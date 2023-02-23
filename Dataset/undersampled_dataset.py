@@ -4,12 +4,12 @@ import numpy as np
 from .FileReader.read_h5 import H5FileReader
 
 class UndersampledKSpaceDataset(KSpaceDataset):
-    def __init__(self, h5_directory, transforms=None):
+    def __init__(self, h5_directory, acs_width=30, transforms=None):
         # call super constructor 
         super().__init__(h5_directory)
         # define our file reader
         self.filereader = H5FileReader
-
+        self.acs_width = acs_width
         # add transforms
         self.transforms = transforms
 
@@ -43,6 +43,9 @@ class UndersampledKSpaceDataset(KSpaceDataset):
         return undersampled
 
     def get_undersampled_indecies(self, k_space_size):
-        random_indecies = random.choices(range(k_space_size[1]), k=k_space_size[1]//2)
+        center = int(k_space_size[1]//2)
+        acs_bounds = [(center - self.acs_width),(center + self.acs_width)]
+        sampled_indeces = [index for index in range(k_space_size[1]) if index not in range(acs_bounds[0],acs_bounds[1])]
+        random_indecies = random.choices(sampled_indeces, k=k_space_size[1]//2)
         return random_indecies
         
