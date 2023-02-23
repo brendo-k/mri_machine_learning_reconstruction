@@ -1,10 +1,8 @@
-from Models.Unet import Unet
+from Models import varnet
 import torch
 
 if __name__ == "__main__":
-    net = Unet(1, 1)
-    x = torch.rand((10, 1, 640, 320))
-    net(x)
-    parameters = sum(param.numel() for param in net.parameters())
-    print(net)
-    print(parameters)
+    x = torch.rand((10, 1, 640, 320), dtype=torch.complex64)
+    mask = torch.ones((10, 1, 640, 320))
+    net = varnet.VarNet(2, 2)
+    net(x, mask)
