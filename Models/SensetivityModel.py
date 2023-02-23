@@ -23,7 +23,7 @@ class SensetivityModel(nn.Module):
         coil_images_real = complex_conversion.complex_to_real(coil_images)
         sense_map = self.model(coil_images_real)
         sense_map = complex_conversion.real_to_complex(sense_map)
-        sense_map = self.root_sum_of_squares(sense_map)
+        sense_map = self.root_sum_of_squares(sense_map) * sense_map
         return sense_map
 
     def mask(self, coil_images):
@@ -36,5 +36,5 @@ class SensetivityModel(nn.Module):
 
     # sense_map [b c h w]
     def root_sum_of_squares(self, sense_map):
-        sense_map = torch.sqrt(sense_map ** 2)
+        sense_map = torch.sqrt(torch.sum(sense_map ** 2, dim=1, keepdim=True))
         return sense_map
