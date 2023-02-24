@@ -29,13 +29,18 @@ class pad(object):
 
     def pad(self, sample):
         x_diff = self.pad_dim[0] - sample.shape[-2]
+        if x_diff < 0:
+            x_diff = 0
         y_diff = self.pad_dim[1] - sample.shape[-1]
+        if y_diff < 0:
+            y_diff = 0
         pad = [(0, 0) for _ in range(sample.ndim)]
         pad[-2] = (x_diff//2, x_diff-x_diff//2)
         pad[-1] = (y_diff//2, y_diff-y_diff//2)
         
+
         sample = np.pad(sample, pad)
-        return sample
+        return sample[:, :, :self.pad_dim[0], :self.pad_dim[1]]
         
     
 class fft_2d(object):
