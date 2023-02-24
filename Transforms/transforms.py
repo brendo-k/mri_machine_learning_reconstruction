@@ -40,7 +40,7 @@ class pad(object):
         
 
         sample = np.pad(sample, pad)
-        return sample[:, :, :self.pad_dim[0], :self.pad_dim[1]]
+        return sample[..., :self.pad_dim[0], :self.pad_dim[1]]
         
     
 class fft_2d(object):
