@@ -30,15 +30,15 @@ class VarnetBlock(nn.Module):
         self.unet = unet
 
     # sensetivities data [B, C, H, W]
-    def forward(self, k_space_data, sensetivities):
-        images = ifft_2d_img(k_space_data, axes=[2, 3])
+    def forward(self, images, sensetivities):
+        images = ifft_2d_img(images, axes=[2, 3])
         combined_images = torch.sum(images * sensetivities, dim=1, keepdim=True)
-        combined_image_real = complex_conversion.complex_to_real(combined_images)
-        refined_image = self.unet(combined_image_real)
-        refined_image = complex_conversion.real_to_complex(refined_image)
-        expanded = sensetivities * refined_image
-        expanded = fft_2d_img(expanded)
-        return expanded
+        combined_images = complex_conversion.complex_to_real(combined_images)
+        combined_images = self.unet(combined_images)
+        combined_images = complex_conversion.real_to_complex(combined_images)
+        images = sensetivities * combined_images
+        images = fft_2d_img(images)
+        return images
 
     # images [B, C, H, W] as complex. Conver to real -> [B, C, H, W, Complex(dim 2)]. Permute to [B, complex * C, H, W]
     # Converts complex tensor to real tensor and concats the complex dimension to channels
