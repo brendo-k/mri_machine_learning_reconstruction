@@ -86,9 +86,10 @@ class normalize(object):
         return only_apply_to(sample, self.normalize, keys=['undersampled'])
     
     def normalize(self, sample):
-        sample_min = sample.min(axis=(-1, -2))
-        sample -= sample_min.reshape((-1,) + (1,)*(sample.ndim-1))
-        return sample/sample.max(axis=(-1, -2)).reshape((-1, 1, 1))
+        sample_min = sample.mean(dim=(-1, -2))
+        sample_std = sample.std(dim=(-1, -2))
+        sample -= sample_min.reshape((sample_min.shape) + (1,)*(sample.ndim-2))
+        return sample/sample_std.reshape((sample_std.shape) + (1,)*(sample.ndim-2))
 
 class permute(object):
     def __call__(self, sample):
