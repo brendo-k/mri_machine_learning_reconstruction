@@ -9,7 +9,7 @@ class Unet(nn.Module):
             out_chan, 
             depth=4,
             chans=18, 
-            with_instance_norm=False,
+            with_instance_norm=True,
             drop_prob=0
             ):
 
