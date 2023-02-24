@@ -23,6 +23,7 @@ class SensetivityModel(nn.Module):
         coil_images_real = complex_conversion.complex_to_real(coil_images)
         sense_map = self.model(coil_images_real)
         sense_map = complex_conversion.real_to_complex(sense_map)
+        sense_map = sense_map.permute((1, 0, 2, 3))
         sense_map = self.root_sum_of_squares(sense_map) * sense_map
         return sense_map
 
@@ -31,7 +32,8 @@ class SensetivityModel(nn.Module):
         acs_width = image_size/6 
         center = image_size//2
         acs_bounds = [-np.ceil(acs_width/2).astype(int) + center, int(acs_width//2) + center]
-        coil_images[:, :, :, acs_bounds[0]:acs_bounds[1]] = 0
+        coil_images[:, :, :, :acs_bounds[0]] = 0
+        coil_images[:, :, :, acs_bounds[1]:] = 0
         return coil_images
 
     # sense_map [b c h w]

@@ -22,6 +22,7 @@ class VarNet(nn.Module):
             refined_k = cascade(k_space, sense_maps)
             data_consistency = mask * (cur_k - k_space)
             cur_k = cur_k - self.lambda_reg * data_consistency + refined_k
+        return cur_k
 
 class VarnetBlock(nn.Module):
     def __init__(self, unet: Unet) -> None:
