@@ -6,7 +6,7 @@ import pyfftw
 def ifft_2d_img(data, axes=[2, 3]):
     if isinstance(data, torch.Tensor):
         data_shifted = torch.fft.ifftshift(data, dim=axes)
-        image = torch.fft.ifft2(data_shifted, dim=axes)
+        image = torch.fft.ifft2(data_shifted, dim=axes, norm='forward')
         image = torch.fft.fftshift(image, dim=axes)
     if isinstance(data, np.ndarray):
         data_shifted = np.fft.ifftshift(data, axes=axes)
@@ -17,7 +17,7 @@ def ifft_2d_img(data, axes=[2, 3]):
 def fft_2d_img(data, axes=[2, 3]):
     if isinstance(data, torch.Tensor):
         data_shifted = torch.fft.fftshift(data, dim=axes)
-        image = torch.fft.fft2(data_shifted, dim=axes)
+        image = torch.fft.fft2(data_shifted, dim=axes, norm='forward')
         image = torch.fft.ifftshift(image, dim=axes)
     if isinstance(data, np.ndarray):
         data_shifted = np.fft.fftshift(data, axes=axes)
