@@ -8,7 +8,7 @@ class double_conv(nn.Module):
 
         self.conv1 = nn.Conv2d(in_chan, out_chan, kernel_size=3, bias=False, padding=1, dtype=torch.float)
         self.conv2 = nn.Conv2d(out_chan, out_chan, kernel_size=3, bias=False, padding=1, dtype=torch.float)
-        self.activation = nn.ReLU()
+        self.activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.instance_norm1 = nn.InstanceNorm2d(out_chan) 
         self.instance_norm2 = nn.InstanceNorm2d(out_chan) 
         self.with_instance_norm = with_instance_norm
