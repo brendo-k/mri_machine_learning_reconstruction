@@ -27,5 +27,3 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
             labelleft=False,
             labelbottom=False)
 
-    plt.tight_layout(pad=0.5)
-    plt.show()
