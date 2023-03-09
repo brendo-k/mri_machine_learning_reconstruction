@@ -86,15 +86,15 @@ class remove_slice_dim(object):
         return sample.reshape(((-1,) + sample.shape[2:]))
     
 
+# Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
-        return only_apply_to(sample, self.normalize, keys=['undersampled'])
+        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space'])
     
     def normalize(self, sample):
-        sample_min = sample.mean(dim=(-1, -2))
-        sample_std = sample.std(dim=(-1, -2))
-        sample -= sample_min.reshape((sample_min.shape) + (1,)*(sample.ndim-2))
-        return sample/sample_std.reshape((sample_std.shape) + (1,)*(sample.ndim-2))
+        sample_min = sample.abs().amin((-1, -2), keepdim=True)
+        sample_max = sample.abs().amax((-1, -2), keepdim=True)
+        return (sample - sample_min)/(sample_max - sample_min)
 
 class permute(object):
     def __call__(self, sample):

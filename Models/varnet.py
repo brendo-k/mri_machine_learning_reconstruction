@@ -17,10 +17,10 @@ class VarNet(nn.Module):
     # k-space sent in [B, C, H, W]
     def forward(self, k_space, mask):
         sense_maps = self.sens_model(k_space)
-        cur_k = k_space
+        cur_k = k_space.clone()
         for cascade in self.cascade:
             refined_k = cascade(k_space, sense_maps)
-            data_consistency = mask * (cur_k - k_space)
+            data_consistency = mask * (k_space - cur_k)
             cur_k = cur_k - self.lambda_reg * data_consistency + refined_k
         return cur_k
 
