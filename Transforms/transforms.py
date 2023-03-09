@@ -1,5 +1,5 @@
 import numpy as np
-from Utils import _combine_coils, fft_2d_img
+from Utils import combine_coils, fft_2d_img
 import torch
 
 def only_apply_to(sample, function, keys):
@@ -55,7 +55,7 @@ class fft_2d(object):
 class combine_coil(object):
     def __call__(self, sample: np.ndarray):
         sampled, undersampled = sample['k_space'], sample['undersampled']
-        full_img = _combine_coils.combine_coils(sampled, coil_dim=1)
+        full_img = combine_coils.combine_coils(sampled, coil_dim=1)
 
         temp = sampled.transpose((1, 0, 2, 3))
         coil_sense = temp/full_img
