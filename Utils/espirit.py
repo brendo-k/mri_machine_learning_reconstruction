@@ -3,7 +3,7 @@ import numpy as np
 fft  = lambda x, ax : np.fft.fftshift(np.fft.fftn(np.fft.ifftshift(x, axes=ax), axes=ax, norm='ortho'), axes=ax) 
 ifft = lambda X, ax : np.fft.fftshift(np.fft.ifftn(np.fft.ifftshift(X, axes=ax), axes=ax, norm='ortho'), axes=ax) 
 
-def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.1, eigen_threshold=0.99):
+def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.01, eigen_threshold=0.99):
     """
     Derives the ESPIRiT operator.
 
@@ -51,7 +51,7 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.1
                 block = calibration_region[zdx:zdx+kernel_size, 
                                            :, 
                                            xdx:xdx+kernel_size, 
-                                           ydx:ydx+kernel_size].astype(np.complex64) 
+                                           ydx:ydx+kernel_size]
                 A[idx, :] = block.flatten()
                 idx = idx + 1
 
@@ -63,9 +63,9 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.1
     num_singular_values = np.sum(S >= singular_value_threshold * S[0])
     V = V[:, 0:num_singular_values]
 
-    kxt = (size_x//2-kernel_size//2, size_x//2+kernel_size//2) if (size_x > 1) else (0, 1)
-    kyt = (size_y//2-kernel_size//2, size_y//2+kernel_size//2) if (size_y > 1) else (0, 1)
-    kzt = (size_z//2-kernel_size//2, size_z//2+kernel_size//2) if (size_z > 1) else (0, 1)
+    kxt = (size_x//2-kernel_size//2, np.ceil(size_x/2-kernel_size/2).astype(int)) if (size_x > 1) else (0, 0)
+    kyt = (size_y//2-kernel_size//2, np.ceil(size_y/2-kernel_size/2).astype(int)) if (size_y > 1) else (0, 0)
+    kzt = (size_z//2-kernel_size//2, np.ceil(size_z/2-kernel_size/2).astype(int)) if (size_z > 1) else (0, 0)
 
     # Reshape into k-space kernel, flips it and takes the conjugate
     kernels = np.zeros(np.append(np.shape(k_space), num_singular_values)).astype(np.complex64)
@@ -74,8 +74,9 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.1
                (size_y > 1) * kernel_size + (size_y == 1) * 1, 
                (size_x > 1) * kernel_size + (size_x == 1) * 1, 
                ]
-    for sing_val_index in range(num_singular_values):
-        kernels[kzt[0]:kzt[1], :, kyt[0]:kyt[1], kxt[0]:kxt[1], sing_val_index] = np.reshape(V[:, sing_val_index], kerdims)
+    kernels = np.reshape(V, (kerdims) + [-1,])
+    kernels = kernels.conj()
+    kernels = np.pad(kernels, ((kzt[0], kzt[1]), (0, 0), (kyt[0], kyt[1]), (kxt[0], kxt[1]), (0, 0)))
 
     # Take the fft of the kernels
     axes = (0, 1, 2)
