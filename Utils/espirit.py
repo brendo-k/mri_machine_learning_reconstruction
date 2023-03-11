@@ -56,7 +56,7 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.0
                 idx = idx + 1
 
     # Take the Singular Value Decomposition.
-    U, S, VH = np.linalg.svd(A, full_matrices=True)
+    _, S, VH = np.linalg.svd(A, full_matrices=False)
     V = VH.conj().T
 
     # Select kernels.
@@ -78,26 +78,24 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.0
     kernels = kernels.conj()
     kernels = np.pad(kernels, ((kzt[0], kzt[1]), (0, 0), (kyt[0], kyt[1]), (kxt[0], kxt[1]), (0, 0)))
 
+    # flip kernels along axes and conjugate (this is from the defention of convolution )
+    kernels = np.flip(kernels, axis=(0, 2, 3)).conj()
+
     # Take the fft of the kernels
-    axes = (0, 1, 2)
+    axes = (0, 2, 3)
+    kerimgs = fft(kernels, axes) * np.sqrt(size_x * size_y * size_z)/np.sqrt(kernel_size**p)
     kerimgs = np.zeros((np.shape(k_space) + (num_singular_values,))).astype(np.complex64)
-    for sing_val_index in range(num_singular_values):
-        for chan_index in range(size_chan):
-            ker = kernels[::-1, chan_index, ::-1, ::-1, sing_val_index].conj()
-            kerimgs[:,chan_index,:,:,sing_val_index] = fft(ker, axes) * np.sqrt(size_x * size_y * size_z)/np.sqrt(kernel_size**p)
 
     # Take the point-wise eigenvalue decomposition and keep eigenvalues greater than c
-    maps = np.zeros(np.shape(k_space) + (size_chan,)).astype(np.complex64)
+    maps = np.zeros(np.shape(k_space)).astype(np.complex64)
     for x in range(0, size_x):
         for y in range(0, size_y):
             for z in range(0, size_z):
 
                 Gq = kerimgs[z,:,y,x,:]
 
-                u, s, vh = np.linalg.svd(Gq, full_matrices=True)
-                for ldx in range(0, size_chan):
-                    if (s[ldx]**2 > eigen_threshold):
-                        maps[z, :, y, x, ldx] = u[:, ldx]
+                u, _, _ = np.linalg.svd(Gq, full_matrices=False)
+                maps[z, :, y, x] = u[:, 0]
 
     return maps
 
