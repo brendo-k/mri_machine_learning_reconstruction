@@ -5,11 +5,11 @@ import einops
 def complex_to_real(images):
     # images dims [B, C, H, W, complex]
     images = torch.view_as_real(images)
-    images = einops.rearrange(images, 'b c h w cm -> b (c cm) h w')
+    images = einops.rearrange(images, 'b c h w cm -> b (cm c) h w')
     return images
 
 def real_to_complex(images):
-    images = einops.rearrange(images, 'b (c cm) h w -> b c h w cm', cm=2)
+    images = einops.rearrange(images, 'b (cm c) h w -> b c h w cm', cm=2)
     images = images.contiguous()
     images = torch.view_as_complex(images)
     return images
