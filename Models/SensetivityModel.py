@@ -7,10 +7,11 @@ import einops
 import torch
 
 class SensetivityModel(nn.Module):
-    def __init__(self, in_chans, out_chans, chans, mask_center=True):
+    def __init__(self, in_chans, out_chans, chans, mask_center=True, acs_bounds=30):
         super().__init__()
-        self.model = Unet(in_chans, out_chans, chans=chans)
+        self.model = Unet(in_chans, out_chans, chans=chans, with_instance_norm=True)
         self.mask_center = mask_center
+        self.acs_bounds = acs_bounds
 
     # recieve coil maps as [B, C, H, W]
     def forward(self, coil_images):
@@ -29,14 +30,13 @@ class SensetivityModel(nn.Module):
 
     def mask(self, coil_images):
         image_size = coil_images.shape[3]
-        acs_width = image_size/6 
         center = image_size//2
-        acs_bounds = [-np.ceil(acs_width/2).astype(int) + center, np.floor(acs_width/2).astype(int) + center]
+        acs_bounds = [-np.ceil(self.acs_bounds/2).astype(int) + center, np.floor(self.acs_bounds/2).astype(int) + center]
         coil_images[:, :, :, :acs_bounds[0]] = 0
         coil_images[:, :, :, acs_bounds[1]:] = 0
         return coil_images
 
     # sense_map [b c h w]
     def root_sum_of_squares(self, sense_map):
-        sense_map = torch.sqrt(torch.sum(sense_map ** 2, dim=1, keepdim=True))
+        sense_map = torch.sqrt(torch.sum(sense_map.abs() ** 2, dim=1, keepdim=True))
         return sense_map
