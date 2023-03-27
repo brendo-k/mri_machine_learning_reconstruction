@@ -12,7 +12,7 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
     width = int(np.ceil(np.sqrt(slices)))
     height = int(np.ceil(slices/width))
 
-    fig, axes = plt.subplots(width, height, gridspec_kw={'wspace': 0, 'hspace': 0})
+    fig, axes = plt.subplots(width, height, figsize=(10, 10))
 
 
     for i in range(data.shape[0]):
