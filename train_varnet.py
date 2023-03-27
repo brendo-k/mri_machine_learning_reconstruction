@@ -45,7 +45,7 @@ transforms = Compose(
         normalize(),
     )
 )
-dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/dataset/multicoil_train', transforms=transforms)
+dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/fastMRI/multicoil_train', transforms=transforms, R=10)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
     
 
@@ -56,7 +56,7 @@ data = next(iter(dataloader))
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # %%
-model = VarNet(2, 2, num_cascades=6, use_norm=True)
+model = VarNet(2, 2, num_cascades=12, use_norm=True)
 model.to(device)
 
 # %%
@@ -71,7 +71,7 @@ from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('/tmp/kadota_runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 # %%
-def train(model, loss_function, optimizer, dataloader, epoch=1):
+def train(model, loss_function, optimizer, dataloader, epoch=7):
     cur_loss = 0
     current_index = 0
     try:
@@ -103,6 +103,10 @@ def train(model, loss_function, optimizer, dataloader, epoch=1):
                         writer.add_scalar('Loss/train', cur_loss, current_index)
                         print(f"Iteration: {current_index + 1:>d}, Loss: {cur_loss:>7f}")
                         cur_loss = 0
+            model_name = model.__class__.__name__
+            date = datetime.now().strftime("%Y%m%d-%H%M%S")
+            torch.save(model.state_dict(), './Model_Weights/' + date + model_name + e +'.pt')
+                 
     except KeyboardInterrupt:
         pass
 
@@ -111,6 +115,4 @@ def train(model, loss_function, optimizer, dataloader, epoch=1):
     torch.save(model.state_dict(), './Model_Weights/' + date + model_name + '.pt')
 
 # %%
-train(model, loss_fn, optimizer, dataloader, epoch=2)
-
-
+train(model, loss_fn, optimizer, dataloader)
