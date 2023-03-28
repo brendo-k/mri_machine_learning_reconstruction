@@ -1,9 +1,11 @@
 import numpy as np
-from Utils import combine_coils, fft_2d_img
+from ml_recon.Utils import combine_coils, fft_2d_img
 import torch
 
 def only_apply_to(sample, function, keys):
     for key in keys:
+        if key not in sample.keys():
+            continue
         sample[key] = function(sample[key])
     return sample
 
