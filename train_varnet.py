@@ -1,43 +1,22 @@
-# %%
-from Models.modl import modl
+
+from ml_recon.Models.modl import modl
 from torch.utils.data import DataLoader
-from Transforms import (pad, trim_coils, combine_coil, toTensor, permute, 
+from ml_recon.Transforms import (pad, trim_coils, combine_coil, toTensor, permute, 
                         view_as_real, remove_slice_dim, fft_2d, normalize, addChannels)
-from Dataset.undersampled_dataset import UndersampledKSpaceDataset
+from ml_recon.Dataset.undersampled_dataset import UndersampledKSpaceDataset
 from torchvision.transforms import Compose
 import numpy as np
 
 import torch
-from Utils import image_slices
-from Models.varnet import VarNet
+from ml_recon.Utils import image_slices
+from ml_recon.Models.varnet import VarNet
 
 
-# %%
+ 
 torch.manual_seed(0)
 np.random.seed(0)
 
-# %%
-def collate_fn(data):
-    undersampled = [d['undersampled'] for d in data]
-    sampled = [d['k_space'] for d in data]
-    ismrmrd_header = [d['ismrmrd_header'] for d in data]
-    mask = [d['mask'] for d in data]
-    recon_rss = [d['reconstruction_rss'] for d in data]
-
-    undersampled = torch.concat(undersampled, dim=0)
-    sampled = torch.concat(sampled, dim=0)
-    mask = torch.concat(mask, dim=0)
-
-    data = {
-        'undersampled': undersampled, 
-        'sampled': sampled,
-        'ismrmrd_header': ismrmrd_header,
-        'mask': mask, 
-        'recon': recon_rss,
-    }
-    return data
-
-# %%
+ 
 transforms = Compose(
     (
         pad((640, 320)), 
@@ -49,28 +28,28 @@ dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/D
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
     
 
-# %%
+ 
 data = next(iter(dataloader))
 
-# %%
+ 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-# %%
+ 
 model = VarNet(2, 2, num_cascades=12, use_norm=True)
 model.to(device)
 
-# %%
+ 
 loss_fn = torch.nn.MSELoss()
 optimizer = torch.optim.SGD(model.parameters(), momentum=0.99, lr=0.0001)
 
-# %%
+ 
 from datetime import datetime
 
-# %%
+ 
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('/tmp/kadota_runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-# %%
+ 
 def train(model, loss_function, optimizer, dataloader, epoch=7):
     cur_loss = 0
     current_index = 0
@@ -114,5 +93,5 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
     date = datetime.now().strftime("%Y%m%d-%H%M%S")
     torch.save(model.state_dict(), './Model_Weights/' + date + model_name + '.pt')
 
-# %%
+ 
 train(model, loss_fn, optimizer, dataloader)
