@@ -98,6 +98,17 @@ class normalize(object):
         sample_max = sample.abs().amax((-1, -2), keepdim=True)
         return (sample - sample_min)/(sample_max - sample_min)
 
+
+class norm_normalize(object):
+    def __call__(self, sample):
+        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space'])
+    
+    def normalize(self, sample):
+        sample_mean = sample.abs().mean((-1, -2), keepdim=True)
+        sample_std = sample.abs().std((-1, -2), keepdim=True)
+        return (sample - sample_mean)/sample_std
+
+
 class permute(object):
     def __call__(self, sample):
         return only_apply_to(sample, self.permute, keys=['undersampled', 'k_space'])

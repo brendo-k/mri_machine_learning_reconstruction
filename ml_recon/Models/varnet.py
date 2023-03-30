@@ -5,7 +5,14 @@ import einops
 from ml_recon.Utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 class VarNet(nn.Module):
-    def __init__(self, in_chan, out_chan, num_cascades=6, sens_chans=8, model_chans=18, use_norm=True, dropout_prob=0) -> None:
+    def __init__(self, 
+                 in_chan, 
+                 out_chan, 
+                 num_cascades=6, 
+                 sens_chans=8, 
+                 model_chans=18, 
+                 use_norm=True, 
+                 dropout_prob=0):
         super().__init__()
         self.cascade = nn.ModuleList(
             [VarnetBlock(Unet(in_chan, out_chan, chans=model_chans, with_instance_norm=use_norm, drop_prob=dropout_prob)) for _ in range(num_cascades)]
