@@ -11,12 +11,9 @@ import torch
 from ml_recon.Utils import image_slices
 from ml_recon.Models.varnet import VarNet
 
-
- 
 torch.manual_seed(0)
 np.random.seed(0)
 
- 
 transforms = Compose(
     (
         pad((640, 320)), 
@@ -25,30 +22,21 @@ transforms = Compose(
     )
 )
 dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/fastMRI/multicoil_train', transforms=transforms, R=10)
-dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
+dataloader = DataLoader(dataset, batch_size=1)
     
-
- 
 data = next(iter(dataloader))
-
  
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
- 
 model = VarNet(2, 2, num_cascades=12, use_norm=True)
 model.to(device)
 
- 
 loss_fn = torch.nn.MSELoss()
 optimizer = torch.optim.SGD(model.parameters(), momentum=0.99, lr=0.0001)
 
- 
 from datetime import datetime
-
- 
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('/tmp/kadota_runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
-
  
 def train(model, loss_function, optimizer, dataloader, epoch=7):
     cur_loss = 0

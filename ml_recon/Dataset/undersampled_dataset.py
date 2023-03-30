@@ -33,9 +33,10 @@ class UndersampledKSpaceDataset(KSpaceDataset):
             data = self.transforms(data)
         return data
 
-    def build_mask(self, k_space, k_space_size, random_indecies):
+    def build_mask(self, k_space, k_space_size, random_indecies) :
         mask = np.ones((k_space.shape[0], k_space_size[0], k_space_size[1]), dtype=np.int8)
         mask[:, :, random_indecies] = 0
+        mask = mask.astype(bool)
         return mask
 
     def apply_undersampled_indecies(self, k_space, random_indecies):
