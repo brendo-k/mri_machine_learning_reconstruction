@@ -43,6 +43,28 @@ class pad(object):
 
         sample = np.pad(sample, pad)
         return sample[..., :self.pad_dim[0], :self.pad_dim[1]]
+
+class pad_recon(object):
+    def __init__(self, pad_dim):
+        self.pad_dim = pad_dim
+
+    def __call__(self, sample):
+        return only_apply_to(sample, self.pad, keys=['recon'])
+
+    def pad(self, sample):
+        x_diff = self.pad_dim[0] - sample.shape[-2]
+        if x_diff < 0:
+            x_diff = 0
+        y_diff = self.pad_dim[1] - sample.shape[-1]
+        if y_diff < 0:
+            y_diff = 0
+        pad = [(0, 0) for _ in range(sample.ndim)]
+        pad[-2] = (x_diff//2, x_diff-x_diff//2)
+        pad[-1] = (y_diff//2, y_diff-y_diff//2)
+        
+
+        sample = np.pad(sample, pad)
+        return sample[..., :self.pad_dim[0], :self.pad_dim[1]]
         
     
 class fft_2d(object):
@@ -57,11 +79,11 @@ class fft_2d(object):
 class combine_coil(object):
     def __call__(self, sample: np.ndarray):
         sampled, undersampled = sample['k_space'], sample['undersampled']
-        full_img = combine_coils.combine_coils(sampled, coil_dim=1)
+        full_img = combine_coils(sampled, coil_dim=1)
 
         temp = sampled.transpose((1, 0, 2, 3))
         coil_sense = temp/full_img
-        coil_sense = coil_sense.transpose((1, 0, 2, 3))
+        coil_sense = coil_sense.transpose((2, 0, 2, 3))
         undersampled_combined = np.sum(undersampled * coil_sense, axis=1)
 
         sample['k_space'] = full_img
@@ -77,7 +99,7 @@ class view_as_real(object):
 
 class toTensor(object):
     def __call__(self, sample: np.ndarray):
-        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask'])
+        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon'])
 
 
 class remove_slice_dim(object):
@@ -101,7 +123,7 @@ class normalize(object):
 
 class norm_normalize(object):
     def __call__(self, sample):
-        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space'])
+        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space', 'recon'])
     
     def normalize(self, sample):
         sample_mean = sample.abs().mean((-1, -2), keepdim=True)
