@@ -30,7 +30,7 @@ class KSpaceDataset(Dataset):
         data = {
             'k_space': k_space[:], 
             'ismrmrd_header': xmltodict.parse(ismrmrd_header), 
-            'reconstruction_rss': recon[:],
+            'recon': recon[:],
         }
         if self.tranforms:
             self.tranforms(data)
