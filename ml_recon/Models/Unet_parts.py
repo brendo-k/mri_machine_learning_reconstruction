@@ -31,7 +31,7 @@ class double_conv(nn.Module):
 class down(nn.Module):
   def __init__(self):
     super().__init__()
-    self.max_pool = nn.MaxPool2d(2, stride=(2, 2))
+    self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
 
   def forward(self, x):
     x = self.max_pool(x)
@@ -41,9 +41,13 @@ class up(nn.Module):
   def __init__(self, in_chan, out_chan):
     super().__init__()
     self.upsample = nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, dtype=torch.float)
-  
+    self.instanceNorm = nn.InstanceNorm2d(out_chan)
+    self.relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
   def forward(self, x):
     x = self.upsample(x)
+    x = self.instanceNorm(x)
+    x = self.relu(x)
     return x
 
 class concat(nn.Module):
