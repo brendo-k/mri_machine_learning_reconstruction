@@ -1,31 +1,5 @@
 import numpy as np
 
-# Adaptive combine method for estimating sensitivities
-def adaptive(x, kernel=(3,3,1), thresh=0.75):
-    """
-    Input:
-        x: [Nx, Ny, Nz, Nc]
-
-    Output:
-        sens: [Nx, Ny, Nz, Nc]
-    """
-
-    Nc = x.shape[-1]
-    y = np.zeros(x.shape, dtype=complex)
-    m = np.zeros(x.shape[:3])
-    x = x/sos(x).reshape(x.shape[:3]+(1,))
-    
-    for vx in range(x.shape[0]):
-        print(f'{0.1*np.round(1000*vx/x.shape[0]):04.1f}%', end='\r')
-        for vy in range(x.shape[1]):
-            for vz in range(x.shape[2]):
-                tmp = x[vx-(kernel[0]-1)//2:vx+(kernel[0]+1)//2, vy-(kernel[1]-1)//2:vy+(kernel[1]+1)//2, vz-(kernel[2]-1)//2:vz+(kernel[2]+1)//2,:].reshape((-1,Nc))
-                d, v = np.linalg.eigh(np.conj(tmp.T)@tmp)
-                y[vx,vy,vz,:] = v[:,d.argmax()]
-                m[vx,vy,vz] = np.sqrt(d.max())
-    
-    return y*(m>thresh*m.max())[:,:,:,np.newaxis]
-
 # ESPIRiT method for estimating sensitivities
 # 2D only for now
 def espirit(x, dims=(128,128), kernel=(5,5), eig_thresh=0.02, mask_thresh=0.99):
