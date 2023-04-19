@@ -1,5 +1,6 @@
 import numpy as np
 from ml_recon.Utils import combine_coils, fft_2d_img
+from ml_recon.Utils.complex_conversion import complex_to_real, real_to_complex
 import torch
 
 def only_apply_to(sample, function, keys):
@@ -83,7 +84,7 @@ class combine_coil(object):
 
         temp = sampled.transpose((1, 0, 2, 3))
         coil_sense = temp/full_img
-        coil_sense = coil_sense.transpose((2, 0, 2, 3))
+        coil_sense = coil_sense.transpose((1, 0, 2, 3))
         undersampled_combined = np.sum(undersampled * coil_sense, axis=1)
 
         sample['k_space'] = full_img
@@ -94,7 +95,7 @@ class combine_coil(object):
 
 class view_as_real(object):
     def __call__(self, sample: torch.Tensor):
-        return only_apply_to(sample, torch.view_as_real, keys=['undersampled', 'k_space'])
+        return only_apply_to(sample, complex_to_real, keys=['undersampled', 'k_space'])
 
 
 class toTensor(object):
@@ -113,11 +114,12 @@ class remove_slice_dim(object):
 # Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
-        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space'])
+        return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space', 'recon'])
     
     def normalize(self, sample):
-        maximum = sample.abs().max()
-        sample /= maximum
+        maximum = sample.abs().amax((-1, -2))
+        sample /= maximum[(...,) + (None,)*2]
+
         return sample
 
 
@@ -138,9 +140,10 @@ class permute(object):
     def permute(self, sample):
         return sample.permute(0, 3, 1, 2)
 
+
 class addChannels(object):
     def __call__(self, sample):
-        return only_apply_to(sample, self.add_dim)
+        return only_apply_to(sample, self.add_dim, keys=['undersampled', 'k_space'])
 
     def add_dim(self, sample):
         return sample[:, None, :, :]

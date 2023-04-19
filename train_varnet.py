@@ -32,20 +32,20 @@ dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # %%
-model = VarNet(2, 2, num_cascades=12, use_norm=True)
+model = VarNet(2, 2, num_cascades=5, use_norm=True)
 model.to(device)
 
 # %%
 loss_fn = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 # %%
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-writer = SummaryWriter('/tmp/kadota_runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
-checkpoint_path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
+writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 # %%
+path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
 def train(model, loss_function, optimizer, dataloader, epoch=7):
     cur_loss = 0
     current_index = 0
@@ -82,11 +82,11 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
                         writer.add_scalar('Loss/train', cur_loss, current_index)
                         print(f"Iteration: {current_index + 1:>d}, Loss: {cur_loss:>7f}")
                         cur_loss = 0
-                        save_model(checkpoint_path, model, optimizer, current_index) 
+                        save_model(path, model, optimizer, current_index) 
     except KeyboardInterrupt:
         pass
 
-    save_model(checkpoint_path, model, optimizer, -1)
+    save_model(path, model, optimizer, -1)
 
 # %%
 train(model, loss_fn, optimizer, dataloader)

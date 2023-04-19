@@ -38,5 +38,5 @@ class KSpaceDataset(Dataset):
         return data 
 
     def _get_files(directory):
-        files = os.listdir(directory)
+        files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         return files
