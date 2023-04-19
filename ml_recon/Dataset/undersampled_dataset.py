@@ -4,7 +4,7 @@ import numpy as np
 from .FileReader.read_h5 import H5FileReader
 
 class UndersampledKSpaceDataset(KSpaceDataset):
-    def __init__(self, h5_directory, acs_width=30, R=8, transforms=None):
+    def __init__(self, h5_directory, acs_width=10, R=8, transforms=None):
         # call super constructor 
         super().__init__(h5_directory)
         # define our file reader
@@ -56,5 +56,5 @@ class UndersampledKSpaceDataset(KSpaceDataset):
         undersampled_indeces = np.setdiff1d(all_indexes, random_indecies) 
         return undersampled_indeces
 
-    def get_k_space_size(k_space):
-        return k_space.shape[:-2] 
+    def get_k_space_size(self, k_space):
+        return k_space.shape[-2:] 

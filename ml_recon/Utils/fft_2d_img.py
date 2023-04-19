@@ -3,7 +3,7 @@ import torch
 import pyfftw
 
 
-def ifft_2d_img(data, axes=[2, 3]):
+def ifft_2d_img(data, axes=[-1, -2]):
     assert isinstance(data, torch.Tensor) or isinstance(data, np.ndarray), 'data should be a numpy array or pytorch tensor'
 
     if isinstance(data, torch.Tensor):
