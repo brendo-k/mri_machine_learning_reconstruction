@@ -1,5 +1,5 @@
 import numpy as np
-from ml_recon.Utils import combine_coils, fft_2d_img
+from ml_recon.Utils import combine_coils, ifft_2d_img
 from ml_recon.Utils.complex_conversion import complex_to_real, real_to_complex
 import torch
 
@@ -73,7 +73,7 @@ class fft_2d(object):
         self.axes = axes
 
     def __call__(self, sample):
-        return only_apply_to(sample, fft_2d_img, keys=['undersampled', 'k_space'])
+        return only_apply_to(sample, ifft_2d_img, keys=['undersampled', 'k_space'])
 
 
 # Combines coils using naive rss with image intensity as highest point
@@ -117,8 +117,8 @@ class normalize(object):
         return only_apply_to(sample, self.normalize, keys=['undersampled', 'k_space', 'recon'])
     
     def normalize(self, sample):
-        maximum = sample.abs().amax((-1, -2))
-        sample /= maximum[(...,) + (None,)*2]
+        maximum = sample.abs().max()
+        sample /= maximum
 
         return sample
 
@@ -148,3 +148,9 @@ class addChannels(object):
     def add_dim(self, sample):
         return sample[:, None, :, :]
         
+class convert_to_float(object):
+    def __call__(self, sample):
+        return only_apply_to(sample, self.convert_to_float, keys=['undersampled', 'k_space', 'recon'])
+    
+    def convert_to_float(self, sample):
+        return sample.float()

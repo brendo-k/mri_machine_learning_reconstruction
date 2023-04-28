@@ -25,10 +25,10 @@ class VarNet(nn.Module):
         sense_maps = self.sens_model(k_space)
         cur_k = k_space.clone()
         for i, cascade in enumerate(self.cascade):
-            refined_k = cascade(k_space, sense_maps)
+            refined_k = cascade(cur_k, sense_maps)
             zero = torch.zeros(1, 1, 1, 1).to(cur_k)
-            data_consistency = torch.where(mask, cur_k - refined_k, zero)
-            cur_k = cur_k - self.lambda_reg[i] * data_consistency + refined_k
+            data_consistency = torch.where(mask, cur_k - k_space, zero)
+            cur_k = cur_k - self.lambda_reg[i] * data_consistency - refined_k
         return cur_k
 
 class VarnetBlock(nn.Module):
