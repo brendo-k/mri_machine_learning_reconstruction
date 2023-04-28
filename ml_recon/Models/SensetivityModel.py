@@ -1,13 +1,13 @@
 import torch.nn as nn
 import numpy as np
 from ml_recon.Models.Unet import Unet
-from ml_recon.Utils import fft_2d_img
+from ml_recon.Utils import ifft_2d_img
 from ml_recon.Utils import complex_conversion
 import einops
 import torch
 
 class SensetivityModel(nn.Module):
-    def __init__(self, in_chans, out_chans, chans, mask_center=True, acs_bounds=30):
+    def __init__(self, in_chans, out_chans, chans, mask_center=True, acs_bounds=10):
         super().__init__()
         self.model = Unet(in_chans, out_chans, chans=chans, with_instance_norm=True)
         self.mask_center = mask_center
@@ -18,7 +18,7 @@ class SensetivityModel(nn.Module):
         if self.mask_center:
             coil_images = self.mask(coil_images) 
 
-        coil_images = fft_2d_img(coil_images, axes=[2, 3])
+        coil_images = ifft_2d_img(coil_images, axes=[2, 3])
         coil_images = einops.rearrange(coil_images, 'b c h w -> (b c) h w')
         coil_images = coil_images[:, None, :, :]
         coil_images_real = complex_conversion.complex_to_real(coil_images)
@@ -38,5 +38,5 @@ class SensetivityModel(nn.Module):
 
     # sense_map [b c h w]
     def root_sum_of_squares(self, sense_map):
-        sense_map = torch.sqrt(torch.sum(sense_map.abs() ** 2, dim=1, keepdim=True))
+        sense_map = sense_map.abs().pow(2).sum(1, keepdim=True).sqrt()
         return sense_map

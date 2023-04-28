@@ -24,7 +24,7 @@ transforms = Compose(
         normalize(),
     )
 )
-dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/fastMRI/multicoil_train', transforms=transforms, R=4)
+dataset = UndersampledKSpaceDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/', transforms=transforms, R=4)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
     
 
@@ -72,7 +72,7 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
                     optimizer.step()
                     cur_loss += loss.item()
                     current_index += 1
-                    if current_index % 1000 == 999:
+                    if current_index % 100 == 99:
                         writer.add_histogram('sens/weights1', next(model.sens_model.model.conv1d.parameters()), current_index)
                         writer.add_histogram('castcade0/weights1', next(model.cascade[0].unet.conv1d.parameters()), current_index)
                         writer.add_histogram('castcade0/weights2', next(model.cascade[1].unet.conv1d.parameters()), current_index)
@@ -82,13 +82,13 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
                         writer.add_scalar('Loss/train', cur_loss, current_index)
                         print(f"Iteration: {current_index + 1:>d}, Loss: {cur_loss:>7f}")
                         cur_loss = 0
-                        save_model(path, model, optimizer, current_index) 
+            save_model(path, model, optimizer, e) 
     except KeyboardInterrupt:
         pass
 
     save_model(path, model, optimizer, -1)
 
 # %%
-train(model, loss_fn, optimizer, dataloader)
+train(model, loss_fn, optimizer, dataloader, 50)
 
 

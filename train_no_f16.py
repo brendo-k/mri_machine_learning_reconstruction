@@ -51,7 +51,6 @@ model.to(device)
 # %%
 loss_fn = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-scaler = torch.cuda.amp.GradScaler()
 
 # %%
 model_weight_path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
@@ -71,16 +70,14 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
 
                     recon_slice = recon_slice.to(device)
                     undersampled_slice = undersampled_slice.to(device)
-                    with torch.autocast(device_type=device, dtype=torch.float16): 
-                        predicted_sampled = model(undersampled_slice)
+                    predicted_sampled = model(undersampled_slice)
 
-                        predicted_sampled = torch.sqrt(predicted_sampled.pow(2).sum(1)+ 1e-6)
-                        predicted_sampled = predicted_sampled[:, 160:-160, :]
-                        loss = loss_function(predicted_sampled, recon_slice)
+                    predicted_sampled = torch.sqrt(predicted_sampled.pow(2).sum(1)+ 1e-6)
+                    predicted_sampled = predicted_sampled[:, 160:-160, :]
+                    loss = loss_function(predicted_sampled, recon_slice)
                     
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                    loss.backward()
+                    optimizer.step()
                     
                     cur_loss += loss.item()
             writer.add_histogram('sens/weights1', next(model.down_sample_layers[0].conv1.parameters()), e)

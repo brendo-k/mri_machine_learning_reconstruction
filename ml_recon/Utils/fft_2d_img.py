@@ -14,6 +14,7 @@ def ifft_2d_img(data, axes=[-1, -2]):
         data_shifted = np.fft.ifftshift(data, axes=axes)
         image = np.fft.ifft2(data_shifted, axes=axes)
         image = np.fft.fftshift(image, axes=axes)
+        image = image.astype(np.complex64)
         
     return image
 
@@ -26,4 +27,5 @@ def fft_2d_img(data, axes=[2, 3]):
         data_shifted = np.fft.fftshift(data, axes=axes)
         image = np.fft.fft2(data_shifted, axes=axes)
         image = np.fft.ifftshift(image, axes=axes)
+        image = image.astype(np.complex64)
     return image
