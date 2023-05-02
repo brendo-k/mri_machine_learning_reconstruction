@@ -22,19 +22,17 @@ class KSpaceDataset(Dataset):
         files = self.file_list[indexs]
 
         full_path = os.path.join(self.directory, files)
-        reader = self.filereader(full_path)
-        image = reader.read()
-        k_space = image['kspace']
-        ismrmrd_header = np.array(image['ismrmrd_header'], dtype=bytes)
-        recon = image['reconstruction_rss']
-        data = {
-            'k_space': k_space[:], 
-            'ismrmrd_header': xmltodict.parse(ismrmrd_header), 
-            'recon': recon[:],
-        }
-        if self.tranforms:
-            self.tranforms(data)
-        reader.close()
+        with self.filereader(full_path) as fr:
+            k_space = fr['kspace']
+            ismrmrd_header = np.array(fr['ismrmrd_header'], dtype=bytes)
+            recon = fr['reconstruction_rss']
+            data = {
+                'k_space': k_space[:], 
+                'ismrmrd_header': xmltodict.parse(ismrmrd_header), 
+                'recon': recon[:],
+            }
+            if self.tranforms:
+                self.tranforms(data)
         return data 
 
     def _get_files(directory):

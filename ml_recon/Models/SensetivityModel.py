@@ -7,7 +7,7 @@ import einops
 import torch
 
 class SensetivityModel(nn.Module):
-    def __init__(self, in_chans, out_chans, chans, mask_center=True, acs_bounds=10):
+    def __init__(self, in_chans, out_chans, chans, mask_center=True, acs_bounds=20):
         super().__init__()
         self.model = Unet(in_chans, out_chans, chans=chans, with_instance_norm=True)
         self.mask_center = mask_center
@@ -32,7 +32,7 @@ class SensetivityModel(nn.Module):
         image_size = coil_images.shape[3]
         center = image_size//2
         acs_bounds = [-np.ceil(self.acs_bounds/2).astype(int) + center, np.floor(self.acs_bounds/2).astype(int) + center]
-        coil_images[:, :, :, :acs_bounds[0]] = 0
+        coil_images[:, :, :, :acs_bounds[0]-1] = 0
         coil_images[:, :, :, acs_bounds[1]:] = 0
         return coil_images
 
