@@ -2,10 +2,9 @@ from abc import ABC, abstractclassmethod
 
 class FileReader(ABC):
     @abstractclassmethod
-    def read(self):
+    def __enter__(self):
         pass
-
+ 
     @abstractclassmethod
-    def close(self):
+    def __exit__(self):
         pass
-

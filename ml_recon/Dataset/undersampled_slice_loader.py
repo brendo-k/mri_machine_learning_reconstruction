@@ -1,14 +1,14 @@
-from .kspace_dataset import KSpaceDataset
+from .slice_loader import SliceLoader 
 import random
 import numpy as np
 from .FileReader.read_h5 import H5FileReader
 
-class UndersampledKSpaceDataset(KSpaceDataset):
-    def __init__(self, h5_directory, acs_width=20, R=8, transforms=None):
+class UndersampledSliceDataset(SliceLoader):
+    def __init__(self, meta_data, acs_width=20, R=8, transforms=None):
         # call super constructor 
-        super().__init__(h5_directory)
+        super().__init__(meta_data)
         # define our file reader
-        self.filereader = H5FileReader
+        super().set_file_reader(H5FileReader)
         self.acs_width = acs_width
         # add transforms
         self.transforms = transforms
@@ -33,21 +33,21 @@ class UndersampledKSpaceDataset(KSpaceDataset):
 
     def build_mask(self, k_space, random_indecies) :
         k_space_size = self.get_k_space_size(k_space)
-        mask = np.ones((k_space.shape[0], k_space_size[0], k_space_size[1]), dtype=np.int8)
-        mask[:, :, random_indecies] = 0
+        mask = np.ones((k_space_size[0], k_space_size[1]), dtype=np.int8)
+        mask[..., random_indecies] = 0
         mask = mask.astype(bool)
         return mask
 
     def apply_undersampled_indecies(self, k_space, random_indecies):
         undersampled = np.copy(k_space)
-        undersampled[:, :, :, random_indecies] = 0
+        undersampled[..., random_indecies] = 0
 
         return undersampled
 
     def get_undersampled_indecies(self, k_space, acs_width, R):
         k_space_size = self.get_k_space_size(k_space)
         center = int(k_space_size[1]//2)
-        acs_bounds = [(center - acs_width//2),(center + np.ceil(acs_width//2).astype(int))]
+        acs_bounds = [(center - acs_width//2), (center + np.ceil(acs_width//2).astype(int))]
         sampled_indeces = [index for index in range(k_space_size[1]) if index not in range(acs_bounds[0],acs_bounds[1])]
         random_indecies = random.choices(sampled_indeces, k=k_space_size[1]//R)
         random_indecies = np.concatenate((random_indecies, range(acs_bounds[0], acs_bounds[1])))

@@ -66,8 +66,3 @@ class concat(nn.Module):
       x_enc_trimmed = x_enc_trimmed[:, :, :, diff_y//2:-diff_y//2]
     concated_data = torch.cat((x_decode, x_enc_trimmed), dim=1)
     return concated_data
-
-
-
-if __name__ == 'main':
-  test = double_conv(1, 64)

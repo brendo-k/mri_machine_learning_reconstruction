@@ -1,5 +1,5 @@
 # %%
-from ml_recon.Models.Unet import Unet
+from ml_recon.Models.fastMRI_unet import Unet
 from torch.utils.data import DataLoader
 from ml_recon.Transforms import (pad, combine_coil, toTensor, addChannels, 
                                    view_as_real, fft_2d, normalize, pad_recon)
@@ -20,7 +20,6 @@ np.random.seed(0)
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-# %%
 
 # %%
 transforms = Compose(
@@ -36,7 +35,7 @@ transforms = Compose(
     )
 )
 dataset = UndersampledSliceDataset('/home/kadotab/header.json', transforms=transforms, R=2)
-dataloader = DataLoader(dataset, batch_size=3, collate_fn=collate_fn)
+dataloader = DataLoader(dataset, batch_size=3)
     
 
 # %%
