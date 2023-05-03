@@ -3,6 +3,7 @@ from ml_recon.Dataset.undersampled_slice_loader import UndersampledSliceDataset
 from ml_recon.Dataset.FileReader.read_h5 import H5FileReader
 from torch.utils.data import DataLoader
 import torch
+import numpy as np
 from ml_recon.Transforms import toTensor, pad, pad_recon
 from torchvision.transforms import Compose
 from ml_recon.Utils.collate_function import collate_fn
@@ -24,6 +25,12 @@ def test_undersampled_slice():
     assert data['k_space'].ndim == 3
     assert data['recon'].ndim == 2
     assert data['mask'].ndim == 2
+    # produce mask array with same number of channels
+    mask_all_channels = np.tile(data['mask'], (data['undersampled'].shape[0], 1, 1))
+    # find locations that equal to zero (masked)
+    masked_locations = data['undersampled']*np.invert(mask_all_channels) == 0
+    equality = np.full(masked_locations.shape, True, dtype=bool)
+    np.testing.assert_array_equal(equality, masked_locations)
 
 # Test if we are able to batch slices. This requires some overhead by padding reconstruction and k-space so it is 
 # same number of dimensions. Pads the coil dimensions as zeros

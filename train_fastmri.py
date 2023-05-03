@@ -20,6 +20,7 @@ np.random.seed(0)
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
+# %%
 
 # %%
 transforms = Compose(
@@ -35,7 +36,7 @@ transforms = Compose(
     )
 )
 dataset = UndersampledSliceDataset('/home/kadotab/header.json', transforms=transforms, R=2)
-dataloader = DataLoader(dataset, batch_size=3)
+dataloader = DataLoader(dataset, batch_size=3, collate_fn=collate_fn)
     
 
 # %%
@@ -80,11 +81,6 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
                     cur_loss += loss.item()
                     current_index += 1
                     if current_index % 1000 == 999:
-                        writer.add_histogram('sens/weights1', next(model.down_sample_layers[0].conv1.parameters()), current_index)
-                        writer.add_histogram('castcade0/weights1', next(model.down_sample_layers[0].conv2.parameters()), current_index)
-                        writer.add_histogram('castcade0/weights2', next(model.down_sample_layers[3].conv.conv1.parameters()), current_index)
-                        writer.add_histogram('castcade0/weights11', next(model.up_sample_layers[3].conv.conv2.parameters()), current_index)
-                        writer.add_histogram('castcade0/weights12', next(model.conv1d.parameters()), current_index)
                         writer.add_scalar('Loss/train', cur_loss, current_index)
                         print(f"Iteration: {current_index + 1:>d}, Loss: {cur_loss:>7f}")
                         save_model(model_weight_path, model, optimizer, current_index)
