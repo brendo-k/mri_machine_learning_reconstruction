@@ -1,5 +1,3 @@
-from ml_recon.Dataset.FileReader.filereader import FileReader
-from torch.utils.data import Dataset
 import json
 import os
 from typing import (
@@ -8,6 +6,9 @@ from typing import (
     Union,
 )
 
+from ml_recon.dataset.filereader.filereader import FileReader
+from torch.utils.data import Dataset
+
 
 class SliceLoader(Dataset):
     """
@@ -15,14 +16,14 @@ class SliceLoader(Dataset):
     to use in the filereader variable. 
     """
     filereader: FileReader
+
+
     def __init__(
-            self, 
-            index_info:Union[str, os.PathLike], 
-            raw_sample_filter:Optional[Callable]=lambda _: True, # if not defined let everything though
-            transforms:Optional[Callable]=None
+            self,
+            index_info: Union[str, os.PathLike], 
+            raw_sample_filter: Optional[Callable] = lambda _: True,  # if not defined let everything though
+            transforms: Optional[Callable] = None
             ):
-
-
         self.tranforms = transforms
         self.data_list = []
         with open(index_info, 'r') as f:
@@ -30,7 +31,8 @@ class SliceLoader(Dataset):
             for key in self.index_info:
                 if raw_sample_filter(self.index_info[key]):
                     self.data_list.append(self.index_info[key])
-    
+
+
     def set_file_reader(self, filereader: FileReader):
         self.filereader = filereader
 

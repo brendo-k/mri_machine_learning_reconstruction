@@ -1,8 +1,8 @@
 import numpy as np
-from ml_recon.Utils import combine_coils, ifft_2d_img
+from ml_recon.utils import combine_coils, ifft_2d_img
 import torch
 import einops
-import scipy
+
 
 def only_apply_to(sample, function, keys):
     for key in keys:
@@ -20,7 +20,7 @@ class trim_coils(object):
         return only_apply_to(sample, self.trim_coil, keys=['undersampled', 'k_space'])
 
     def trim_coil(self, sample):
-        sample = sample[:, :self.coil_size, : ,:]
+        sample = sample[:, :self.coil_size, :, :]
         return sample
 
 
@@ -41,10 +41,10 @@ class pad(object):
         pad = [(0, 0) for _ in range(sample.ndim)]
         pad[-2] = (x_diff//2, x_diff//2)
         pad[-1] = (y_diff//2, y_diff//2)
-        
 
         sample = np.pad(sample, pad)
         return sample[..., :self.pad_dim[0], :self.pad_dim[1]]
+
 
 class pad_recon(object):
     def __init__(self, pad_dim):
@@ -63,12 +63,11 @@ class pad_recon(object):
         pad = [(0, 0) for _ in range(sample.ndim)]
         pad[-2] = (x_diff//2, x_diff-x_diff//2)
         pad[-1] = (y_diff//2, y_diff-y_diff//2)
-        
 
         sample = np.pad(sample, pad)
         return sample[..., :self.pad_dim[0], :self.pad_dim[1]]
-        
-    
+
+
 class fft_2d(object):
     def __init__(self, axes):
         self.axes = axes
@@ -82,7 +81,7 @@ class combine_coil(object):
     def __init__(self, coil_dim, use_abs=False):
         self.coil_dim = coil_dim
         self.use_abs = use_abs
-        
+
     def __call__(self, sample: np.ndarray):
         sampled, undersampled = sample['k_space'], sample['undersampled']
         if self.use_abs:
@@ -95,7 +94,7 @@ class combine_coil(object):
         sample['undersampled'] = undersampled_combined
 
         return sample
-        
+
 
 class view_as_real(object):
     def __call__(self, sample: torch.Tensor):
@@ -117,7 +116,7 @@ class remove_slice_dim(object):
 
     def remove_first_dim(self, sample):
         return sample.reshape(((-1,) + sample.shape[2:]))
-    
+
 
 # Normalize to [0, 1] range
 class normalize(object):
@@ -132,6 +131,7 @@ class normalize(object):
         sample['k_space'] = k_space
         sample['recon'] = recon
         return sample
+
 
 # Normalize to [0, 1] range
 class normalize_mean(object):
@@ -150,6 +150,7 @@ class normalize_mean(object):
         sample['recon'] = recon
         return sample
 
+
 class permute(object):
     def __call__(self, sample):
         return only_apply_to(sample, self.permute, keys=['undersampled', 'k_space'])
@@ -164,13 +165,15 @@ class addChannels(object):
 
     def add_dim(self, sample):
         return sample.unsqueeze(0)
-        
+
+
 class convert_to_float(object):
     def __call__(self, sample):
         return only_apply_to(sample, self.convert_to_float, keys=['undersampled', 'k_space', 'recon'])
     
     def convert_to_float(self, sample):
         return sample.float()
+
 
 class crop_to_target(object):
     def __call__(self, sample):

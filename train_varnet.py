@@ -1,14 +1,16 @@
 # %%
 from ml_recon.models.varnet import VarNet
 from torch.utils.data import DataLoader
+import torch
+
 from ml_recon.transforms import (pad, toTensor, normalize)
 from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
+from ml_recon.utils import save_model
+from ml_recon.utils.collate_function import collate_fn
+
 from torchvision.transforms import Compose
 import numpy as np
 
-import torch
-from ml_recon.utils import image_slices, save_model
-from ml_recon.utils.collate_function import collate_fn
 
 # %%
 torch.manual_seed(0)
@@ -23,10 +25,10 @@ transforms = Compose(
     )
 )
 dataset = UndersampledSliceDataset(
-    '/home/kadotab/header.json', 
+    '/home/kadotab/header.json',
     transforms=transforms,
-    R=4, 
-    raw_sample_filter=lambda value: value['coils'] >=16)
+    R=4,
+    raw_sample_filter=lambda value: value['coils'] >= 16)
 
 dataloader = DataLoader(dataset, batch_size=2, collate_fn=collate_fn, num_workers=1)
     
@@ -44,10 +46,12 @@ data = next(iter(dataloader))
 # %%
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
+writer = SummaryWriter('/home/kadotab/scratch/runs/' + datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 # %%
 path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
+
+
 def train(model, loss_function, optimizer, dataloader, epoch=7):
     cur_loss = 0
     try:
@@ -79,7 +83,7 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
 
     save_model(path, model, optimizer, -1)
 
-# %%
+
 train(model, loss_fn, optimizer, dataloader, 50)
 
 

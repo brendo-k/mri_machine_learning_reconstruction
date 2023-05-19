@@ -1,20 +1,21 @@
 from .slice_loader import SliceLoader 
 import random
 import numpy as np
-from .FileReader.read_h5 import H5FileReader
+from .filereader.read_h5 import H5FileReader
 import os
 from typing import Union, Callable
 
+
 class UndersampledSliceDataset(SliceLoader):
     def __init__(
-            self, 
+            self,
             meta_data: Union[str, os.PathLike],
-            acs_width: int=20,
-            R: int=8, 
-            raw_sample_filter: Callable=lambda _: True,
-            transforms: Callable=None):
+            acs_width: int = 20,
+            R: int = 8,
+            raw_sample_filter: Callable = lambda _: True,
+            transforms: Callable = None):
 
-        # call super constructor 
+        # call super constructor
         super().__init__(meta_data, raw_sample_filter=raw_sample_filter)
         # define our file reader
         super().set_file_reader(H5FileReader)
@@ -40,7 +41,7 @@ class UndersampledSliceDataset(SliceLoader):
             data = self.transforms(data)
         return data
 
-    def build_mask(self, k_space, random_indecies) :
+    def build_mask(self, k_space, random_indecies):
         k_space_size = self.get_k_space_size(k_space)
         mask = np.ones((k_space_size[0], k_space_size[1]), dtype=np.int8)
         mask[..., random_indecies] = 0
@@ -66,4 +67,4 @@ class UndersampledSliceDataset(SliceLoader):
         return undersampled_indeces
 
     def get_k_space_size(self, k_space):
-        return k_space.shape[-2:] 
+        return k_space.shape[-2:]
