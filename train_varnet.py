@@ -1,15 +1,14 @@
 # %%
-from ml_recon.Models.modl import modl
+from ml_recon.models.varnet import VarNet
 from torch.utils.data import DataLoader
-from ml_recon.Transforms import (pad, toTensor, normalize)
-from ml_recon.Dataset.undersampled_slice_loader import UndersampledSliceDataset
+from ml_recon.transforms import (pad, toTensor, normalize)
+from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
 from torchvision.transforms import Compose
 import numpy as np
 
 import torch
-from ml_recon.Utils import image_slices, save_model
-from ml_recon.Utils.collate_function import collate_fn
-from ml_recon.Models.varnet import VarNet
+from ml_recon.utils import image_slices, save_model
+from ml_recon.utils.collate_function import collate_fn
 
 # %%
 torch.manual_seed(0)
@@ -23,28 +22,29 @@ transforms = Compose(
         normalize(),
     )
 )
-dataset = UndersampledSliceDataset('/home/kadotab/header.json', transforms=transforms, R=4)
-dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
+dataset = UndersampledSliceDataset(
+    '/home/kadotab/header.json', 
+    transforms=transforms,
+    R=4, 
+    raw_sample_filter=lambda value: value['coils'] >=16)
+
+dataloader = DataLoader(dataset, batch_size=2, collate_fn=collate_fn, num_workers=1)
     
-
-# %%
-data = next(iter(dataloader))
-
 # %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # %%
-model = VarNet(2, 2, num_cascades=5, use_norm=True)
+model = VarNet(num_cascades=5)
 model.to(device)
-
 # %%
 loss_fn = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+data = next(iter(dataloader))
 # %%
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-writer = SummaryWriter('/home/kadotab/scratch/runs' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
+writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 # %%
 path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
@@ -66,18 +66,14 @@ def train(model, loss_function, optimizer, dataloader, epoch=7):
 
                 loss.backward()
                 optimizer.step()
-                cur_loss += loss.item()
+                cur_loss += loss.item()*sampled.shape[0]
                   
-            writer.add_histogram('sens/weights1', next(model.sens_model.model.conv1d.parameters()), e)
-            writer.add_histogram('castcade0/weights1', next(model.cascade[0].unet.conv1d.parameters()), e)
-            writer.add_histogram('castcade0/weights2', next(model.cascade[1].unet.conv1d.parameters()), e)
-            writer.add_histogram('castcade0/weights11', next(model.cascade[-2].unet.conv1d.parameters()), e)
-            writer.add_histogram('castcade0/weights12', next(model.cascade[-1].unet.conv1d.parameters()), e)
             writer.add_histogram('varnet/regularizer', model.lambda_reg.data, e)
-            writer.add_scalar('Loss/train', cur_loss, e)
-            print(f"Iteration: {e + 1:>d}, Loss: {cur_loss:>7f}")
+            writer.add_scalar('train/loss', cur_loss/len(dataloader), e)
+            print(f"Iteration: {e + 1:>d}, Loss: {cur_loss/len(dataloader):>7f}")
             cur_loss = 0
-            save_model(path, model, optimizer, e) 
+            if e % 10 == 9:
+                save_model(path, model, optimizer, e) 
     except KeyboardInterrupt:
         pass
 
