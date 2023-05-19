@@ -1,16 +1,18 @@
-# %%
-from ml_recon.models.Unet import Unet
+from datetime import datetime
+
 from torch.utils.data import DataLoader
+
+from ml_recon.models.Unet import Unet
 from ml_recon.transforms import (pad, combine_coil, toTensor, addChannels, 
                                    view_as_real, fft_2d, normalize, pad_recon, normalize_mean)
+from ml_recon.utils.save_model import save_model
+from ml_recon.utils import combine_coils, image_slices
 from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
+from ml_recon.utils.collate_function import collate_fn
+
 from torchvision.transforms import Compose
 import numpy as np
 import torch
-from ml_recon.utils.collate_function import collate_fn
-from datetime import datetime
-from ml_recon.utils.save_model import save_model
-from ml_recon.utils import combine_coils, image_slices
 
 # %%
 torch.manual_seed(0)

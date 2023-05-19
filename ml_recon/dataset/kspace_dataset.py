@@ -1,11 +1,14 @@
-from .FileReader.filereader import FileReader
+from .filereader.filereader import FileReader
 import os
 from torch.utils.data import Dataset
 import xmltodict
 import numpy as np
 
+
 class KSpaceDataset(Dataset):
     filereader: FileReader
+
+
     def __init__(self, directory, transforms=None):
         self.file_list = KSpaceDataset._get_files(directory)
         self.directory = directory

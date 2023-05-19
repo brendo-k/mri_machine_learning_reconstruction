@@ -1,8 +1,8 @@
 import torch.nn as nn
 import torch
-from ml_recon.Models import Unet, NormUnet, SensetivityModel
-import einops
-from ml_recon.Utils import fft_2d_img, ifft_2d_img, complex_conversion
+from ml_recon.models import Unet, NormUnet, SensetivityModel
+from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
+
 
 class VarNet(nn.Module):
     def __init__(self, 
@@ -15,9 +15,20 @@ class VarNet(nn.Module):
                  dropout_prob=0):
         super().__init__()
         # module cascades
-        self.cascade = nn.ModuleList(
-            [VarnetBlock(NormUnet(in_chan, out_chan, chans=model_chans, with_instance_norm=use_norm, drop_prob=dropout_prob)) for _ in range(num_cascades)]
+        self.cascade = nn.ModuleList()
+        for _ in range(num_cascades):
+            self.cascade.append(
+                VarnetBlock(
+                    NormUnet(
+                        in_chan,
+                        out_chan,
+                        chans=model_chans,
+                        with_instance_norm=use_norm,
+                        drop_prob=dropout_prob
+                    )
+                )
             )
+
         # model to estimate sensetivities
         self.sens_model = SensetivityModel(in_chan, out_chan, chans=sens_chans, mask_center=True)
         # regularizer weight

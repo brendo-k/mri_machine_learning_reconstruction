@@ -1,7 +1,8 @@
 from .kspace_dataset import KSpaceDataset
 import random
 import numpy as np
-from .FileReader.read_h5 import H5FileReader
+from .filereader.read_h5 import H5FileReader
+
 
 class UndersampledKSpaceDataset(KSpaceDataset):
     def __init__(self, h5_directory, acs_width=20, R=8, transforms=None):
@@ -31,7 +32,7 @@ class UndersampledKSpaceDataset(KSpaceDataset):
             data = self.transforms(data)
         return data
 
-    def build_mask(self, k_space, random_indecies) :
+    def build_mask(self, k_space, random_indecies):
         k_space_size = self.get_k_space_size(k_space)
         mask = np.ones((k_space.shape[0], k_space_size[0], k_space_size[1]), dtype=np.int8)
         mask[:, :, random_indecies] = 0
@@ -47,8 +48,8 @@ class UndersampledKSpaceDataset(KSpaceDataset):
     def get_undersampled_indecies(self, k_space, acs_width, R):
         k_space_size = self.get_k_space_size(k_space)
         center = int(k_space_size[1]//2)
-        acs_bounds = [(center - acs_width//2),(center + np.ceil(acs_width//2).astype(int))]
-        sampled_indeces = [index for index in range(k_space_size[1]) if index not in range(acs_bounds[0],acs_bounds[1])]
+        acs_bounds = [(center - acs_width//2), (center + np.ceil(acs_width//2).astype(int))]
+        sampled_indeces = [index for index in range(k_space_size[1]) if index not in range(acs_bounds[0], acs_bounds[1])]
         random_indecies = random.choices(sampled_indeces, k=k_space_size[1]//R)
         random_indecies = np.concatenate((random_indecies, range(acs_bounds[0], acs_bounds[1])))
 

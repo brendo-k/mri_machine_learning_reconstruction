@@ -83,6 +83,7 @@ class MriModule(pl.LightningModule):
                 raise RuntimeError(
                     f"Expected key {k} in dict returned by validation_step."
                 )
+
         if val_logs["output"].ndim == 2:
             val_logs["output"] = val_logs["output"].unsqueeze(0)
         elif val_logs["output"].ndim != 3:
