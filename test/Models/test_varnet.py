@@ -1,4 +1,4 @@
-from ml_recon.Models.varnet import VarNet
+from ml_recon.models.varnet import VarNet
 import torch
 
 def test_passthrough():
