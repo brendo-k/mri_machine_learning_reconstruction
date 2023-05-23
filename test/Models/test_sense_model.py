@@ -1,4 +1,4 @@
-from ml_recon.Models.SensetivityModel import SensetivityModel
+from ml_recon.models.sensetivityModel import SensetivityModel
 import torch
 
 def test_passthrough():

@@ -1,4 +1,4 @@
-from ml_recon.Transforms import normalize, pad
+from ml_recon.transforms import normalize, pad
 import torch
 
 
