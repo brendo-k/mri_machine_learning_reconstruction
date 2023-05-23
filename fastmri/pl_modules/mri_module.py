@@ -3,6 +3,8 @@ Copyright (c) Facebook, Inc. and its affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Modified by Brenden Kadota
 """
 
 import pathlib
@@ -12,23 +14,23 @@ from collections import defaultdict
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from torchmetrics.metric import Metric
+# from torchmetrics.metric import Metric
 
 import fastmri
 from fastmri import evaluate
 
 
-class DistributedMetricSum(Metric):
-    def __init__(self, dist_sync_on_step=True):
-        super().__init__(dist_sync_on_step=dist_sync_on_step)
-
-        self.add_state("quantity", default=torch.tensor(0.0), dist_reduce_fx="sum")
-
-    def update(self, batch: torch.Tensor):  # type: ignore
-        self.quantity += batch
-
-    def compute(self):
-        return self.quantity
+# class DistributedMetricSum(Metric):
+#     def __init__(self, dist_sync_on_step=True):
+#         super().__init__(dist_sync_on_step=dist_sync_on_step)
+#
+#         self.add_state("quantity", default=torch.tensor(0.0), dist_reduce_fx="sum")
+#
+#     def update(self, batch: torch.Tensor):  # type: ignore
+#         self.quantity += batch
+#
+#     def compute(self):
+#         return self.quantity
 
 
 class MriModule(pl.LightningModule):
@@ -61,32 +63,22 @@ class MriModule(pl.LightningModule):
         self.num_log_images = num_log_images
         self.val_log_indices = None
 
-        self.NMSE = DistributedMetricSum()
-        self.SSIM = DistributedMetricSum()
-        self.PSNR = DistributedMetricSum()
-        self.ValLoss = DistributedMetricSum()
-        self.TotExamples = DistributedMetricSum()
-        self.TotSliceExamples = DistributedMetricSum()
+        # This should be used if we are trainign on multiple gpus, figure this out
+        # when we try training larger models
+        # self.NMSE = DistributedMetricSum()
+        # self.SSIM = DistributedMetricSum()
+        # self.PSNR = DistributedMetricSum()
+        # self.ValLoss = DistributedMetricSum()
+        # self.TotExamples = DistributedMetricSum()
+        # self.TotSliceExamples = DistributedMetricSum()
 
-    def validation_step_end(self, val_logs):
+    def on_validation_batch_end(self, val_logs):
         # check inputs
-        for k in (
-            "batch_idx",
-            "fname",
-            "slice_num",
-            "max_value",
-            "output",
-            "target",
-            "val_loss",
-        ):
-            if k not in val_logs.keys():
-                raise RuntimeError(
-                    f"Expected key {k} in dict returned by validation_step."
-                )
-        if val_logs["output"].ndim == 2:
-            val_logs["output"] = val_logs["output"].unsqueeze(0)
-        elif val_logs["output"].ndim != 3:
-            raise RuntimeError("Unexpected output size from validation_step.")
+        self.validate_keys(val_logs)
+
+        self.check_dim_sizes(val_logs, 'output')
+        self.check_dim_sizes(val_logs, 'target')
+
         if val_logs["target"].ndim == 2:
             val_logs["target"] = val_logs["target"].unsqueeze(0)
         elif val_logs["target"].ndim != 3:
@@ -95,9 +87,7 @@ class MriModule(pl.LightningModule):
         # pick a set of images to log if we don't have one already
         if self.val_log_indices is None:
             self.val_log_indices = list(
-                np.random.permutation(len(self.trainer.val_dataloaders[0]))[
-                    : self.num_log_images
-                ]
+                np.random.permutation(len(self.trainer.val_dataloaders[0]))[:self.num_log_images]
             )
 
         # log images to tensorboard
@@ -105,6 +95,7 @@ class MriModule(pl.LightningModule):
             batch_indices = [val_logs["batch_idx"]]
         else:
             batch_indices = val_logs["batch_idx"]
+
         for i, batch_idx in enumerate(batch_indices):
             if batch_idx in self.val_log_indices:
                 key = f"val_images_idx_{batch_idx}"
@@ -129,9 +120,7 @@ class MriModule(pl.LightningModule):
             output = val_logs["output"][i].cpu().numpy()
             target = val_logs["target"][i].cpu().numpy()
 
-            mse_vals[fname][slice_num] = torch.tensor(
-                evaluate.mse(target, output)
-            ).view(1)
+            mse_vals[fname][slice_num] = torch.tensor(evaluate.mse(target, output)).view(1)
             target_norms[fname][slice_num] = torch.tensor(
                 evaluate.mse(target, np.zeros_like(target))
             ).view(1)
@@ -147,6 +136,29 @@ class MriModule(pl.LightningModule):
             "ssim_vals": dict(ssim_vals),
             "max_vals": max_vals,
         }
+
+    def check_dim_sizes(self, val_logs):
+        if val_logs[val_logs].ndim == 2:
+            val_logs[val_logs] = val_logs[val_logs].unsqueeze(0)
+
+        elif val_logs[val_logs].ndim != 3:
+            raise RuntimeError("Unexpected output size from validation_step.")
+
+    # make sure val_logs contains the proper keys
+    def validate_keys(self, val_logs):
+        for k in (
+            "batch_idx",
+            "fname",
+            "slice_num",
+            "max_value",
+            "output",
+            "target",
+            "val_loss",
+        ):
+            if k not in val_logs.keys():
+                raise RuntimeError(
+                    f"Expected key {k} in dict returned by validation_step."
+                )
 
     def log_image(self, name, image):
         self.logger.experiment.add_image(name, image, global_step=self.global_step)

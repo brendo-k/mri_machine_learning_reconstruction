@@ -22,7 +22,6 @@ class NormUnet(nn.Module):
             out_chan, 
             depth=4,
             chans=18, 
-            with_instance_norm=True,
             drop_prob=0
             ):
         """
@@ -40,7 +39,6 @@ class NormUnet(nn.Module):
             out_chan,
             chans=chans,
             depth=depth,
-            with_instance_norm=with_instance_norm,
             drop_prob=drop_prob,
         )
 
