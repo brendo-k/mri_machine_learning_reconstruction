@@ -1,9 +1,9 @@
-
 # %%
 from datetime import datetime
 
-from ml_recon.models.varnet import VarNet
-from torch.utils.data import DataLoader
+#from ml_recon.models.varnet import VarNet
+from fastmri.models.varnet import VarNet
+from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -39,20 +39,19 @@ val_dataset = UndersampledSliceDataset(
     transforms=transforms,
     R=4,
     )
-
+train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
 train_loader = DataLoader(train_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
 val_loader = DataLoader(val_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
 
 # %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-data = next(iter(val_loader))
 # %%
-model = VarNet(num_cascades=5)
+model = VarNet(num_cascades=3)
 model.to(device)
 # %%
 loss_fn = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 # %%
 writer = SummaryWriter('/home/kadotab/scratch/runs/' + datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -72,10 +71,11 @@ def train(model, loss_function, optimizer, dataloader):
         mask_slice = mask.to(device)
         undersampled_slice = undersampled.to(device)
         sampled_slice = sampled.to(device)
+        undersampled_slice = torch.view_as_real(undersampled_slice)
 
-        predicted_sampled = model(undersampled_slice, mask_slice)
+        predicted_sampled = model(undersampled_slice, (undersampled_slice != 0).bool().to(device))
         loss = loss_function(
-            torch.view_as_real(predicted_sampled),
+            (predicted_sampled),
             torch.view_as_real(sampled_slice)
             )
 
@@ -96,10 +96,11 @@ def validate(model, loss_function, dataloader):
             mask_slice = mask.to(device)
             undersampled_slice = undersampled.to(device)
             sampled_slice = sampled.to(device)
+            undersampled_slice = torch.view_as_real(undersampled_slice)
 
-            predicted_sampled = model(undersampled_slice, mask_slice)
+            predicted_sampled = model(undersampled_slice, (undersampled_slice != 0).bool().to(device))
             loss = loss_function(
-                torch.view_as_real(predicted_sampled),
+                (predicted_sampled),
                 torch.view_as_real(sampled_slice)
                 )
 
@@ -108,16 +109,17 @@ def validate(model, loss_function, dataloader):
 
 
 for e in range(50):
+    torch.use_deterministic_algorithms(True)
     sample = next(iter(val_loader))
-    output = model(sample['undersampled'].to(device), sample['mask'].to(device))
-    output = ifft_2d_img(output)
-    output = output.pow(2).sum(1).sqrt()
+    output = model(torch.view_as_real(sample['undersampled'].to(device)), (torch.view_as_real(sample['undersampled']) != 0).bool().to(device))
+    output = torch.view_as_real(ifft_2d_img(torch.view_as_complex(output)))
+    output = output.pow(2).sum(-1).sqrt().pow(2).sum(1).sqrt()
     output = output[:, 160:-160, :].cpu()
     diff = (output - sample['recon'])
     writer.add_image('val/recon', output[0].abs().unsqueeze(0)/output[0].abs().max(), e)
     writer.add_image('val/diff', diff[0].abs().unsqueeze(0)/diff[0].abs().max(), e)
     writer.add_image('val/target', sample['recon'][0].unsqueeze(0)/sample['recon'][0].max(), e)
-    writer.add_histogram('weights/lambda', model.lambda_reg)
+    #writer.add_histogram('weights/lambda', model.lambda_reg)
     train_loss = train(model, loss_fn, optimizer, train_loader)
     val_loss = validate(model, loss_fn, val_loader)
 

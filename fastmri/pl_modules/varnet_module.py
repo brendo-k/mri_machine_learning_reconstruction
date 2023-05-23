@@ -9,9 +9,7 @@ from argparse import ArgumentParser
 
 import torch
 
-import fastmri
-from fastmri.data import transforms
-from fastmri.models import VarNet
+from ml_recon.models.varnet import VarNet
 
 from .mri_module import MriModule
 
@@ -34,7 +32,7 @@ class VarNetModule(MriModule):
 
     def __init__(
         self,
-        num_cascades: int = 12,
+        num_cascades: int = 5,
         pools: int = 4,
         chans: int = 18,
         sens_pools: int = 4,
@@ -90,10 +88,11 @@ class VarNetModule(MriModule):
             pools=self.pools,
         )
 
-        self.loss = fastmri.SSIMLoss()
+        self.loss = torch.nn.MSELoss()
 
-    def forward(self, masked_kspace, mask, num_low_frequencies):
-        return self.varnet(masked_kspace, mask, num_low_frequencies)
+    # forward pass
+    def forward(self, masked_kspace, mask):
+        return self.varnet(masked_kspace, mask)
 
     def training_step(self, batch, batch_idx):
         output = self(batch.masked_kspace, batch.mask, batch.num_low_frequencies)

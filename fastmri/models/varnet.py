@@ -265,18 +265,20 @@ class VarNet(nn.Module):
         )
 
     def forward(
-        self,
-        masked_kspace: torch.Tensor,
-        mask: torch.Tensor,
-        num_low_frequencies: Optional[int] = None,
-    ) -> torch.Tensor:
+            self,
+            masked_kspace: torch.Tensor,
+            mask: torch.Tensor,
+            num_low_frequencies: Optional[int] = None,
+        ) -> torch.Tensor:
+
         sens_maps = self.sens_net(masked_kspace, mask, num_low_frequencies)
         kspace_pred = masked_kspace.clone()
 
         for cascade in self.cascades:
             kspace_pred = cascade(kspace_pred, masked_kspace, mask, sens_maps)
 
-        return fastmri.rss(fastmri.complex_abs(fastmri.ifft2c(kspace_pred)), dim=1)
+        return kspace_pred
+        # return fastmri.rss(fastmri.complex_abs(fastmri.ifft2c(kspace_pred)), dim=1)
 
 
 class VarNetBlock(nn.Module):
