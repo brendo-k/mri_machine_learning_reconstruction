@@ -3,52 +3,47 @@ import torch.nn as nn
 import torch 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chan, out_chan, with_instance_norm, drop_prob):
+    def __init__(self, in_chans, out_chans, drop_prob):
+        
         super().__init__()
 
-        self.conv1 = nn.Conv2d(in_chan, out_chan, kernel_size=3, bias=False, padding=1, dtype=torch.float)
-        self.conv2 = nn.Conv2d(out_chan, out_chan, kernel_size=3, bias=False, padding=1, dtype=torch.float)
-        self.activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        self.instance_norm1 = nn.InstanceNorm2d(out_chan) 
-        self.instance_norm2 = nn.InstanceNorm2d(out_chan) 
-        self.with_instance_norm = with_instance_norm
-        self.drop_out1 = nn.Dropout2d(drop_prob)
-        self.drop_out2 = nn.Dropout2d(drop_prob)
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Dropout2d(drop_prob),
+            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Dropout2d(drop_prob),
+        )
       
     def forward(self, x):
-      x = self.conv1(x)
-      if self.with_instance_norm:
-        x = self.instance_norm1(x)
-      x = self.activation(x)
-      x = self.drop_out1(x)
-      x = self.conv2(x)
-      if self.with_instance_norm:
-        x = self.instance_norm2(x)
-      x = self.activation(x)
-      x = self.drop_out2(x)
-      return x
+        x = self.layers(x)
+        return x
 
 class down(nn.Module):
-  def __init__(self):
-    super().__init__()
-    self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
+    def __init__(self):
+        super().__init__()
+        self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
 
-  def forward(self, x):
-    x = self.max_pool(x)
-    return x
+    def forward(self, x):
+        x = self.max_pool(x)
+        return x
+
 
 class up(nn.Module):
   def __init__(self, in_chan, out_chan):
     super().__init__()
-    self.upsample = nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, dtype=torch.float)
-    self.instanceNorm = nn.InstanceNorm2d(out_chan)
-    self.relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
+    self.layers = nn.Sequential(
+      nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
+      nn.InstanceNorm2d(out_chan),
+      nn.LeakyReLU(negative_slope=0.2, inplace=True),
+    )
   def forward(self, x):
-    x = self.upsample(x)
-    x = self.instanceNorm(x)
-    x = self.relu(x)
+    x = self.layers(x)
     return x
+
 
 class concat(nn.Module):
   def __init__(self):
