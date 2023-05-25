@@ -107,7 +107,7 @@ class view_as_real(object):
 
 class toTensor(object):
     def __call__(self, sample: np.ndarray):
-        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon'])
+        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon', 'double_undersample', 'lambda_mask', 'K', 'prob_omega'])
 
 
 class remove_slice_dim(object):
@@ -126,6 +126,8 @@ class normalize(object):
         undersampled /= undersample_max
         k_space /= undersample_max
         recon /= undersample_max
+        if 'double_undersample' in sample.keys():
+            sample['double_undersample'] = sample['double_undersample'] / undersample_max
 
         sample['undersampled'] = undersampled
         sample['k_space'] = k_space

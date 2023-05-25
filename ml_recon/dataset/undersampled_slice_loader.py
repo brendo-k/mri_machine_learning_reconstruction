@@ -25,6 +25,13 @@ class UndersampledSliceDataset(SliceLoader):
         self.R = R
 
     def __getitem__(self, index):
+        data = self.get_item_from_index(index)
+
+        if self.transforms:
+            data = self.transforms(data)
+        return data
+
+    def get_item_from_index(self, index):
         data = super().__getitem__(index)
 
         # get k-space data
@@ -36,11 +43,9 @@ class UndersampledSliceDataset(SliceLoader):
 
         data['mask'] = mask
         data['undersampled'] = undersampled
-        data['prob_omega'] = prob_map
-
-        if self.transforms:
-            data = self.transforms(data)
+        data['prob_omega'] = prob_map.copy()
         return data
+            
 
     def build_mask(self, k_space, random_indecies):
         k_space_size = self.get_k_space_size(k_space)
