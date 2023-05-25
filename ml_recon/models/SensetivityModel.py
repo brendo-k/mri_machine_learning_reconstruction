@@ -44,6 +44,7 @@ class SensetivityModel(nn.Module):
         return images
 
     def mask(self, coil_images, mask):
+        masked_images = coil_images.clone()
         squeezed_mask = mask[:, 0,  :].to(torch.int8)
         cent = squeezed_mask.shape[1] // 2
         # running argmin returns the first non-zero
@@ -52,9 +53,9 @@ class SensetivityModel(nn.Module):
 
         bounds = torch.max(torch.cat((left, right)))
 
-        coil_images[..., :cent - bounds - 1] = 0
-        coil_images[..., cent + bounds:] = 0
-        return coil_images
+        masked_images[..., :cent - bounds - 1] = 0
+        masked_images[..., cent + bounds:] = 0
+        return masked_images
 
     # sense_map [batches channel height width], take absolute root sum of squares
     def root_sum_of_squares(self, sense_map):
