@@ -1,9 +1,11 @@
 import torch
+from typing import Optional
 
-def load_checkpoint(path, model:torch.nn.Module, optimizer:torch.optim.Optimizer):
+def load_checkpoint(path, model:torch.nn.Module, optimizer : Optional[torch.optim.Optimizer] = None):
 
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
     

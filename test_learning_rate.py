@@ -104,7 +104,7 @@ def validate(model, loss_function, dataloader):
     return val_running_loss/len(dataloader)
 
 
-lr = torch.linspace(1e-8, 0.1, 400)
+lr = torch.linspace(1e-8, 0.1, 200)
 losses = []
 sample = next(iter(train_loader))
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
