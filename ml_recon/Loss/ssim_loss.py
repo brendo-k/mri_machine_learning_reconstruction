@@ -37,7 +37,6 @@ class SSIMLoss(nn.Module):
     ):
         assert isinstance(self.w, torch.Tensor)
 
-        data_range = data_range[:, None, None, None]
         C1 = (self.k1 * data_range) ** 2
         C2 = (self.k2 * data_range) ** 2
         ux = F.conv2d(X, self.w)  # typing: ignore

@@ -5,36 +5,29 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-import argparse
-import pathlib
-from argparse import ArgumentParser
 from typing import Optional
 
-import h5py
+import torch
 import numpy as np
-from runstats import Statistics
-from skimage.metrics import peak_signal_noise_ratio, structural_similarity
-
-from fastmri.data import transforms
+from ml_recon.Loss.ssim_loss import SSIMLoss
 
 
-def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
+def mse(gt: torch.Tensor, pred: torch.Tensor) -> np.ndarray:
     """Compute Mean Squared Error (MSE)"""
-    return np.mean((gt - pred) ** 2)
+    return ((gt - pred) ** 2).mean()
 
 
-def nmse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
+def nmse(gt: torch.Tensor, pred: torch.Tensor) -> np.ndarray:
     """Compute Normalized Mean Squared Error (NMSE)"""
-    return np.array(np.linalg.norm(gt - pred) ** 2 / np.linalg.norm(gt) ** 2)
+    return torch.linalg.vector_norm(gt - pred) ** 2 / torch.linalg.vector_norm(gt) ** 2
 
 
 def psnr(
     gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
 ) -> np.ndarray:
     """Compute Peak Signal to Noise Ratio metric (PSNR)"""
-    if maxval is None:
-        maxval = gt.max()
-    return peak_signal_noise_ratio(gt, pred, data_range=maxval)
+    error = mse(gt, pred)
+    return 10 * torch.log10(pred.max().pow(2)/error)
 
 
 def ssim(
@@ -48,10 +41,8 @@ def ssim(
 
     maxval = gt.max() if maxval is None else maxval
 
-    ssim = np.array([0])
-    for slice_num in range(gt.shape[0]):
-        ssim = ssim + structural_similarity(
-            gt[slice_num], pred[slice_num], data_range=maxval
+    ssim = SSIMLoss()(
+            gt, pred, data_range=maxval
         )
 
-    return ssim / gt.shape[0]
+    return ssim 
