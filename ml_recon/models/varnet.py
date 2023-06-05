@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from ml_recon.models import NormUnet, SensetivityModel
-from fastmri.models.unet import Unet
+from ml_recon.models.resnet import resnet
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 
@@ -16,15 +16,11 @@ class VarNet(nn.Module):
         super().__init__()
         # module cascades
         self.cascade = nn.ModuleList()
+        self.model = resnet(15)
         for _ in range(num_cascades):
             self.cascade.append(
                 VarnetBlock(
-                    NormUnet(
-                        in_chan,
-                        out_chan,
-                        chans=model_chans,
-                        drop_prob=dropout_prob
-                    )
+                    self.model
                 )
             )
 
@@ -51,7 +47,7 @@ class VarNet(nn.Module):
         return current_k
 
 class VarnetBlock(nn.Module):
-    def __init__(self, unet: Unet) -> None:
+    def __init__(self, unet: nn.Module) -> None:
         super().__init__()
         self.unet = unet
 

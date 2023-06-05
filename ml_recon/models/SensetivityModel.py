@@ -1,7 +1,5 @@
 import torch.nn as nn
-import numpy as np
 from ml_recon.models.NormUnet import NormUnet
-# from ml_recon.models.NormUnet import NormUnet
 from ml_recon.utils import ifft_2d_img
 from ml_recon.utils import complex_conversion
 import einops
