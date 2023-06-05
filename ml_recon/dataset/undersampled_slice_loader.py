@@ -103,7 +103,6 @@ class UndersampledSliceDataset(SliceLoader):
                 break
             ii += 1
             if ii == 100:
-                warnings.warn('gen_pdf_columns did not converge after 100 iterations')
                 break
         prob_map = np.repeat(prob_map, nx, axis=1)
         prob_map = np.rot90(prob_map)

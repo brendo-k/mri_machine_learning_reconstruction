@@ -18,8 +18,9 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
         # get undersampled k-space data
         undersampled = data['undersampled']
 
-        prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, self.acs_width)
-
+        # get probability density function of k-space along columns
+        prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, 0)
+        
         lambda_mask = super().mask_from_prob(prob_lambda)
         prob_omega = data['prob_omega']
 

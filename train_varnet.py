@@ -2,8 +2,8 @@
 # %%
 from datetime import datetime
 
-from ml_recon.models.varnet import VarNet
-from torch.utils.data import DataLoader
+from ml_recon.models.varnet_resnet import VarNet
+from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -40,25 +40,22 @@ val_dataset = UndersampledSliceDataset(
     R=4,
     )
 
-train_loader = DataLoader(train_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
-val_loader = DataLoader(val_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
+#train_dataset, _ = random_split(train_dataset, [0.05, 0.95])
+train_loader = DataLoader(train_dataset, batch_size=1, num_workers=1, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=1, num_workers=1)
 
-# %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-data = next(iter(val_loader))
-# %%
 model = VarNet(num_cascades=5)
 model.to(device)
-# %%
+
 loss_fn = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+tensorboard_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%Y%m%d-%H%M%S")
+writer = SummaryWriter(tensorboard_dir)
 
 # %%
-writer = SummaryWriter('/home/kadotab/scratch/runs/' + datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-# %%
-path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
+path = '/home/kadotab/python/ml/ml_recon/Model_Weights/self2/'
 
 
 def train(model, loss_function, optimizer, dataloader):
@@ -107,21 +104,25 @@ def validate(model, loss_function, dataloader):
     return val_running_loss/len(dataloader)
 
 
+
+sample = next(iter(val_loader))
 for e in range(50):
-    sample = next(iter(val_loader))
-    output = model(sample['undersampled'].to(device), sample['mask'].to(device))
-    output = ifft_2d_img(output)
-    output = output.pow(2).sum(1).sqrt()
-    output = output[:, 160:-160, :].cpu()
-    diff = (output - sample['recon'])
-    writer.add_image('val/recon', output[0].abs().unsqueeze(0)/output[0].abs().max(), e)
-    writer.add_image('val/diff', diff[0].abs().unsqueeze(0)/diff[0].abs().max(), e)
-    writer.add_image('val/target', sample['recon'][0].unsqueeze(0)/sample['recon'][0].max(), e)
-    writer.add_histogram('weights/lambda', model.lambda_reg)
+    with torch.no_grad():
+        sampled = sample['undersampled'].to(device)
+        output = model(sampled, sample['mask'].to(device))
+        output = ifft_2d_img(output)
+        output = output.abs().pow(2).sum(1).sqrt()
+        output = output[:, 160:-160, :].cpu()
+        diff = (output - sample['recon'])
+        writer.add_image('val/recon', output[0].unsqueeze(0)/output[0].max(), e)
+        writer.add_image('val/diff', diff[0].abs().unsqueeze(0)/diff[0].abs().max(), e)
+        writer.add_image('val/target', sample['recon'][0].unsqueeze(0)/sample['recon'][0].max(), e)
+        writer.add_histogram('weights/lambda', model.lambda_reg)
+        
     train_loss = train(model, loss_fn, optimizer, train_loader)
     val_loss = validate(model, loss_fn, val_loader)
 
     writer.add_scalar('train/loss', train_loss, e)
     writer.add_scalar('val/loss', val_loss, e)
 
-    save_model(path, model, optimizer, e)
+save_model(path, model, optimizer, 50)

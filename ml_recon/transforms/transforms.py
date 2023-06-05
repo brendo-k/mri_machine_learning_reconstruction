@@ -121,17 +121,16 @@ class remove_slice_dim(object):
 # Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
-        undersampled, k_space, recon = sample['undersampled'], sample['k_space'], sample['recon']
+        undersampled, k_space,  = sample['undersampled'], sample['k_space']
         undersample_max = ifft_2d_img(undersampled).abs().max()
         undersampled /= undersample_max
         k_space /= undersample_max
-        recon /= undersample_max
         if 'double_undersample' in sample.keys():
             sample['double_undersample'] = sample['double_undersample'] / undersample_max
 
         sample['undersampled'] = undersampled
         sample['k_space'] = k_space
-        sample['recon'] = recon
+        sample['scaling_factor'] = undersample_max
         return sample
 
 

@@ -1,131 +1,79 @@
+
 # %%
-from ml_recon.Models.Unet import Unet
+from datetime import datetime
+
+from ml_recon.models.varnet_resnet import VarNet
 from torch.utils.data import DataLoader
-from ml_recon.Transforms import (pad, combine_coil, toTensor, addChannels, 
-                                   view_as_real, fft_2d, normalize, pad_recon)
-from ml_recon.Dataset.undersampled_slice_loader import UndersampledSliceDataset
+import torch
+
+from ml_recon.transforms import (toTensor, normalize)
+from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
+from ml_recon.utils import ifft_2d_img
+from ml_recon.utils.evaluate import nmse, psnr
+from ml_recon.Loss.ssim_loss import SSIMLoss
+
 from torchvision.transforms import Compose
 import numpy as np
-import torch
-from ml_recon.Utils.collate_function import collate_fn
-from datetime import datetime
-from ml_recon.Utils.save_model import save_model
-from ml_recon.Utils import combine_coils, image_slices
-from ml_recon.Models.fastMRI_varnet import Varnet
 
+path = '/home/kadotab/python/ml/ml_recon/Model_Weights/self/20230525-173845VarNet.pt'
 # %%
 torch.manual_seed(0)
 np.random.seed(0)
 
 # %%
-from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter('/home/kadotab/scratch/runs/' +  datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-# %%
-
-# %%
 transforms = Compose(
     (
-        pad((640, 320)),
-        pad_recon((320, 320)), 
-        fft_2d(axes=[-1, -2]),
+        # pad((640, 320)),
         toTensor(),
-        combine_coil(0),
-        normalize(), 
-        addChannels(),
-        view_as_real(),
+        normalize(),
     )
 )
-dataset = UndersampledSliceDataset('/home/kadotab/header.json', transforms=transforms, R=2)
-dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
-    
+test_dataset = UndersampledSliceDataset(
+    '/home/kadotab/test_16_header.json',
+    transforms=transforms,
+    R=4,
+    )
+
+test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
 
 # %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # %%
-model = Unet(2, 2)
+model = VarNet(num_cascades=5)
 model.to(device)
 
-# %%
-checkpoint = torch.load('/home/kadotab/python/ml/ml_recon/Model_Weights/20230505-204602Unet.pt')
+checkpoint = torch.load(path, map_location=torch.device('cpu'))
 model.load_state_dict(checkpoint['model'])
+nmse_values = []
+ssim_values = []
+psnr_values = []
+ssim = SSIMLoss().to(device)
+model.train(False)
+val_running_loss = 0
+for data in test_loader:
+    with torch.no_grad():
+        sampled = data['k_space']
+        mask = data['mask']
+        undersampled = data['undersampled']
+        mask_slice = mask.to(device)
+        undersampled_slice = undersampled.to(device)
+        sampled_slice = sampled.to(device)
 
-# %%
-loss_fn = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        predicted_sampled = model(undersampled_slice, mask_slice)
+        predicted_sampled = ifft_2d_img(predicted_sampled)
+        predicted_sampled *= data['scaling_factor'].to(device)
+        sampled = ifft_2d_img(sampled)
 
-# %%
-optimizer.load_state_dict(checkpoint['optimizer'])
-
-# %%
-data = next(iter(dataloader))
-
-# %%
-output = model(data['undersampled'].to(device))
-
-# %%
-
-
-# %%
-output.shape
-
-# %%
-output.shape
-
-# %%
-output_abs = output.pow(2).sum(1).sqrt()
-
-# %%
-# %%
-import matplotlib.pyplot as plt
-
-# %%
-model_weight_path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-def train(model, loss_function, optimizer, dataloader, epoch=7):
-    cur_loss = 0
-    e = 0
-    try:
-        for e in range(epoch):
-            for data in dataloader:
-                undersampled = data['undersampled']
-                recon = data['recon']
-                optimizer.zero_grad()
-
-                recon_slice = recon.to(device)
-                undersampled = undersampled.to(device)
+        image = predicted_sampled.abs().pow(2).sum(1).sqrt()
+        image = image[:, 160:-160, :] 
+        gt = data['recon'] 
+        gt = gt.to(device)
+        nmse_values.append(nmse(gt, image))
+        ssim_values.append(ssim(gt, image, gt.max()))
+        psnr_values.append(psnr(gt, image))
     
-                predicted_sampled = model(undersampled)
-
-                predicted_sampled = torch.sqrt(predicted_sampled.pow(2).sum(1)+ 1e-8)
-                predicted_sampled = predicted_sampled[:, 160:-160, :]
-                fig, ax = plt.subplots(1, 3)
-                ax[0].imshow(predicted_sampled[0].cpu().detach())
-                ax[1].imshow(recon_slice[0].cpu())
-                ax[2].imshow(recon_slice[0].cpu() - predicted_sampled[0].detach().cpu())
-                plt.show()
-                print((recon_slice - predicted_sampled).pow(2).sum())
-                loss = loss_function(predicted_sampled, recon_slice)
-                print(loss) 
-                loss.backward()
-                optimizer.step()
-                    
-                cur_loss += loss.item()
-            writer.add_histogram('sens/weights1', model.down_sample_layers[0].conv1.weight, e)
-            writer.add_histogram('castcade0/weights1', model.down_sample_layers[0].conv2.weight, e)
-            writer.add_histogram('castcade0/weights2', model.down_sample_layers[3].conv.conv1.weight, e)
-            writer.add_histogram('castcade0/weights11', model.up_sample_layers[3].conv.conv2.weight, e)
-            writer.add_histogram('castcade0/weights12', model.conv1d.weight, e)
-            writer.add_scalar('Loss/train', cur_loss, e)
-            print(f"Iteration: {e + 1:>d}, Loss: {cur_loss:>7f}")
-            save_model(model_weight_path, model, optimizer, e)
-            cur_loss = 0
-    except KeyboardInterrupt:
-        pass
-
-    save_model(model_weight_path, model, optimizer, -1)
-
-# %%
-train(model, loss_fn, optimizer, dataloader, epoch=50)
-
-
+print('Unet supevised')
+print(sum(nmse_values)/len(nmse_values))
+print(1 - sum(ssim_values)/len(ssim_values))
+print(sum(psnr_values)/len(psnr_values))
