@@ -56,12 +56,3 @@ class SliceLoader(Dataset):
             if self.tranforms:
                 self.tranforms(data)
         return data 
-
-if __name__ == '__main__':
-    loader = SliceLoader('/home/kadotab/header.json', raw_sample_filter=lambda value: value['coils'] >=16)
-    import cProfile
-    from ml_recon.Dataset.FileReader.read_h5 import H5FileReader
-    loader.set_file_reader(H5FileReader)
-    cProfile.run('SliceLoader("/home/kadotab/header.json")')
-    print(len(loader))
-

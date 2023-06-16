@@ -10,10 +10,11 @@ class UndersampledSliceDataset(SliceLoader):
     def __init__(
             self,
             meta_data: Union[str, os.PathLike],
-            acs_width: int = 20,
+            acs_width: int = 10,
             R: int = 8,
             raw_sample_filter: Callable = lambda _: True,
-            transforms: Callable = None):
+            transforms: Callable = None
+            ):
 
         # call super constructor
         super().__init__(meta_data, raw_sample_filter=raw_sample_filter)
@@ -110,7 +111,7 @@ class UndersampledSliceDataset(SliceLoader):
     
     def mask_from_prob(self, prob_map):
         prob_map[prob_map > 0.99] = 1
-        (nx, ny) = np.shape(prob_map)
+        (nx, _) = np.shape(prob_map)
         mask1d = np.random.binomial(1, prob_map[0:1])
         mask = np.repeat(mask1d, nx, axis=0)
         return np.array(mask, dtype=bool)

@@ -2,7 +2,7 @@
 from datetime import datetime
 import os
 
-from ml_recon.models.varnet_unet import VarNet
+from ml_recon.models.varnet_resnet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -29,20 +29,20 @@ transforms = Compose(
     )
 )
 train_dataset = SelfSupervisedSampling(
-    '/home/kadotab/train_16_header.json',
+    '/home/kadotab/train.json',
     transforms=transforms,
     R=4,
-    R_hat=4
+    R_hat=2
     )
 
 val_dataset = SelfSupervisedSampling(
-    '/home/kadotab/val_16_header.json',
+    '/home/kadotab/val.json',
     transforms=transforms,
     R=4,
-    R_hat=4
+    R_hat=2
     )
 
-train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+[train_dataset, _] = random_split(train_dataset, [0.1, 0.9])
 train_loader = DataLoader(train_dataset, batch_size=1, num_workers=1, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=1, num_workers=1)
 
@@ -122,11 +122,11 @@ for e in range(50):
         sample = next(iter(val_loader))
         sampled = sample['undersampled']
         output = model(sampled.to(device), sample['mask'].to(device))
-        output = output * sample['scale_factor'].to(device)
+        output = output * sample['scaling_factor'].to(device)
         output = ifft_2d_img(output)
         output = output.abs().pow(2).sum(1).sqrt()
         output = output[:, 160:-160, :].cpu()
-        diff = (output - sample['recon'])
+        diff = (output - sample['recon']).abs()
         writer.add_image('val/recon', output[0].abs().unsqueeze(0)/output[0].abs().max(), e)
         writer.add_image('val/diff', diff[0].abs().unsqueeze(0)/diff[0].abs().max(), e)
         writer.add_image('val/target', sample['recon'][0].unsqueeze(0)/sample['recon'][0].max(), e)
