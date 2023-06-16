@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from ml_recon.models import NormUnet, SensetivityModel
+from ml_recon.models import SensetivityModel
 from ml_recon.models.resnet import resnet
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 

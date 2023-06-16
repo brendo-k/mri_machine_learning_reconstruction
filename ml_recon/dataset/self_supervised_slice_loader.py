@@ -1,15 +1,22 @@
-import random
-
 from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
 import random
 import numpy as np
-import torch 
+
+from typing import Optional, Callable
 
 class SelfSupervisedSampling(UndersampledSliceDataset):
-    def __init__(self, h5_directory, R, R_hat, transforms):
-        super().__init__(h5_directory, R=R)
+    def __init__(
+            self, 
+            h5_directory, 
+            R, 
+            R_hat, 
+            transforms=None,
+            raw_sample_filter: Optional[Callable] = lambda x: True
+            ):
+        super().__init__(h5_directory, R=R, raw_sample_filter=raw_sample_filter)
         self.R_hat = R_hat
         self.transforms = transforms
+
 
     def __getitem__(self, index):
         
@@ -19,7 +26,7 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
         undersampled = data['undersampled']
 
         # get probability density function of k-space along columns
-        prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, 0)
+        prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, self.acs_width)
         
         lambda_mask = super().mask_from_prob(prob_lambda)
         prob_omega = data['prob_omega']

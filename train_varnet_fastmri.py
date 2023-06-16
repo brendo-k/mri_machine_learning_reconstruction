@@ -29,17 +29,17 @@ transforms = Compose(
     )
 )
 train_dataset = UndersampledSliceDataset(
-    '/home/kadotab/train_16_header.json',
+    '/home/kadotab/train.json',
     transforms=transforms,
     R=4,
     )
 
 val_dataset = UndersampledSliceDataset(
-    '/home/kadotab/val_16_header.json',
+    '/home/kadotab/val.json',
     transforms=transforms,
     R=4,
     )
-train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+    
 train_loader = DataLoader(train_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
 val_loader = DataLoader(val_dataset, batch_size=1, collate_fn=collate_fn, num_workers=1)
 
