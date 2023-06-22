@@ -6,30 +6,22 @@ class residual_block(nn.Module):
     def __init__(self, chans, scaling) -> None:
         super().__init__()
 
-        self.conv1 = nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False)
-        self.norm1 = nn.BatchNorm2d(chans)
-        self.conv2 = nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False)
-        self.norm2 = nn.BatchNorm2d(chans)
+        self.res_block = nn.Sequential(
+            nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm2d(chans),
+            nn.functional.relu,
+            nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False),
+        )
         self.scaling = scaling
 
     def forward(self, x):
-        res = x
-        x = self.conv1(x)
-        x = self.norm1(x)
-        x = nn.functional.relu(x) 
-        x = self.conv2(x)
-        x = self.norm2(x)
-        x *= self.scaling
-        x += res
-        return x
+        return self.res_block(x) * self.scaling + x
 
 class resnet(nn.Module):
     def __init__(self, itterations, chans=32, scaling=0.1) -> None:
         super().__init__()
 
-        self.cascade = nn.Sequential()
-        for _ in range(itterations):
-            self.cascade.append(residual_block(chans, scaling))
+        self.cascade = nn.ModuleList([residual_block(chans, scaling) for _ in range(itterations)])
 
         self.encode = nn.Conv2d(2, chans, 3, padding=1, bias=False)
         self.final_conv = nn.Conv2d(chans, chans, 3, padding=1, bias=False)
@@ -55,12 +47,13 @@ class resnet(nn.Module):
 
 
     def forward(self, x):
-        x, mean, std = self.norm(x)
+    #    x, mean, std = self.norm(x)
         x = self.encode(x)
         x_res = x
-        x = self.cascade(x)
+        for layer in self.cascade:
+            x = layer(x)
         x = self.final_conv(x)
         x += x_res
         x = self.decode(x)
-        x = self.unnorm(x, mean, std)
+    #    x = self.unnorm(x, mean, std)
         return x

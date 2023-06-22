@@ -12,6 +12,7 @@ class UndersampledSliceDataset(SliceLoader):
             meta_data: Union[str, os.PathLike],
             acs_width: int = 10,
             R: int = 8,
+            deterministic: bool = True,
             raw_sample_filter: Callable = lambda _: True,
             transforms: Callable = None
             ):
@@ -24,8 +25,14 @@ class UndersampledSliceDataset(SliceLoader):
         # add transforms
         self.transforms = transforms
         self.R = R
+        if deterministic:
+            self.rng = np.random.default_rng(8)
+        else:
+            self.rng = np.random.default_rng()
+
 
     def __getitem__(self, index):
+        
         data = self.get_item_from_index(index)
 
         if self.transforms:
@@ -39,7 +46,7 @@ class UndersampledSliceDataset(SliceLoader):
         k_space = data['k_space']
 
         prob_map = self.gen_pdf_columns(k_space.shape[-2], k_space.shape[-1], 1/self.R, 8, self.acs_width)
-        mask = self.mask_from_prob(prob_map)
+        mask = self.mask_from_prob(prob_map, self.rng)
         undersampled =  k_space * mask
 
         data['mask'] = mask
@@ -48,38 +55,11 @@ class UndersampledSliceDataset(SliceLoader):
         return data
             
 
-    def build_mask(self, k_space, random_indecies):
-        k_space_size = self.get_k_space_size(k_space)
-        mask = np.ones((k_space_size[0], k_space_size[1]), dtype=np.int8)
-        mask[..., random_indecies] = 0
-        mask = mask.astype(bool)
-        return mask
-
-    def apply_undersampled_indecies(self, k_space, random_indecies):
-        undersampled = np.copy(k_space)
-        undersampled[..., random_indecies] = 0
-
-        return undersampled
-
-    def get_undersampled_indecies(self, k_space, acs_width, R):
-        k_space_size = self.get_k_space_size(k_space)
-        center = int(k_space_size[1]//2)
-        acs_bounds = [(center - acs_width//2), (center + np.ceil(acs_width//2).astype(int))]
-        sampled_indeces = [index for index in range(k_space_size[1]) if index not in range(acs_bounds[0],acs_bounds[1])]
-        random_indecies = random.choices(sampled_indeces, k=k_space_size[1]//R)
-        random_indecies = np.concatenate((random_indecies, range(acs_bounds[0], acs_bounds[1])))
-
-        all_indexes = np.arange(0, k_space_size[1])
-        undersampled_indeces = np.setdiff1d(all_indexes, random_indecies) 
-        return undersampled_indeces
-
-    def get_k_space_size(self, k_space):
-        return k_space.shape[-2:]
-
     def gen_pdf_columns(self, nx, ny, one_over_R, poylnomial_power, c_sq):
     # generates 1D polynomial variable density with sampling factor delta, fully sampled central square c_sq
-        xv, yv = np.meshgrid(np.linspace(-1, 1, 1), np.linspace(-1, 1, ny), sparse=False, indexing='xy')
+        yv = np.linspace(-1, 1, ny)
         r = np.abs(yv)
+        # normalize to 1
         r /= np.max(r)
         prob_map = (1 - r) ** poylnomial_power
         prob_map[prob_map > 1] = 1
@@ -105,13 +85,13 @@ class UndersampledSliceDataset(SliceLoader):
             ii += 1
             if ii == 100:
                 break
-        prob_map = np.repeat(prob_map, nx, axis=1)
+        prob_map = np.tile(prob_map, (1, nx))
         prob_map = np.rot90(prob_map)
         return prob_map
     
-    def mask_from_prob(self, prob_map):
+    def mask_from_prob(self, prob_map, rng_generator):
         prob_map[prob_map > 0.99] = 1
         (nx, _) = np.shape(prob_map)
-        mask1d = np.random.binomial(1, prob_map[0:1])
+        mask1d = rng_generator.binomial(1, prob_map[0:1])
         mask = np.repeat(mask1d, nx, axis=0)
         return np.array(mask, dtype=bool)
