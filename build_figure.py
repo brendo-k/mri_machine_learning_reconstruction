@@ -1,5 +1,5 @@
 
-from ml_recon.models.varnet_resnet import VarNet
+from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader
 import torch
 
@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches   
 
-path = '/home/kadotab/python/ml/ml_recon/Model_Weights/varnet_resnet_self2/20230528-235741VarNet.pt'
+path = '/home/kadotab/python/ml/ml_recon/Model_Weights/20230614-151243VarNet.pt'
 # %%
 torch.manual_seed(0)
 np.random.seed(0)
@@ -56,7 +56,7 @@ with torch.no_grad():
     mask_slice = mask.to(device)
     undersampled_slice = undersampled.to(device)
     sampled_slice = sampled.to(device)
-    double_undersampled = data['double_undersampled']
+    double_undersampled = data['double_undersample']
 
     predicted_sampled = model(undersampled_slice, mask_slice)
     predicted_sampled = predicted_sampled * data['scaling_factor'].to(device)
@@ -87,7 +87,7 @@ plt.savefig('gt.png')
 
 plt.clf()
 error = (gt - image).abs()
-plt.imshow(error, cmap='gray', vmax=0.0002)
+plt.imshow(error, cmap='gray')
 plt.colorbar()
 plt.savefig('error.png')
 print(f'error sum: {(gt - image).pow(2).sum()}')

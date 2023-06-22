@@ -16,7 +16,7 @@ class VarNet(nn.Module):
         super().__init__()
         # module cascades
         self.cascade = nn.ModuleList()
-        self.model = resnet(15)
+        self.model = resnet(13)
         for _ in range(num_cascades):
             self.cascade.append(
                 VarnetBlock(
@@ -24,27 +24,23 @@ class VarNet(nn.Module):
                 )
             )
 
-        # model to estimate sensetivities
-        self.sens_model = SensetivityModel(in_chan, out_chan, chans=sens_chans, mask_center=True)
-        # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k, mask):
+    def forward(self, reference_k: torch.tensor, mask: torch.tensor):
         assert mask.ndim == 3
         # get sensetivity maps
-        sense_maps = self.sens_model(reference_k, mask)
+        sense_maps = torch.ones(reference_k.shape, device='cuda:0')
         # current k_space 
-        current_k = reference_k.clone()
+        current_k: torch.tensor = reference_k.clone()
         for i, cascade in enumerate(self.cascade):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
             # mask values
-            zero = torch.zeros(1, 1, 1, 1).to(current_k)
+            zero = torch.zeros(1, 1, 1, 1, device=current_k.get_device(), dtype=current_k.dtype)
             # zero where not in mask
             data_consistency = torch.where(mask.unsqueeze(1), current_k - reference_k, zero)
             # gradient descent step
-            current_k = current_k - self.lambda_reg[i] * data_consistency - refined_k
+            current_k = current_k -  data_consistency - refined_k
         return current_k
 
 class VarnetBlock(nn.Module):

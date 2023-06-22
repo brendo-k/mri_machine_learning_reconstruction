@@ -2,7 +2,7 @@
 from datetime import datetime
 import os
 
-from ml_recon.models.varnet_resnet import VarNet
+from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -10,7 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 from ml_recon.transforms import (toTensor, normalize)
 from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
 from ml_recon.utils import save_model, ifft_2d_img
-# from ml_recon.utils.collate_function import collate_fn
 
 from torchvision.transforms import Compose
 import numpy as np
@@ -23,7 +22,6 @@ np.random.seed(0)
 # %%
 transforms = Compose(
     (
-        # pad((640, 320)),
         toTensor(),
         normalize(),
     )
@@ -42,7 +40,6 @@ val_dataset = SelfSupervisedSampling(
     R_hat=2
     )
 
-[train_dataset, _] = random_split(train_dataset, [0.1, 0.9])
 train_loader = DataLoader(train_dataset, batch_size=1, num_workers=1, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=1, num_workers=1)
 
@@ -119,7 +116,9 @@ def validate(model, loss_function, dataloader):
 
 for e in range(50):
     with torch.no_grad():
-        sample = next(iter(val_loader))
+        itterator = iter(val_loader)
+        _ = next(itterator)
+        sample = next(itterator)
         sampled = sample['undersampled']
         output = model(sampled.to(device), sample['mask'].to(device))
         output = output * sample['scaling_factor'].to(device)

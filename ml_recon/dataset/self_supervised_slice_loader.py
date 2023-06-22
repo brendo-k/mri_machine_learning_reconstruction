@@ -13,7 +13,9 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
             transforms=None,
             raw_sample_filter: Optional[Callable] = lambda x: True
             ):
-        super().__init__(h5_directory, R=R, raw_sample_filter=raw_sample_filter)
+
+        # determanistic set to true so mask doesn't change every epoch
+        super().__init__(h5_directory, R=R, raw_sample_filter=raw_sample_filter, deterministic=True)
         self.R_hat = R_hat
         self.transforms = transforms
 
@@ -28,7 +30,8 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
         # get probability density function of k-space along columns
         prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, self.acs_width)
         
-        lambda_mask = super().mask_from_prob(prob_lambda)
+        # change mask every epoch
+        lambda_mask = super().mask_from_prob(prob_lambda, np.random.default_rng())
         prob_omega = data['prob_omega']
 
         one_minus_eps = 1 - 1e-3
@@ -36,7 +39,7 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
 
         data['double_undersample'] = undersampled * lambda_mask
         data['lambda_mask'] = lambda_mask
-        K =(1 - prob_omega) / (1 - prob_omega * prob_lambda)
+        K = (1 - prob_omega) / (1 - prob_omega * prob_lambda)
         K = np.expand_dims(np.expand_dims(K, 0), 0).astype(float)
         data['K'] = K
 
