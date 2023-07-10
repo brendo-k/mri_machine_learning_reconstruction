@@ -28,7 +28,7 @@ class VarNet(nn.Module):
         self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k, mask):
+    def forward(self, reference_k: torch.Tensor, mask: torch.Tensor):
         # get sensetivity maps
         sense_maps = self.sens_model(reference_k, mask)
         # current k_space 
@@ -37,7 +37,7 @@ class VarNet(nn.Module):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
             # mask values
-            zero = torch.zeros(1, 1, 1, 1).to(current_k)
+            zero = torch.zeros(1, 1, 1, 1, dtype=current_k.dtype, device=current_k.device, requires_grad=False)
             # zero where not in mask
             data_consistency = torch.where(mask.unsqueeze(1), current_k - reference_k, zero)
             # gradient descent step
@@ -53,7 +53,7 @@ class VarnetBlock(nn.Module):
     def forward(self, images, sensetivities):
         # Reduce
         images = ifft_2d_img(images, axes=[2, 3])
-        combined_images = torch.sum(images * sensetivities.conj_physical(), dim=1, keepdim=True)
+        combined_images = torch.sum(images * sensetivities.conj(), dim=1, keepdim=True)
 
         combined_images = complex_conversion.complex_to_real(combined_images)
         combined_images = self.unet(combined_images)

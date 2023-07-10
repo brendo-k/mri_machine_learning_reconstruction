@@ -41,24 +41,16 @@ class NormUnet(nn.Module):
             drop_prob=drop_prob,
         )
 
-    def complex_to_chan_dim(self, x: torch.Tensor) -> torch.Tensor:
-        b, c, h, w, two = x.shape
-        assert two == 2
-        return x.permute(0, 4, 1, 2, 3).reshape(b, 2 * c, h, w)
-
-    def chan_complex_to_last_dim(self, x: torch.Tensor) -> torch.Tensor:
-        b, c2, h, w = x.shape
-        assert c2 % 2 == 0
-        c = c2 // 2
-        return x.view(b, 2, c, h, w).permute(0, 2, 3, 4, 1).contiguous()
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
         b, c, h, w = x.shape
         x = x.view(b, 2, c // 2 * h * w)
 
-        mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1)
+        mean = x.mean(dim=2).view(b, 2, 1, 1).detach()
+        std = x.std(dim=2).view(b, 2, 1, 1).detach()
+
+        std = std + 1e-8
 
         x = x.view(b, c, h, w)
 
@@ -98,7 +90,6 @@ class NormUnet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         # get shapes for unet and normalize
-        #x = self.complex_to_chan_dim(x)
         x, mean, std = self.norm(x)
         x, pad_sizes = self.pad(x)
 
@@ -107,6 +98,5 @@ class NormUnet(nn.Module):
         # get shapes back and unnormalize
         x = self.unpad(x, *pad_sizes)
         x = self.unnorm(x, mean, std)
-        #x = self.chan_complex_to_last_dim(x)
 
         return x

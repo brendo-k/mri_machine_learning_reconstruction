@@ -51,7 +51,7 @@ class SensetivityModel(nn.Module):
 
         bounds = torch.max(torch.cat((left, right)))
 
-        masked_images[..., :cent - bounds - 1] = 0
+        masked_images[..., :cent - bounds] = 0
         masked_images[..., cent + bounds:] = 0
         return masked_images
 
