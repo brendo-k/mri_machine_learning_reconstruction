@@ -1,0 +1,30 @@
+import torch
+import torch.nn as nn
+
+class DnCNN(nn.Module):
+    def __init__(self, 
+                 in_chan, 
+                 out_chan,
+                 kernel_size = 3,
+                 feature_size = 64,
+                 num_of_layers = 17):
+        super().__init__()
+
+        self.dncnn = nn.Sequential()
+
+        encoder = nn.Sequential(
+            nn.Conv2d(in_channels=in_chan, out_channels=feature_size, kernel_size=kernel_size, padding=1, bias=False),
+            nn.ReLU(inplace=True)
+        )
+        self.dncnn.append(encoder)
+
+        for _ in range(num_of_layers-2):
+            self.dncnn.append(nn.Conv2d(in_channels=feature_size, out_channels=feature_size, kernel_size=kernel_size, padding=1, bias=False))
+            self.dncnn.append(nn.BatchNorm2d(feature_size))
+            self.dncnn.append(nn.ReLU(inplace=True))
+
+        decoder = nn.Conv2d(in_channels=feature_size, out_channels=out_chan, kernel_size=kernel_size, padding=1, bias=False)
+        self.dncnn.append(decoder)
+
+    def forward(self, x):
+        return x - self.dncnn(x)
