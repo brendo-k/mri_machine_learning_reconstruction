@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_recon.transforms import (pad, toTensor, normalize)
+from ml_recon.transforms import pad, toTensor, normalize, pad_recon
 from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
 from ml_recon.utils import save_model, ifft_2d_img
 from ml_recon.utils.collate_function import collate_fn
@@ -23,9 +23,10 @@ np.random.seed(0)
 # %%
 transforms = Compose(
     (
-        # pad((640, 320)),
+        pad((640, 320)),
         toTensor(),
         normalize(),
+        pad_recon((320, 320))
     )
 )
 train_dataset = UndersampledSliceDataset(
@@ -40,9 +41,9 @@ val_dataset = UndersampledSliceDataset(
     R=4,
     )
 
-#train_dataset, _ = random_split(train_dataset, [0.05, 0.95])
-train_loader = DataLoader(train_dataset, batch_size=1, num_workers=1, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=1, num_workers=1)
+train_dataset, _ = random_split(train_dataset, [0.05, 0.95])
+train_loader = DataLoader(train_dataset, batch_size=1, num_workers=3, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=1, num_workers=3)
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 

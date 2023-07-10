@@ -5,6 +5,7 @@ import argparse
 import time
 import yaml
 import contextlib
+import matplotlib.pyplot as plt
 
 from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader, random_split
@@ -57,30 +58,27 @@ def main():
     if current_device == 0:
         writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H%M") + model.__class__.__name__
         writer = SummaryWriter(writer_dir)
-    else: 
-        writer = None
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-    
+    lr = torch.linspace(1e-8, 0.1, 200)
+    losses = []
+    sample = next(iter(train_loader))
+    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    for lrs in lr:
+        optimizer = torch.optim.Adam(model.parameters(), lr=lrs)
+        output = model(undersampled_slice, mask)
+        loss = loss_fn(torch.view_as_real(output * ssdu_indecies), torch.view_as_real(sampled_slice * ssdu_indecies))
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
 
-    for epoch in range(args.max_epochs):
-        print(f'starting epoch: {epoch}')
-        start = time.time()
-        if distributed:
-            train_loader.sampler.set_epoch(epoch)
+    plt.plot(lr, losses)
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.savefig('/home/kadotab/python/ml/loss_vs_lr.png')
 
-        train_loss = train(model, loss_fn, train_loader, optimizer, current_device)
-        end = time.time()
-        print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
-        with torch.no_grad():
-            val_loss = validate(model, loss_fn, val_loader, current_device)
-            plot_recon(model, val_loader, current_device, writer, epoch)
-        
-        if current_device == 0:
-            writer.add_scalar('train/loss', train_loss, epoch)
-            writer.add_scalar('val/loss', val_loss, epoch)
-
-    save_model(path, model, optimizer, args.max_epochs, current_device)
+   
 
     if distributed:
         destroy_process_group()
