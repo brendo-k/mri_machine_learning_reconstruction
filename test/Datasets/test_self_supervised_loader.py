@@ -8,7 +8,7 @@ from ml_recon.utils.read_headers import make_header
 @pytest.fixture(scope="session")
 def build_header(tmp_path_factory):
     path = tmp_path_factory.getbasetemp()
-    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/train/', path / 'header.json')
+    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/', path / 'header.json')
     return header_path
 
 @pytest.fixture
@@ -22,16 +22,16 @@ def build_dataset(build_header):
 def test_slice_load(build_dataset):
     data = next(iter(build_dataset))
     assert 'double_undersample' in data.keys(), 'add double undersample keys'
-    assert 'lambda_mask' in data.keys(), 'add lambda mask keys'
+    assert 'omega_mask' in data.keys(), 'add lambda mask keys'
     assert data['double_undersample'].ndim == 3, 'double undersample should have (chan, frequency encode, phase encode)'
-    assert data['lambda_mask'].ndim == 2, 'lambda mask should be 2 dimensional, (frequency encode, phase encode)'
+    assert data['omega_mask'].ndim == 2, 'lambda mask should be 2 dimensional, (frequency encode, phase encode)'
     assert (data['double_undersample'] == 0).sum() > (data['undersampled'] == 0).sum(), 'double undersample should be more zeroed than single undersample'
 
 
 def test_lambda_mask(build_dataset):
     data = next(iter(build_dataset))
-    assert (data['double_undersample'] * ~data['lambda_mask'] == 0).all()
-    mask = data['lambda_mask'] * data['mask']
+    assert (data['double_undersample'] * ~data['omega_mask'] == 0).all()
+    mask = data['omega_mask'] * data['mask']
     assert (torch.from_numpy(data['double_undersample'])[0, :, :] != 0).sum() > mask.sum()*0.80 #90 percent because there are some weird zero padded regions
     torch.testing.assert_allclose(data['double_undersample'] * mask, data['double_undersample']) # should not be affected by mask
 

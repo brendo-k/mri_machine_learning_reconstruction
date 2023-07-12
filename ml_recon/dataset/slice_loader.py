@@ -8,6 +8,8 @@ from typing import (
 
 from ml_recon.dataset.filereader.filereader import FileReader
 from torch.utils.data import Dataset
+from scipy.interpolate import interpn
+import numpy as np
 
 
 class SliceLoader(Dataset):
@@ -20,13 +22,13 @@ class SliceLoader(Dataset):
 
     def __init__(
             self,
-            index_info: Union[str, os.PathLike], 
+            header_file: Union[str, os.PathLike], 
             raw_sample_filter: Optional[Callable] = lambda _: True,  # if not defined let everything though
             transforms: Optional[Callable] = None
             ):
         self.tranforms = transforms
         self.data_list = []
-        with open(index_info, 'r') as f:
+        with open(header_file, 'r') as f:
             self.index_info = json.load(f)
             for key in self.index_info:
                 if raw_sample_filter(self.index_info[key]):
@@ -37,15 +39,17 @@ class SliceLoader(Dataset):
         self.filereader = filereader
 
     def __getitem__(self, index):
-        slice_index = self.data_list[index]['slice_index']
-        file_name = self.data_list[index]['file_name']
-        images = self._read_files(file_name, slice_index)
+        images = self._get_data_from_index(index)
+        images = self.resample(images)
+
         return images
 
     def __len__(self):
         return len(self.data_list)
 
-    def _read_files(self, file_name, slice_index):
+    def _get_data_from_index(self, index):
+        slice_index = self.data_list[index]['slice_index']
+        file_name = self.data_list[index]['file_name']
         with self.filereader(file_name) as fr:
             slice = fr['kspace'][slice_index]
             recon_slice = fr['reconstruction_rss'][slice_index]
@@ -53,6 +57,36 @@ class SliceLoader(Dataset):
                 'k_space': slice, 
                 'recon': recon_slice,
             }
-            if self.tranforms:
-                self.tranforms(data)
         return data 
+    
+    def resample(self, data):
+        resample_height = 128
+        resample_width = 128
+        k_space = data['k_space']
+        k_space = k_space[:, ::2, :]
+        _, height, width = k_space.shape
+        height_cent, width_cent = int(height/2), int(width/2)
+        k_space = k_space[:, height_cent - resample_height//2:height_cent + resample_height//2, width_cent - resample_width//2: width_cent + resample_width//2]
+        data['k_space'] = k_space
+
+        recon = data['recon']
+        xv, yv = np.meshgrid(np.linspace(0, recon.shape[0]-1, 128), np.linspace(0, recon.shape[1]-1, 128))
+        recon_downsampled = interpn((range(recon.shape[0]), range(recon.shape[1])), recon, (yv, xv), bounds_error=False)
+        data['recon'] = recon_downsampled
+        
+        return data
+
+if __name__ == '__main__':
+    from ml_recon.dataset.filereader.read_h5 import H5FileReader
+    from ml_recon.utils.image_slices import image_slices
+    import matplotlib.pyplot as plt
+    loader = SliceLoader('/home/kadotab/train.json')
+    loader.set_file_reader(H5FileReader)
+    data = loader[0]
+
+    image_slices(data['k_space'], vmax=1e-5)
+    plt.savefig('/home/kadotab/python/ml/resampled')
+    plt.clf()
+    plt.imshow(data['recon'])
+    plt.savefig('/home/kadotab/python/ml/recon_resampled')
+    

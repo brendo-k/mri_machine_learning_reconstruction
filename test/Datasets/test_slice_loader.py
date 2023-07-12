@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture(scope="session")
 def build_header(tmp_path_factory) -> str:
     path = tmp_path_factory.getbasetemp()
-    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/train/', path / 'header.json')
+    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/', path / 'header.json')
     return header_path
 
 @pytest.fixture
@@ -67,8 +67,16 @@ def test_filter(build_header):
 
 def test_probability_mask(build_dataset):
     dataset = build_dataset
-    pdf = dataset.gen_pdf_columns(300, 300, 1/4, 8, 10)
-    
+    pdf = dataset.gen_pdf_columns(300, 600, 1/4, 8, 10)
     
     np.testing.assert_allclose(np.mean(pdf), 1/4, atol=1e-3)
-    np.testing.assert_equal(pdf[:, 150 - 5, 150 + 5], np.ones(300, 10))
+    assert pdf.shape == (600, 300)
+    np.testing.assert_equal(pdf[:, 150 - 5: 150 + 5], np.ones((600, 10)))
+
+def test_determanistic(build_header):
+    dataset = UndersampledSliceDataset(build_header, R=4, deterministic=True)
+
+    data1 = dataset[0]
+    data2 = dataset[0]
+
+    np.testing.assert_equal(data1['mask'], data2['mask'])

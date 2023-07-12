@@ -1,12 +1,18 @@
-from .slice_loader import SliceLoader 
-import random
 import numpy as np
-from .filereader.read_h5 import H5FileReader
 import os
 from typing import Union, Callable
 
+from ml_recon.dataset.filereader.read_h5 import H5FileReader
+from ml_recon.dataset.slice_loader import SliceLoader 
 
 class UndersampledSliceDataset(SliceLoader):
+    """This is a supervised slice dataloader. 
+
+    Args:
+        meta_data (str, os.PathLike): path to metadata file holding slice information,
+        acs_width (int): width of auto calibration lines to keep
+        R (int): acceleration factor to use
+    """
     def __init__(
             self,
             meta_data: Union[str, os.PathLike],
@@ -22,13 +28,10 @@ class UndersampledSliceDataset(SliceLoader):
         # define our file reader
         super().set_file_reader(H5FileReader)
         self.acs_width = acs_width
+        self.deterministic = deterministic
         # add transforms
         self.transforms = transforms
         self.R = R
-        if deterministic:
-            self.rng = np.random.default_rng(8)
-        else:
-            self.rng = np.random.default_rng()
 
 
     def __getitem__(self, index):
@@ -42,28 +45,37 @@ class UndersampledSliceDataset(SliceLoader):
     def get_item_from_index(self, index):
         data = super().__getitem__(index)
 
+        rng = self.get_random_generator()
+
         # get k-space data
         k_space = data['k_space']
 
-        prob_map = self.gen_pdf_columns(k_space.shape[-2], k_space.shape[-1], 1/self.R, 8, self.acs_width)
-        mask = self.mask_from_prob(prob_map, self.rng)
+        prob_map = self.gen_pdf_columns(k_space.shape[-1], k_space.shape[-2], 1/self.R, 8, self.acs_width)
+        mask = self.get_mask_from_distribution(prob_map, rng)
         undersampled =  k_space * mask
 
         data['mask'] = mask
         data['undersampled'] = undersampled
         data['prob_omega'] = prob_map.copy()
         return data
+
+    def get_random_generator(self):
+        if self.deterministic:
+            rng = np.random.default_rng(8)
+        else:
+            rng = np.random.default_rng()
+        return rng
             
 
     def gen_pdf_columns(self, nx, ny, one_over_R, poylnomial_power, c_sq):
     # generates 1D polynomial variable density with sampling factor delta, fully sampled central square c_sq
-        yv = np.linspace(-1, 1, ny)
-        r = np.abs(yv)
+        xv = np.linspace(-1, 1, nx)
+        r = np.abs(xv)
         # normalize to 1
         r /= np.max(r)
         prob_map = (1 - r) ** poylnomial_power
         prob_map[prob_map > 1] = 1
-        prob_map[ny // 2 - c_sq // 2:ny // 2 + c_sq // 2] = 1
+        prob_map[ny // 2 - c_sq // 2:nx // 2 + c_sq // 2] = 1
 
         a = -1
         b = 1
@@ -74,7 +86,7 @@ class UndersampledSliceDataset(SliceLoader):
             prob_map = (1 - r) ** poylnomial_power + c
             prob_map[prob_map > 1] = 1
             prob_map[prob_map < 0] = 0
-            prob_map[ny // 2 - c_sq // 2:ny // 2 + c_sq // 2] = 1
+            prob_map[nx // 2 - c_sq // 2:nx // 2 + c_sq // 2] = 1
             delta_current = np.mean(prob_map)
             if one_over_R > delta_current + eta:
                 a = c
@@ -85,13 +97,16 @@ class UndersampledSliceDataset(SliceLoader):
             ii += 1
             if ii == 100:
                 break
-        prob_map = np.tile(prob_map, (1, nx))
-        prob_map = np.rot90(prob_map)
+        
+        prob_map = np.tile(prob_map, (ny, 1))
+
         return prob_map
     
-    def mask_from_prob(self, prob_map, rng_generator):
+    def get_mask_from_distribution(self, prob_map, rng_generator):
         prob_map[prob_map > 0.99] = 1
         (nx, _) = np.shape(prob_map)
         mask1d = rng_generator.binomial(1, prob_map[0:1])
         mask = np.repeat(mask1d, nx, axis=0)
         return np.array(mask, dtype=bool)
+    
+
