@@ -41,6 +41,6 @@ def make_header(path, output=None):
 
 
 if __name__ == "__main__":
-    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/val/', '/home/kadotab/val.json')
-    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/test/', '/home/kadotab/test.json')
-    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/train/', '/home/kadotab/train.json')
+    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_val/', '/home/kadotab/val.json')
+    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_test/', '/home/kadotab/test.json')
+    make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/', '/home/kadotab/train.json')

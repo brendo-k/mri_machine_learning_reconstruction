@@ -1,8 +1,8 @@
-from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
 import random
 import numpy as np
-
 from typing import Optional, Callable
+
+from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
 
 class SelfSupervisedSampling(UndersampledSliceDataset):
     def __init__(
@@ -28,17 +28,17 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
         undersampled = data['undersampled']
 
         # get probability density function of k-space along columns
-        prob_lambda = super().gen_pdf_columns(undersampled.shape[-2], undersampled.shape[-1], 1/self.R_hat, 8, self.acs_width)
+        prob_lambda = super().gen_pdf_columns(undersampled.shape[-1], undersampled.shape[-2], 1/self.R_hat, 8, self.acs_width)
         
         # change mask every epoch
-        lambda_mask = super().mask_from_prob(prob_lambda, np.random.default_rng())
+        omega_mask = super().get_mask_from_distribution(prob_lambda, np.random.default_rng())
         prob_omega = data['prob_omega']
 
         one_minus_eps = 1 - 1e-3
         prob_lambda[prob_lambda > one_minus_eps] = one_minus_eps
 
-        data['double_undersample'] = undersampled * lambda_mask
-        data['lambda_mask'] = lambda_mask
+        data['double_undersample'] = undersampled * omega_mask
+        data['omega_mask'] = omega_mask
         K = (1 - prob_omega) / (1 - prob_omega * prob_lambda)
         K = np.expand_dims(np.expand_dims(K, 0), 0).astype(float)
         data['K'] = K

@@ -1,5 +1,5 @@
 import numpy as np
-from ml_recon.utils import combine_coils, ifft_2d_img
+from ml_recon.utils import combine_coils, ifft_2d_img, fft_2d_img
 import torch
 import einops
 
@@ -29,7 +29,7 @@ class pad(object):
         self.pad_dim = pad_dim
 
     def __call__(self, sample):
-        return only_apply_to(sample, self.pad, keys=['undersampled', 'k_space', 'mask'])
+        return only_apply_to(sample, self.pad, keys=['undersampled', 'k_space', 'mask', 'omega_mask', 'double_undersample'])
 
     def pad(self, sample):
         x_diff = self.pad_dim[0] - sample.shape[-2]
@@ -107,7 +107,7 @@ class view_as_real(object):
 
 class toTensor(object):
     def __call__(self, sample: np.ndarray):
-        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon', 'double_undersample', 'lambda_mask', 'K', 'prob_omega'])
+        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon', 'double_undersample', 'omega_mask', 'k', 'prob_omega'])
 
 
 class remove_slice_dim(object):
@@ -137,19 +137,33 @@ class normalize(object):
 # Normalize to [0, 1] range
 class normalize_mean(object):
     def __call__(self, sample):
-        undersampled, k_space, recon = sample['undersampled'], sample['k_space'], sample['recon']
-        undersampled = undersampled[:, 160:-160, :]
-        k_space = k_space[:, 160:-160, :]
-        undersample_mean = undersampled.mean()
-        undersample_std = undersampled.std()
-        undersampled = (undersampled - undersample_mean)/(undersample_std)
-        k_space = (k_space - undersample_mean)/(undersample_std)
-        recon = (recon - undersample_mean)/(undersample_std)
+        undersampled, k_space = sample['undersampled'], sample['k_space']
+        undersampled, undersampled_mean, undersampled_std = self.normalize(undersampled)
+        k_space, _, _ = self.normalize(k_space)
+
+        if 'double_undersample' in sample.keys():
+            double_undersampled = sample['double_undersample']
+            double_undersampled, double_undersampled_mean, double_undersampled_std = self.normalize(undersampled)
+            sample['double_undersample'] = double_undersampled
+            sample['double_undersample_mean'] = double_undersampled_mean
+            sample['double_undersample_std'] = double_undersampled_std
 
         sample['undersampled'] = undersampled
         sample['k_space'] = k_space
-        sample['recon'] = recon
+        sample['undersample_mean'] = undersampled_mean
+        sample['undersample_std'] = undersampled_std
+
         return sample
+    
+    def normalize(self, k_space):
+        image = ifft_2d_img(k_space)
+
+        image_mean = image.abs().mean()
+        image_std = image.abs().std()
+
+        k_space = fft_2d_img((image - image_mean)/image_std)
+        
+        return k_space, image_mean, image_std
 
 
 class permute(object):
@@ -176,6 +190,3 @@ class convert_to_float(object):
         return sample.float()
 
 
-class crop_to_target(object):
-    def __call__(self, sample):
-        undersampled, k_space, recon = sample['undersampled'], sample['k_space'], sample['recon']

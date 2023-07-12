@@ -64,7 +64,6 @@ def main():
     losses = []
     sample = next(iter(train_loader))
     mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for lrs in lr:
         optimizer = torch.optim.Adam(model.parameters(), lr=lrs)
         output = model(undersampled_slice, mask)
