@@ -64,7 +64,8 @@ def main():
         writer = None
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-    
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 40, gamma=0.1)
+
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -78,6 +79,8 @@ def main():
         with torch.no_grad():
             val_loss = validate(model, loss_fn, val_loader, current_device, args.supervised)
             plot_recon(model, val_loader, current_device, writer, epoch)
+        
+        scheduler.step()
         
         if current_device == 0:
             writer.add_scalar('train/loss', train_loss, epoch)
@@ -147,7 +150,7 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
         R_hat=2
         )
 
-    train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+    #train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
 
     if distributed:
         print('Setting up distributed sampler')

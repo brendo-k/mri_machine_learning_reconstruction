@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_recon.transforms import toTensor, normalize, pad_recon, pad
+from ml_recon.transforms import toTensor, normalize, pad_recon, pad, normalize_mean
 from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
 from ml_recon.utils import save_model, ifft_2d_img
 from ml_recon.utils.collate_function import collate_fn
@@ -121,10 +121,8 @@ def setup_devices(args):
 def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     transforms = Compose(
         (
-            pad((640, 320)),
-            pad_recon((320, 320)),
             toTensor(),
-            normalize(),
+            normalize_mean(),
         )
     )
     train_dataset = SelfSupervisedSampling(
