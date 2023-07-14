@@ -337,7 +337,7 @@ def plot_recon(model, val_loader, device, writer, epoch):
         ground_truth = ifft_2d_img(sample['k_space']).abs().pow(2).sum(1).sqrt()
         diff = (output - ground_truth).abs()
 
-        image_scaling_factor = ground_truth[0].max() * 0.75
+        image_scaling_factor = ground_truth[0].max() * 0.40
         image_scaled = output[[0], :, :].abs()/image_scaling_factor
 
         diff_scaled = diff[[0], :, :]/(image_scaling_factor/4)
