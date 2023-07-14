@@ -1,0 +1,8 @@
+data: 
+  data_dir_train: /home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/
+  data_dir_test: /home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_test/
+  data_dir_val: /home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_val/
+  supervised: true
+model:
+  in_chan: 2
+  out_chan: 2
