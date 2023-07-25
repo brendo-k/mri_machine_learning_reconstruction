@@ -31,12 +31,13 @@ parser.add_argument('--lr', type=float, default=1e-4, help='')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=1, help='')
-parser.add_argument('--supervised', action='store_false', help='')
+parser.add_argument('--supervised', action='store_true', help='')
+parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/dataset/multicoil_train/t1', help='')
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
 parser.add_argument('--world_size', default=2, type=int, help='')
-parser.add_argument('--distributed', action='store_false', help='')
+parser.add_argument('--distributed', action='store_true', help='')
 
 def main():
     args = parser.parse_args()
@@ -136,15 +137,16 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
             normalize_mean(),
         )
     )
+    data_dir = arg.data_dir
     train_dataset = SelfSupervisedSampling(
-        '/home/kadotab/train.json',
+        os.path.join(data_dir, 'multicoil_train'),
         transforms=transforms,
         R=4,
         R_hat=2
         )
     
     val_dataset = SelfSupervisedSampling(
-        '/home/kadotab/val.json',
+        os.path.join(data_dir, 'multicoil_val'),
         transforms=transforms,
         R=4,
         R_hat=2
