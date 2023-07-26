@@ -293,24 +293,24 @@ def to_device(data: Dict, device: str, supervised: bool):
     if supervised:
         input_slice = data['undersampled']
         target_slice = data['k_space']
-        mask = data['mask']
+        mask_omega = data['mask']
 
         loss_mask = torch.ones((target_slice.shape)).to(device)
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
-        mask = mask.to(device)
+        mask = mask_omega.to(device)
     else:
         undersampled = data['undersampled']
         mask_lambda = data['omega_mask']
         double_undersampled = data['double_undersample']
-        mask = data['mask']
+        mask_omega = data['mask']
         K = data['k']
 
         input_slice = double_undersampled.to(device)
         target_slice = undersampled.to(device)
-        mask = (mask_lambda * mask).to(device)
+        mask = (mask_lambda * mask_omega).to(device)
 
-        loss_mask = (~mask_lambda * mask).detach()
+        loss_mask = (~mask_lambda * mask_omega).detach()
         loss_mask = loss_mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
 
     return mask, input_slice, target_slice, loss_mask
