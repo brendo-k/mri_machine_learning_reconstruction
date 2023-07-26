@@ -1,5 +1,5 @@
 import numpy as np
-from ml_recon.utils import combine_coils, ifft_2d_img, fft_2d_img
+from ml_recon.utils import ifft_2d_img, fft_2d_img, root_sum_of_squares
 import torch
 import einops
 
@@ -122,7 +122,7 @@ class remove_slice_dim(object):
 class normalize(object):
     def __call__(self, sample):
         undersampled, k_space,  = sample['undersampled'], sample['k_space']
-        undersample_max = ifft_2d_img(undersampled).abs().pow(2).sum(1).sqrt().max()
+        undersample_max = root_sum_of_squares(ifft_2d_img(undersampled)).max()
         undersampled /= undersample_max
         k_space /= undersample_max
         if 'double_undersample' in sample.keys():
@@ -157,14 +157,23 @@ class normalize_mean(object):
     
     def normalize(self, k_space):
         image = ifft_2d_img(k_space)
-        image_combined = image.abs().sum(1).sqrt()
+        image_real = image.real
+        image_imag = image.imag
 
-        image_mean = image_combined.mean()
-        image_std = image_combined.std()
+        image_mean_real = image_real.mean()
+        image_mean_imag = image_imag.mean()
 
-        k_space = fft_2d_img((image - image_mean)/image_std)
+        image_real_std = image_real.std()
+        image_imag_std = image_imag.std()
+
+        image_real_norm = (image_real - image_mean_real)/image_real_std
+        image_imag_norm = (image_imag - image_mean_imag)/image_imag_std
+
+        k_space = fft_2d_img(image_real_norm + 1j * image_imag_nomr)
         
-        return k_space, image_mean, image_std
+        image_std = image_imag_std
+        
+        return k_space, image_mean_real, image_std
 
 
 class permute(object):

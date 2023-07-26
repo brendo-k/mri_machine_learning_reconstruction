@@ -14,8 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ml_recon.transforms import toTensor, normalize, pad_recon, pad, normalize_mean
 from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
-from ml_recon.utils import save_model, ifft_2d_img
-from ml_recon.utils.collate_function import collate_fn
+from ml_recon.utils import save_model, ifft_2d_img, collate_fn, root_sum_of_squares
 
 from torchvision.transforms import Compose
 from torch.distributed import init_process_group, destroy_process_group
@@ -27,10 +26,10 @@ PROFILE = False
 
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
-parser.add_argument('--lr', type=float, default=1e-4, help='')
+parser.add_argument('--lr', type=float, default=1e-3, help='')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
-parser.add_argument('--num_workers', type=int, default=1, help='')
+parser.add_argument('--num_workers', type=int, default=0, help='')
 parser.add_argument('--supervised', action='store_true', help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/dataset/multicoil_train/t1', help='')
 
@@ -66,7 +65,7 @@ def main():
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 40, gamma=0.1)
-
+    
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -134,7 +133,7 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     transforms = Compose(
         (
             toTensor(),
-            normalize_mean(),
+            normalize(),
         )
     )
     data_dir = arg.data_dir
@@ -328,28 +327,38 @@ def plot_recon(model, val_loader, device, writer, epoch):
         epoch (int): epoch
     """
     if device == 0:
+        # difference magnitude
+        difference_scaling = 4
+
+        # forward pass
         sample = next(iter(val_loader))
         sampled = sample['undersampled']
         output = model(sampled.to(device), sample['mask'].to(device))
         
-        output = ifft_2d_img(output)
-        output = output.abs().pow(2).sum(1).sqrt()
-        output = output.cpu()
+        # coil combination
+        output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
+        ground_truth = root_sum_of_squares(ifft_2d_img(sample['k_space']))
 
-        ground_truth = ifft_2d_img(sample['k_space']).abs().pow(2).sum(1).sqrt()
         diff = (output - ground_truth).abs()
 
+        # get scaling factor (skull is high intensity)
         image_scaling_factor = ground_truth[0].max() * 0.40
-        image_scaled = output[[0], :, :].abs()/image_scaling_factor
 
-        diff_scaled = diff[[0], :, :]/(image_scaling_factor/4)
+        # scale images and difference
+        image_scaled = output[[0], :, :].abs()/image_scaling_factor
+        diff_scaled = diff[[0], :, :]/(image_scaling_factor/difference_scaling)
+
+        # clamp to 0-1 range
+        image_scaled = image_scaled.clamp(0, 1)
+        diff_scaled = diff_scaled.clamp(0, 1)
 
         writer.add_image('val/recon', image_scaled, epoch)
         writer.add_image('val/diff', diff_scaled, epoch)
 
+        # plot target if it's the first epcoh
         if epoch == 0:
             recon_scaled = ground_truth[[0], :, :]/image_scaling_factor
-            recon_scaled[recon_scaled > 1] = 1
+            recon_scaled = recon_scaled.clamp(0, 1)
             writer.add_image('val/target', recon_scaled, epoch)
 
 def save_config(args, writer_dir):
