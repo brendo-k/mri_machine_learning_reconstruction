@@ -1,4 +1,4 @@
-from ml_recon.utils.combine_coils import combine_coils
+from ml_recon.utils.root_sum_of_squares import combine_coils
 import torch
 import math
 
