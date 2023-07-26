@@ -17,7 +17,7 @@ class residual_block(nn.Module):
     def forward(self, x):
         return self.res_block(x) * self.scaling + x
 
-class resnet(nn.Module):
+class ResNet(nn.Module):
     def __init__(self, itterations, chans=32, scaling=0.1) -> None:
         super().__init__()
 

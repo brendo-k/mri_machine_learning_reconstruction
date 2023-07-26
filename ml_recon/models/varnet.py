@@ -1,31 +1,32 @@
 import torch.nn as nn
 import torch
+from typing import Tuple
+
 from ml_recon.models import NormUnet, SensetivityModel
-from ml_recon.models.resnet import resnet
+from ml_recon.models.resnet import ResNet
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 
 class VarNet(nn.Module):
     def __init__(self, 
-                 in_chan=2, 
-                 out_chan=2, 
-                 num_cascades=6, 
-                 sens_chans=8, 
-                 model_chans=18, 
-                 dropout_prob=0):
+                 model_backbone: nn.Module,
+                 num_cascades=6,
+                 sens_chans=8,
+                 ):
         super().__init__()
+
         # module cascades
         self.cascade = nn.ModuleList()
-        self.model = resnet(15)
+
         for _ in range(num_cascades):
             self.cascade.append(
                 VarnetBlock(
-                    self.model
+                    model_backbone
                 )
             )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel(in_chan, out_chan, chans=sens_chans, mask_center=True)
+        self.sens_model = SensetivityModel(2, 2, chans=sens_chans, mask_center=True)
         # regularizer weight
         self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
 
@@ -48,9 +49,9 @@ class VarNet(nn.Module):
         return current_k
 
 class VarnetBlock(nn.Module):
-    def __init__(self, unet: nn.Module) -> None:
+    def __init__(self, model: nn.Module) -> None:
         super().__init__()
-        self.unet = unet
+        self.model = model
 
     # sensetivities data [B, C, H, W]
     def forward(self, images, sensetivities):
@@ -59,7 +60,9 @@ class VarnetBlock(nn.Module):
         combined_images = torch.sum(images * sensetivities.conj_physical(), dim=1, keepdim=True)
 
         combined_images = complex_conversion.complex_to_real(combined_images)
-        combined_images = self.unet(combined_images)
+        combined_images, mean, std = self.norm(combined_images)
+        combined_images = self.model(combined_images)
+        combined_images = self.unnorm(combined_images, mean, std)
         combined_images = complex_conversion.real_to_complex(combined_images)
 
         # Expand
@@ -68,3 +71,21 @@ class VarnetBlock(nn.Module):
 
         return images
     
+    def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # group norm
+        b, c, h, w = x.shape
+        x = x.view(b, 2, c // 2 * h * w)
+
+        mean = x.mean(dim=2).view(b, 2, 1, 1).detach()
+        std = x.std(dim=2).view(b, 2, 1, 1).detach()
+
+        std = std + 1e-8
+
+        x = x.view(b, c, h, w)
+
+        return (x - mean) / std, mean, std
+
+    def unnorm(
+        self, x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
+    ) -> torch.Tensor:
+        return x * std + mean

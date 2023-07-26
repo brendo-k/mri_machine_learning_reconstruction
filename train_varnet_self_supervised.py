@@ -7,7 +7,10 @@ import yaml
 import contextlib
 import json
 
-from ml_recon.models.varnet_unet import VarNet
+from ml_recon.models.varnet import VarNet
+
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUnet
+#from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -32,6 +35,7 @@ parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=0, help='')
 parser.add_argument('--supervised', action='store_true', help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/dataset/multicoil_train/t1', help='')
+parser.add_argument('--model', type=str, choices=['unet', 'restnet', 'dncnn', 'transformer'], default='unet')
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
@@ -40,11 +44,11 @@ parser.add_argument('--distributed', action='store_true', help='')
 
 def main():
     args = parser.parse_args()
-    
+
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = VarNet(num_cascades=5)
-    model.to(current_device)
+    model = setup_model_backbone(args, current_device)
+
 
     if distributed:
         print(f'Setting up DDP in device {current_device}')
@@ -90,6 +94,23 @@ def main():
 
     if distributed:
         destroy_process_group()
+
+
+def setup_model_backbone(args, current_device):
+
+    if args.model == 'unet':
+        backbone = Unet(in_chan=2, out_chan=2, depth=4, chans=32)
+    elif args.model == 'resnet':
+        backbone == ResNet(itterations=12, chans=32)
+    elif args.model == 'dncnn':
+        backbone = DnCNN(in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
+    elif args.model == 'transformer':
+        backbone = SwinUnet(in_chan=2, out_chan=2)
+
+    model = VarNet(backbone, num_cascades=5)
+    model.to(current_device)
+
+    return model
 
 def setup_devices(dist_backend, init_method, world_size):
     """set up ddp, gpu, or cpu based on arguments and current number of devices 
@@ -367,13 +388,15 @@ def save_config(args, writer_dir):
         f.write(json.dumps(args_dict, indent=4))
 
 
-def load_config(cname):
+def load_config(args):
     """ loads yaml file """
-    with open(cname, 'r') as stream:
-        configs = yaml.safe_load_all(stream)
-        config = next(configs)
+    with open(args.config_file, 'r') as f:
+        configs_dict = yaml.load(f)
+        
+    for k, v in configs_dict.items():
+        setattr(args, k, v)
 
-    return config
+    return args
 
 if __name__ == '__main__':
     main()

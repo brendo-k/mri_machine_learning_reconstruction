@@ -7,7 +7,7 @@ class SwinUnet(nn.Module):
             in_chan, 
             out_chan
     ):
-        self.net = SwinUNETR(img_size=(640, 320), in_channels=in_chan, out_channels=out_chan)
+        self.net = SwinUNETR(img_size=(128, 128), in_channels=in_chan, out_channels=out_chan, spatial_dims=2)
 
     def forward(self, x):
         return self.net(x)
