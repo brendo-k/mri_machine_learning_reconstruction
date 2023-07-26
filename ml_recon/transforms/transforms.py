@@ -122,7 +122,7 @@ class remove_slice_dim(object):
 class normalize(object):
     def __call__(self, sample):
         undersampled, k_space,  = sample['undersampled'], sample['k_space']
-        undersample_max = ifft_2d_img(undersampled).abs().max()
+        undersample_max = ifft_2d_img(undersampled).abs().pow(2).sum(1).sqrt().max()
         undersampled /= undersample_max
         k_space /= undersample_max
         if 'double_undersample' in sample.keys():
@@ -157,9 +157,10 @@ class normalize_mean(object):
     
     def normalize(self, k_space):
         image = ifft_2d_img(k_space)
+        image_combined = image.abs().sum(1).sqrt()
 
-        image_mean = image.abs().mean()
-        image_std = image.abs().std()
+        image_mean = image_combined.mean()
+        image_std = image_combined.std()
 
         k_space = fft_2d_img((image - image_mean)/image_std)
         
