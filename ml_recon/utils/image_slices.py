@@ -17,7 +17,7 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
 
     for i in range(data.shape[0]):
         (x, y) = np.unravel_index(i, (width, height))
-        current_slice = np.abs(np.squeeze(data[i, coil_num, :, :]))
+        current_slice = np.squeeze(data[i, coil_num, :, :])
         axes[x, y].imshow(current_slice, vmin=vmin, vmax=vmax, cmap=cmap, aspect='equal')
         axes[x,y].tick_params(
         which='both',      # both major and minor ticks are affected

@@ -30,6 +30,7 @@ class SliceLoader(Dataset):
             ):
         self.tranforms = transforms
         self.data_list = []
+
         header_file = os.path.join(data_dir, 'header.json')
         if not os.path.isfile(header_file) or build_new_header:
             print(f'Making header in {data_dir}')

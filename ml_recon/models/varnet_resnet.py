@@ -38,9 +38,9 @@ class VarNet(nn.Module):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
             # mask values
-            zero = torch.zeros(1, 1, 1, 1).to(current_k)
+            zero = torch.zeros(1, 1, 1, 1, dtype=current_k.dtype, device=current_k.device, requires_grad=False)
             # zero where not in mask
-            data_consistency = torch.where(mask.unsqueeze(1), current_k - reference_k, zero)
+            data_consistency = torch.where(mask, current_k - reference_k, zero)
             # gradient descent step
             current_k = current_k - self.lambda_reg[i] * data_consistency - refined_k
         return current_k

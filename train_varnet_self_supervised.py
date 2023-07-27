@@ -41,6 +41,8 @@ parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, 
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
 parser.add_argument('--world_size', default=2, type=int, help='')
 parser.add_argument('--distributed', action='store_true', help='')
+parser.add_argument('--use_subset', action='store_true', help='')
+
 
 def main():
     args = parser.parse_args()
@@ -68,7 +70,7 @@ def main():
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 40, gamma=0.1)
-    
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 10, 1e-4)
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -83,7 +85,7 @@ def main():
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
             val_loss = validate(model, loss_fn, val_loader, current_device, args.supervised)
-            plot_recon(model, val_loader, current_device, writer, epoch)
+            plot_recon(model, val_loader, current_device, writer, epoch, args.supervised)
         
         scheduler.step()
         
@@ -163,18 +165,21 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     train_dataset = SelfSupervisedSampling(
         os.path.join(data_dir, 'multicoil_train'),
         transforms=transforms,
-        R=4,
-        R_hat=2
+        #raw_sample_filter=lambda x: x['coils'] == 16,
+        R=3,
+        R_hat=3
         )
     
     val_dataset = SelfSupervisedSampling(
         os.path.join(data_dir, 'multicoil_val'),
         transforms=transforms,
-        R=4,
-        R_hat=2
+        #raw_sample_filter=lambda x: x['coils'] == 16,
+        R=3,
+        R_hat=3
         )
-
-    #train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+    
+    if arg.use_subset:
+        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
 
     if distributed:
         print('Setting up distributed sampler')
@@ -242,6 +247,7 @@ def train_step(model, loss_function, optimizer, data, device, supervised):
 
     optimizer.zero_grad()
     predicted_sampled = model(input_slice, mask)
+
     loss = loss_function(
             torch.view_as_real(predicted_sampled * loss_mask),
             torch.view_as_real(target_slice * loss_mask)
@@ -317,28 +323,30 @@ def to_device(data: Dict, device: str, supervised: bool):
         target_slice = data['k_space']
         mask_omega = data['mask']
 
-        loss_mask = torch.ones((target_slice.shape)).to(device)
+
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
-        mask = mask_omega.to(device)
-    else:
+        mask = mask.to(device)
+        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        loss_mask = torch.ones((target_slice.shape)).to(device)
         undersampled = data['undersampled']
         mask_lambda = data['omega_mask']
         double_undersampled = data['double_undersample']
-        mask_omega = data['mask']
+        omega_mask = data['mask']
         K = data['k']
 
         input_slice = double_undersampled.to(device)
         target_slice = undersampled.to(device)
-        mask = (mask_lambda * mask_omega).to(device)
 
-        loss_mask = (~mask_lambda * mask_omega).detach()
+        loss_mask = (~mask_lambda * omega_mask).detach()
         loss_mask = loss_mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        mask = (mask_lambda * omega_mask)
+        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
 
     return mask, input_slice, target_slice, loss_mask
 
 
-def plot_recon(model, val_loader, device, writer, epoch):
+def plot_recon(model, val_loader, device, writer, epoch, supervised):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
 
@@ -355,8 +363,9 @@ def plot_recon(model, val_loader, device, writer, epoch):
 
         # forward pass
         sample = next(iter(val_loader))
-        sampled = sample['undersampled']
-        output = model(sampled.to(device), sample['mask'].to(device))
+        mask, input_slice, target_slice, loss_mask = to_device(sample, device, True)
+        
+        output = model(input_slice, mask)
         
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
@@ -378,11 +387,18 @@ def plot_recon(model, val_loader, device, writer, epoch):
         writer.add_image('val/recon', image_scaled, epoch)
         writer.add_image('val/diff', diff_scaled, epoch)
 
+        if not supervised:
+            mask, input_slice, target_slice, loss_mask = to_device(sample, device, supervised)
+            writer.add_image('loss_mask', loss_mask[0, [0]], epoch)
+            writer.add_image('current_mask', mask[0, [0]], epoch)
+            writer.add_image('omega_mask', sample['mask'][[0]], epoch)
+            
         # plot target if it's the first epcoh
         if epoch == 0:
             recon_scaled = ground_truth[[0], :, :]/image_scaling_factor
             recon_scaled = recon_scaled.clamp(0, 1)
             writer.add_image('val/target', recon_scaled, epoch)
+
 
 def save_config(args, writer_dir):
     args_dict = vars(args)

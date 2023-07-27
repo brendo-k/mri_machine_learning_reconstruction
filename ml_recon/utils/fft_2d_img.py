@@ -19,9 +19,9 @@ def ifft_2d_img(data, axes=[-1, -2]):
 
 def fft_2d_img(data, axes=[-1, -2]):
     if isinstance(data, torch.Tensor):
-        data_shifted = torch.fft.fftshift(data, dim=axes)
+        data_shifted = torch.fft.ifftshift(data, dim=axes)
         image = torch.fft.fft2(data_shifted, dim=axes, norm='ortho')
-        image = torch.fft.ifftshift(image, dim=axes)
+        image = torch.fft.fftshift(image, dim=axes)
     if isinstance(data, np.ndarray):
         data_shifted = np.fft.fftshift(data, axes=axes)
         image = np.fft.fft2(data_shifted, axes=axes, norm='ortho')

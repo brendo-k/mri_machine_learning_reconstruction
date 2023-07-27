@@ -136,6 +136,9 @@ class normalize(object):
 
 # Normalize to [0, 1] range
 class normalize_mean(object):
+    def __init__(self, norm_chan):
+        self.norm_chan = norm_chan
+
     def __call__(self, sample):
         undersampled, k_space = sample['undersampled'], sample['k_space']
         undersampled, undersampled_mean, undersampled_std = self.normalize(undersampled)
@@ -170,8 +173,6 @@ class normalize_mean(object):
         image_imag_norm = (image_imag - image_mean_imag)/image_imag_std
 
         k_space = fft_2d_img(image_real_norm + 1j * image_imag_nomr)
-        
-        image_std = image_imag_std
         
         return k_space, image_mean_real, image_std
 
