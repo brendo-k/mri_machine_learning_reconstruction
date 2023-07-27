@@ -6,8 +6,8 @@ class DnCNN(nn.Module):
                  in_chan, 
                  out_chan,
                  kernel_size = 3,
-                 feature_size = 64,
-                 num_of_layers = 17):
+                 feature_size = 32,
+                 num_of_layers = 15):
         super().__init__()
 
         self.dncnn = nn.Sequential()
@@ -27,4 +27,4 @@ class DnCNN(nn.Module):
         self.dncnn.append(decoder)
 
     def forward(self, x):
-        return x - self.dncnn(x)
+        return self.dncnn(x)

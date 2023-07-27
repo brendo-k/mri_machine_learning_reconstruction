@@ -43,7 +43,8 @@ class SensetivityModel(nn.Module):
 
     def mask(self, coil_images, mask):
         masked_images = coil_images.clone()
-        squeezed_mask = mask[:, 0,  :].to(torch.int8)
+        squeezed_mask = mask[:, 0, 0, :].to(torch.int8)
+
         cent = squeezed_mask.shape[1] // 2
         # running argmin returns the first non-zero
         left = torch.argmin(squeezed_mask[:, :cent].flip(1), dim=1)

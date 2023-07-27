@@ -28,7 +28,7 @@ PROFILE = False
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
 parser.add_argument('--lr', type=float, default=1e-4, help='')
-parser.add_argument('--batch_size', type=int, default=2, help='')
+parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=1, help='')
 
@@ -55,12 +55,9 @@ def main():
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H%M") + model.__class__.__name__
-        writer = SummaryWriter(writer_dir)
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-    lr = torch.linspace(1e-8, 0.1, 200)
+    lr = torch.linspace(0, 0.01, 1000)
     losses = []
     sample = next(iter(train_loader))
     mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device)
@@ -74,7 +71,6 @@ def main():
 
     plt.plot(lr, losses)
     plt.yscale('log')
-    plt.xscale('log')
     plt.savefig('/home/kadotab/python/ml/loss_vs_lr.png')
 
    

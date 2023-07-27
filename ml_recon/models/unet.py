@@ -4,9 +4,17 @@ from typing import Tuple, List
 import torch.nn as nn 
 import torch
 import torch.nn.functional as F
-from .Unet_parts import down, up, concat, double_conv
 
 class Unet(nn.Module):
+    """
+    PyTorch implementation of a U-Net model.
+
+    O. Ronneberger, P. Fischer, and Thomas Brox. U-net: Convolutional networks
+    for biomedical image segmentation. In International Conference on Medical
+    image computing and computer-assisted intervention, pages 234–241.
+    Springer, 2015.
+    """
+
     def __init__(
             self, 
             in_chan, 
@@ -86,12 +94,73 @@ class Unet_down(nn.Module):
 class Unet_up(nn.Module):
     def __init__(self, in_chan, out_chan, drop_prob):
         super().__init__()
-        self.concat = concat()
         self.up = up(in_chan, out_chan)
+        self.concat = concat()
         self.conv = double_conv(in_chan, out_chan, drop_prob)
 
-    def forward(self, x, x_encode):
+    def forward(self, x, x_concat):
         x = self.up(x)
-        x = self.concat(x_encode, x)
+        x = self.concat(x, x_concat)
         x = self.conv(x)
         return x
+
+
+class double_conv(nn.Module):
+    def __init__(self, in_chans, out_chans, drop_prob):
+        
+        super().__init__()
+
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Dropout2d(drop_prob),
+            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Dropout2d(drop_prob),
+        )
+      
+    def forward(self, x):
+        return self.layers(x)
+
+class down(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
+
+    def forward(self, x):
+        x = self.max_pool(x)
+        return x
+
+
+class up(nn.Module):
+
+  def __init__(self, in_chan, out_chan):
+    super().__init__()
+    self.layers = nn.Sequential(
+      nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
+      nn.InstanceNorm2d(out_chan),
+      nn.LeakyReLU(negative_slope=0.2, inplace=True),
+    )
+
+  def forward(self, x):
+    return self.layers(x)
+
+
+class concat(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+  def forward(self, x: torch.Tensor, x_concat: torch.Tensor):
+    x_concat_shape = x_concat.shape[-2:]
+    x_shape = x.shape[-2:]
+    diff_x = x_concat_shape[0] - x_shape[0]
+    diff_y = x_concat_shape[1] - x_shape[1]
+    x_concat_trimmed = x_concat
+    if diff_x != 0:
+      x_concat_trimmed = x_concat_trimmed[:, :, diff_x//2:-diff_x//2, :]
+    if diff_y != 0:
+      x_concat_trimmed = x_concat_trimmed[:, :, :, diff_y//2:-diff_y//2]
+    concated_data = torch.cat((x, x_concat_trimmed), dim=1)
+    return concated_data
