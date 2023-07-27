@@ -121,8 +121,8 @@ class remove_slice_dim(object):
 # Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
-        undersampled, k_space,  = sample['undersampled'], sample['k_space']
-        undersample_max = ifft_2d_img(undersampled).abs().max()
+        undersampled, k_space = sample['undersampled'], sample['k_space']
+        undersample_max = ifft_2d_img(k_space).abs().pow(2).sum(1).sqrt().max()
         undersampled /= undersample_max
         k_space /= undersample_max
         if 'double_undersample' in sample.keys():
@@ -136,6 +136,9 @@ class normalize(object):
 
 # Normalize to [0, 1] range
 class normalize_mean(object):
+    def __init__(self, norm_chan):
+        self.norm_chan = norm_chan
+
     def __call__(self, sample):
         undersampled, k_space = sample['undersampled'], sample['k_space']
         undersampled, undersampled_mean, undersampled_std = self.normalize(undersampled)
@@ -157,11 +160,29 @@ class normalize_mean(object):
     
     def normalize(self, k_space):
         image = ifft_2d_img(k_space)
+        if self.norm_chan:
+            image_real = image.real
+            image_imag = image.imag
 
-        image_mean = image.abs().mean()
-        image_std = image.abs().std()
+            image_real = (image_real - image_real.mean())/image_real.std()
+            image_imag = (image_imag - image_imag.mean())/image_imag.std()
+            image_real = image_real.clamp(-6, 6)
+            image_imag = image_imag.clamp(-6, 6)
 
-        k_space = fft_2d_img((image - image_mean)/image_std)
+            image_mean = image_real.mean()
+            image_std = image_real.std()
+
+            k_space = fft_2d_img(image_real  + 1j * image_imag)
+
+        else:
+            image_mean = image.mean()
+            image_std = image.abs().std()
+
+            norm_image = (image - image_mean)/image_std
+            norm_image = norm_image.clamp(-6, 6)
+            k_space = fft_2d_img(norm_image)
+            
+
         
         return k_space, image_mean, image_std
 

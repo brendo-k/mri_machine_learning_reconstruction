@@ -7,7 +7,11 @@ import yaml
 import contextlib
 import json
 
-from ml_recon.models.varnet_unet import VarNet
+import ml_recon.models.varnet_unet as varnet_unet
+import ml_recon.models.varnet_resnet as varnet_resnet
+import ml_recon.models.varnet_transformer as varnet_transformer
+import ml_recon.models.varnet_dnCNN as varnet_dncnn
+import fastmri.models.varnet as fast_mri
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -27,19 +31,37 @@ PROFILE = False
 
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
-parser.add_argument('--lr', type=float, default=1e-4, help='')
+parser.add_argument('--lr', type=float, default=1e-3, help='')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
-parser.add_argument('--num_workers', type=int, default=1, help='')
-parser.add_argument('--supervised', action='store_false', help='')
+parser.add_argument('--num_workers', type=int, default=0, help='')
+parser.add_argument('--supervised', action='store_true', help='')
+parser.add_argument('--model', type=str, default='unet', help='must be dncnn, transformer, unet, or resnet')
+parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
 parser.add_argument('--world_size', default=2, type=int, help='')
-parser.add_argument('--distributed', action='store_false', help='')
+parser.add_argument('--use_subset', action='store_true', help='')
+
 
 def main():
     args = parser.parse_args()
+
+    model_name = args.model.lower() 
+    if model_name == 'unet':
+        VarNet = varnet_unet.VarNet
+    elif model_name == 'resnet':
+        VarNet = varnet_resnet.VarNet
+    elif model_name == 'dncnn':
+        VarNet = varnet_dncnn.VarNet
+    elif model_name == 'transformer':
+        VarNet = varnet_transformer.VarNet
+    elif model_name == 'fastmri':
+        VarNet = fast_mri.VarNet
+    else:
+        raise(ValueError('Must be unet, resnet, transformer, or dncnn'))
+    print(f'Using model {VarNet.__module__ }')
     
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
@@ -65,6 +87,8 @@ def main():
 
     path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 40, gamma=0.1)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 10, 1e-4)
+    
 
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
@@ -72,13 +96,14 @@ def main():
         if distributed:
             train_loader.sampler.set_epoch(epoch)
 
+        model.train()
         train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.supervised)
-
+        model.eval()
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
             val_loss = validate(model, loss_fn, val_loader, current_device, args.supervised)
-            plot_recon(model, val_loader, current_device, writer, epoch)
+            plot_recon(model, val_loader, current_device, writer, epoch, args.supervised)
         
         scheduler.step()
         
@@ -133,24 +158,28 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     transforms = Compose(
         (
             toTensor(),
-            normalize_mean(),
+            normalize_mean(norm_chan=True),
         )
     )
+    data_dir = arg.data_dir
     train_dataset = SelfSupervisedSampling(
-        '/home/kadotab/train.json',
+        os.path.join(data_dir, 'multicoil_train'),
         transforms=transforms,
-        R=4,
-        R_hat=2
+        #raw_sample_filter=lambda x: x['coils'] == 16,
+        R=3,
+        R_hat=3
         )
     
     val_dataset = SelfSupervisedSampling(
-        '/home/kadotab/val.json',
+        os.path.join(data_dir, 'multicoil_val'),
         transforms=transforms,
-        R=4,
-        R_hat=2
+        #raw_sample_filter=lambda x: x['coils'] == 16,
+        R=3,
+        R_hat=3
         )
-
-    #train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+    
+    if arg.use_subset:
+        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
 
     if distributed:
         print('Setting up distributed sampler')
@@ -218,6 +247,7 @@ def train_step(model, loss_function, optimizer, data, device, supervised):
 
     optimizer.zero_grad()
     predicted_sampled = model(input_slice, mask)
+
     loss = loss_function(
             torch.view_as_real(predicted_sampled * loss_mask),
             torch.view_as_real(target_slice * loss_mask)
@@ -293,28 +323,31 @@ def to_device(data: Dict, device: str, supervised: bool):
         target_slice = data['k_space']
         mask = data['mask']
 
-        loss_mask = torch.ones((target_slice.shape)).to(device)
+
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
         mask = mask.to(device)
+        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        loss_mask = torch.ones((target_slice.shape)).to(device)
     else:
         undersampled = data['undersampled']
         mask_lambda = data['omega_mask']
         double_undersampled = data['double_undersample']
-        mask = data['mask']
+        omega_mask = data['mask']
         K = data['k']
 
         input_slice = double_undersampled.to(device)
         target_slice = undersampled.to(device)
-        mask = (mask_lambda * mask).to(device)
 
-        loss_mask = (~mask_lambda * mask).detach()
+        loss_mask = (~mask_lambda * omega_mask).detach()
         loss_mask = loss_mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        mask = (mask_lambda * omega_mask)
+        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
 
     return mask, input_slice, target_slice, loss_mask
 
 
-def plot_recon(model, val_loader, device, writer, epoch):
+def plot_recon(model, val_loader, device, writer, epoch, supervised):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
 
@@ -327,28 +360,38 @@ def plot_recon(model, val_loader, device, writer, epoch):
     """
     if device == 0:
         sample = next(iter(val_loader))
-        sampled = sample['undersampled']
-        output = model(sampled.to(device), sample['mask'].to(device))
+        mask, input_slice, target_slice, loss_mask = to_device(sample, device, True)
+        
+        output = model(input_slice, mask)
         
         output = ifft_2d_img(output)
         output = output.abs().pow(2).sum(1).sqrt()
-        output = output.cpu()
+        output = output.cpu() 
 
         ground_truth = ifft_2d_img(sample['k_space']).abs().pow(2).sum(1).sqrt()
         diff = (output - ground_truth).abs()
 
-        image_scaling_factor = ground_truth[0].max() * 0.40
+        image_scaling_factor = ground_truth[0].max() * 0.70
         image_scaled = output[[0], :, :].abs()/image_scaling_factor
+        image_scaled[image_scaled > 1] = 1
 
         diff_scaled = diff[[0], :, :]/(image_scaling_factor/4)
+        diff_scaled[diff_scaled > 1] = 1
 
         writer.add_image('val/recon', image_scaled, epoch)
         writer.add_image('val/diff', diff_scaled, epoch)
 
+        if not supervised:
+            mask, input_slice, target_slice, loss_mask = to_device(sample, device, supervised)
+            writer.add_image('loss_mask', loss_mask[0, [0]], epoch)
+            writer.add_image('current_mask', mask[0, [0]], epoch)
+            writer.add_image('omega_mask', sample['mask'][[0]], epoch)
+            
         if epoch == 0:
             recon_scaled = ground_truth[[0], :, :]/image_scaling_factor
             recon_scaled[recon_scaled > 1] = 1
             writer.add_image('val/target', recon_scaled, epoch)
+
 
 def save_config(args, writer_dir):
     args_dict = vars(args)

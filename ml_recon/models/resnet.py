@@ -9,7 +9,7 @@ class residual_block(nn.Module):
         self.res_block = nn.Sequential(
             nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False),
             nn.InstanceNorm2d(chans),
-            nn.functional.relu,
+            nn.ReLU(),
             nn.Conv2d(chans, chans, 3, stride=1, padding=1, bias=False),
         )
         self.scaling = scaling

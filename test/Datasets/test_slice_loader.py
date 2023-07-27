@@ -10,18 +10,17 @@ from ml_recon.utils.collate_function import collate_fn
 from ml_recon.utils.read_headers import make_header
 import pytest
 
-@pytest.fixture(scope="session")
-def build_header(tmp_path_factory) -> str:
-    path = tmp_path_factory.getbasetemp()
-    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/', path / 'header.json')
-    return header_path
 
 @pytest.fixture
-def build_dataset(build_header) -> UndersampledSliceDataset:
+def build_dataset(get_data_dir, scope='session') -> UndersampledSliceDataset:
     torch.manual_seed(0)
-    dataset = UndersampledSliceDataset(build_header, 4)
+    dataset = UndersampledSliceDataset(get_data_dir, 4)
     dataset.set_file_reader(H5FileReader)
     return dataset
+
+@pytest.fixture
+def get_data_dir() -> str:
+    return '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
 
 def test_slice_load(build_dataset):
     data = next(iter(build_dataset))
@@ -45,9 +44,9 @@ def test_undersampled_slice(build_dataset):
 
 # Test if we are able to batch slices. This requires some overhead by padding reconstruction and k-space so it is 
 # same number of dimensions. Pads the coil dimensions as zeros
-def test_undersampled_slice_batching(build_header):
+def test_undersampled_slice_batching(get_data_dir):
     transforms = Compose((pad((640, 320)), pad_recon((320, 320)), toTensor()))
-    dataset = UndersampledSliceDataset(build_header, R=4, transforms=transforms)
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, transforms=transforms)
     dataset.set_file_reader(H5FileReader)
     dataloader = DataLoader(dataset, collate_fn=collate_fn, batch_size=5)
     data = next(iter(dataloader))
@@ -57,8 +56,8 @@ def test_undersampled_slice_batching(build_header):
         
 # Test if we are able to batch slices. This requires some overhead by padding reconstruction and k-space so it is 
 # same number of dimensions. Pads the coil dimensions as zeros
-def test_filter(build_header):
-    dataset = UndersampledSliceDataset(build_header, R=4, raw_sample_filter=lambda sample: sample['coils'] >= 16, transforms=toTensor())
+def test_filter(get_data_dir):
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, raw_sample_filter=lambda sample: sample['coils'] >= 16, transforms=toTensor())
     dataset.set_file_reader(H5FileReader)
     dataloader = DataLoader(dataset, collate_fn=collate_fn, batch_size=1)
     data = next(iter(dataloader))
@@ -73,10 +72,19 @@ def test_probability_mask(build_dataset):
     assert pdf.shape == (600, 300)
     np.testing.assert_equal(pdf[:, 150 - 5: 150 + 5], np.ones((600, 10)))
 
-def test_determanistic(build_header):
-    dataset = UndersampledSliceDataset(build_header, R=4, deterministic=True)
+def test_determanistic(get_data_dir):
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, deterministic=True)
 
     data1 = dataset[0]
     data2 = dataset[0]
 
     np.testing.assert_equal(data1['mask'], data2['mask'])
+
+
+def test_non_determanistic(get_data_dir):
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, deterministic=False)
+
+    data1 = dataset[0]
+    data2 = dataset[0]
+
+    assert (data1['mask'] != data2['mask']).any()
