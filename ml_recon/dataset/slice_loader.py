@@ -9,6 +9,7 @@ from typing import (
 from ml_recon.dataset.filereader.filereader import FileReader
 from torch.utils.data import Dataset
 from scipy.interpolate import interpn
+from ml_recon.utils.read_headers import make_header
 import numpy as np
 
 
@@ -22,12 +23,18 @@ class SliceLoader(Dataset):
 
     def __init__(
             self,
-            header_file: Union[str, os.PathLike], 
+            data_dir: Union[str, os.PathLike], 
             raw_sample_filter: Optional[Callable] = lambda _: True,  # if not defined let everything though
-            transforms: Optional[Callable] = None
+            transforms: Optional[Callable] = None,
+            build_new_header: bool = False
             ):
         self.tranforms = transforms
         self.data_list = []
+        header_file =  os.path.join(data_dir, 'header.json')
+
+        if not os.path.isfile(header_file):
+            make_header(data_dir, header_file)
+
         with open(header_file, 'r') as f:
             self.index_info = json.load(f)
             for key in self.index_info:

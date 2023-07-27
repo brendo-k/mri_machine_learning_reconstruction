@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
-from ml_recon.models import NormUnet, SensetivityModel
+from ml_recon.models import SensetivityModel
+from ml_recon.models.swin_unetr import SwinUnet 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 
@@ -18,7 +19,7 @@ class VarNet(nn.Module):
         for _ in range(num_cascades):
             self.cascade.append(
                 VarnetBlock(
-                    NormUnet(2, 2)
+                    SwinUnet(2, 2)
                 )
             )
 
@@ -28,7 +29,7 @@ class VarNet(nn.Module):
         self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k: torch.Tensor, mask: torch.Tensor):
+    def forward(self, reference_k, mask):
         # get sensetivity maps
         sense_maps = self.sens_model(reference_k, mask)
         # current k_space 
@@ -53,7 +54,7 @@ class VarnetBlock(nn.Module):
     def forward(self, images, sensetivities):
         # Reduce
         images = ifft_2d_img(images, axes=[2, 3])
-        combined_images = torch.sum(images * sensetivities.conj(), dim=1, keepdim=True)
+        combined_images = torch.sum(images * sensetivities.conj_physical(), dim=1, keepdim=True)
 
         combined_images = complex_conversion.complex_to_real(combined_images)
         combined_images = self.unet(combined_images)

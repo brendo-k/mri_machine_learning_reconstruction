@@ -5,16 +5,15 @@ from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
 from ml_recon.dataset.filereader.read_h5 import H5FileReader
 from ml_recon.utils.read_headers import make_header
 
-@pytest.fixture(scope="session")
-def build_header(tmp_path_factory):
-    path = tmp_path_factory.getbasetemp()
-    header_path = make_header('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/', path / 'header.json')
-    return header_path
+@pytest.fixture
+def get_data_dir():
+    path = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
+    return path
 
 @pytest.fixture
-def build_dataset(build_header):
+def build_dataset(get_data_dir):
     torch.manual_seed(0)
-    dataset = SelfSupervisedSampling(build_header, 4, 2)
+    dataset = SelfSupervisedSampling(get_data_dir, 4, 2)
     dataset.set_file_reader(H5FileReader)
     return dataset
     

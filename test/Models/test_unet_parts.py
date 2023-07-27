@@ -1,5 +1,6 @@
+import pytest
 import torch
-from ml_recon.models.Unet_parts import double_conv, down, up, concat
+from ml_recon.models.Unet import double_conv, down, up, concat, Unet_up, Unet_down, Unet
 
 # Unit tests for double_conv module
 def test_double_conv():
@@ -46,12 +47,90 @@ def test_up():
 def test_concat():
     input_shape_encode = (1, 64, 256, 256)
     input_shape_decode = (1, 32, 128, 128)
-    x_encode = torch.randn(input_shape_encode)
-    x_decode = torch.randn(input_shape_decode)
+    x_concat = torch.randn(input_shape_encode)
+    x = torch.randn(input_shape_decode)
 
     # Create an instance of the concat module
     concat_module = concat()
 
     # Ensure the output shape matches the expected shape after concatenation
-    output = concat_module(x_encode, x_decode)
+    output = concat_module(x, x_concat)
     assert output.shape == (1, 96, 128, 128)
+
+
+# Test the forward pass of Unet model
+def test_unet_forward():
+    in_channels = 3
+    out_channels = 1
+    depth = 4
+    chans = 18
+    drop_prob = 0.2
+    batch_size = 2
+    height, width = 128, 128
+
+    # Create an instance of the Unet model
+    model = Unet(in_channels, out_channels, depth, chans, drop_prob)
+
+    # Generate random input data
+    input_data = torch.rand(batch_size, in_channels, height, width)
+
+    # Perform forward pass
+    output = model(input_data)
+
+    # Check output shape
+    assert output.shape == (batch_size, out_channels, height, width)
+
+    # Check that all elements in the output are finite numbers
+    assert torch.isfinite(output).all()
+
+# Test the forward pass of Unet_down module
+def test_unet_down_forward():
+    in_channels = 18
+    out_channels = 36
+    drop_prob = 0.2
+    batch_size = 2
+    height, width = 64, 64
+
+    # Create an instance of the Unet_down module
+    down_module = Unet_down(in_channels, out_channels, drop_prob)
+
+    # Generate random input data
+    input_data = torch.rand(batch_size, in_channels, height, width)
+
+    # Perform forward pass
+    output = down_module(input_data)
+
+    # Check output shape
+    assert output.shape == (batch_size, out_channels, height // 2, width // 2)
+
+    # Check that all elements in the output are finite numbers
+    assert torch.isfinite(output).all()
+
+# Test the forward pass of Unet_up module
+def test_unet_up_forward():
+    out_channels = 18
+    in_channels = out_channels * 2
+    drop_prob = 0.2
+    batch_size = 2
+    height, width = 64, 64
+
+    # Create an instance of the Unet_down module
+    up_module = Unet_up(in_channels, out_channels, drop_prob)
+
+    # Generate random input data
+    input_data = torch.rand(batch_size, in_channels, height, width)
+    concat_data = torch.rand(batch_size, out_channels, height * 2 + 2, width * 2+ 5)
+
+    # Perform forward pass
+    output = up_module(input_data, concat_data)
+
+    # Check output shape
+    assert output.shape == (batch_size, out_channels, height * 2, width * 2)
+
+    # Check that all elements in the output are finite numbers
+    assert torch.isfinite(output).all()
+
+
+
+if __name__ == '__main__':
+    pytest.main()
