@@ -9,7 +9,7 @@ import json
 
 from ml_recon.models.varnet import VarNet
 
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUnet
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 #from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
@@ -49,7 +49,6 @@ def main():
 
     model = setup_model_backbone(args, current_device)
 
-
     if distributed:
         print(f'Setting up DDP in device {current_device}')
         model = DDP(model, device_ids=[current_device])
@@ -76,7 +75,9 @@ def main():
         if distributed:
             train_loader.sampler.set_epoch(epoch)
 
+        model.train()
         train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.supervised)
+        model.eval()
 
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
@@ -105,7 +106,8 @@ def setup_model_backbone(args, current_device):
     elif args.model == 'dncnn':
         backbone = DnCNN(in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
     elif args.model == 'transformer':
-        backbone = SwinUnet(in_chan=2, out_chan=2)
+        backbone = SwinUNETR(img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2)
+        print('loaded swinunet!')
 
     model = VarNet(backbone, num_cascades=5)
     model.to(current_device)
@@ -358,7 +360,7 @@ def plot_recon(model, val_loader, device, writer, epoch):
         
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
-        ground_truth = root_sum_of_squares(ifft_2d_img(sample['k_space']))
+        ground_truth = root_sum_of_squares(ifft_2d_img(sample['k_space']), coil_dim=1)
 
         diff = (output - ground_truth).abs()
 
