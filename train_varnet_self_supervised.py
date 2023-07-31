@@ -34,8 +34,8 @@ parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=0, help='')
 parser.add_argument('--supervised', action='store_true', help='')
-parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/dataset/multicoil_train/t1', help='')
-parser.add_argument('--model', type=str, choices=['unet', 'restnet', 'dncnn', 'transformer'], default='unet')
+parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
+parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
@@ -62,7 +62,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H%M") + model.__class__.__name__
+        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model
         writer = SummaryWriter(writer_dir)
         save_config(args, writer_dir)
     else: 
@@ -104,7 +104,7 @@ def setup_model_backbone(args, current_device):
     if args.model == 'unet':
         backbone = Unet(in_chan=2, out_chan=2, depth=4, chans=32)
     elif args.model == 'resnet':
-        backbone == ResNet(itterations=12, chans=32)
+        backbone = ResNet(itterations=12, chans=32)
     elif args.model == 'dncnn':
         backbone = DnCNN(in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
     elif args.model == 'transformer':
@@ -166,16 +166,15 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
         os.path.join(data_dir, 'multicoil_train'),
         transforms=transforms,
         #raw_sample_filter=lambda x: x['coils'] == 16,
-        R=3,
-        R_hat=3
+        R=4,
+        R_hat=2
         )
     
     val_dataset = SelfSupervisedSampling(
         os.path.join(data_dir, 'multicoil_val'),
         transforms=transforms,
-        #raw_sample_filter=lambda x: x['coils'] == 16,
-        R=3,
-        R_hat=3
+        R=4,
+        R_hat=2
         )
     
     if arg.use_subset:
@@ -323,12 +322,12 @@ def to_device(data: Dict, device: str, supervised: bool):
         target_slice = data['k_space']
         mask_omega = data['mask']
 
-
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
-        mask = mask.to(device)
-        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        mask = mask_omega.to(device)
+        mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
         loss_mask = torch.ones((target_slice.shape)).to(device)
+    else:
         undersampled = data['undersampled']
         mask_lambda = data['omega_mask']
         double_undersampled = data['double_undersample']
@@ -339,9 +338,9 @@ def to_device(data: Dict, device: str, supervised: bool):
         target_slice = undersampled.to(device)
 
         loss_mask = (~mask_lambda * omega_mask).detach()
-        loss_mask = loss_mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        loss_mask = loss_mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
         mask = (mask_lambda * omega_mask)
-        mask = mask[:, None, :, :].repeat(1, input_slice.shape[1], 1, 1).to(device)
+        mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
 
     return mask, input_slice, target_slice, loss_mask
 
