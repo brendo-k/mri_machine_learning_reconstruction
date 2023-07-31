@@ -122,7 +122,7 @@ class remove_slice_dim(object):
 class normalize(object):
     def __call__(self, sample):
         undersampled, k_space,  = sample['undersampled'], sample['k_space']
-        undersample_max = root_sum_of_squares(ifft_2d_img(undersampled)).max()
+        undersample_max = root_sum_of_squares(ifft_2d_img(undersampled), coil_dim=1).max()
         undersampled /= undersample_max
         k_space /= undersample_max
         if 'double_undersample' in sample.keys():
