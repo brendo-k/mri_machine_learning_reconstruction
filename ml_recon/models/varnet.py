@@ -32,7 +32,7 @@ class VarNet(nn.Module):
 
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
-        assert mask.ndim == 3
+        assert mask.ndim == 4
         # get sensetivity maps
         sense_maps = self.sens_model(reference_k, mask)
         # current k_space 
@@ -43,7 +43,7 @@ class VarNet(nn.Module):
             # mask values
             zero = torch.zeros(1, 1, 1, 1).to(current_k)
             # zero where not in mask
-            data_consistency = torch.where(mask.unsqueeze(1), current_k - reference_k, zero)
+            data_consistency = torch.where(mask, current_k - reference_k, zero)
             # gradient descent step
             current_k = current_k - self.lambda_reg[i] * data_consistency - refined_k
         return current_k
