@@ -30,28 +30,8 @@ class ResNet(nn.Module):
         self.decode = nn.Conv2d(chans, 2, 3, padding=1, bias=False)
     
 
-    def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # group norm
-        b, c, h, w = x.shape
-        x = x.view(b, 2, c // 2 * h * w)
-
-        mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1)
-
-        x = x.view(b, c, h, w)
-
-        return (x - mean) / std, mean, std
-
-    def unnorm(
-        self, x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
-    ) -> torch.Tensor:
-        return x * std + mean
-
-
     def forward(self, x):
-        x, mean, std = self.norm(x)
         x = self.encode(x)
         x = self.cascade(x) + x
         x = self.decode(x)
-        x = self.unnorm(x, mean, std)
         return x
