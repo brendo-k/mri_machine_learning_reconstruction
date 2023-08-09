@@ -32,10 +32,14 @@ def test_undersampled_slice(build_dataset):
     data = next(iter(build_dataset))
     # produce mask array with same number of channels
     mask_all_channels = np.tile(data['mask'], (data['undersampled'].shape[0], 1, 1))
+
     # find locations that equal to zero (masked)
     masked_locations = data['undersampled']*np.invert(mask_all_channels) == 0
-    equality = np.full(masked_locations.shape, True, dtype=bool)
+    equality = np.full_like(masked_locations, True)
     np.testing.assert_array_equal(equality, masked_locations, 'All mask locations should be zero!')
+
+    # ensure unmasked locations are the same
+    np.testing.assert_array_equal(data['undersampled'], data['k_space'] * data['mask'], 'Should be the same k_space loacations')
 
     phase_encode_size = data['mask'].shape[-1]
     center = np.floor(phase_encode_size/2).astype(int)

@@ -33,6 +33,8 @@ def test_lambda_mask(build_dataset):
     mask = data['omega_mask'] * data['mask']
     assert (torch.from_numpy(data['double_undersample'])[0, :, :] != 0).sum() > mask.sum()*0.80 #90 percent because there are some weird zero padded regions
     torch.testing.assert_allclose(data['double_undersample'] * mask, data['double_undersample']) # should not be affected by mask
+    torch.testing.assert_allclose(data['undersampled'] * data['omega_mask'], data['double_undersample']) # should not be affected by mask
+
 
 def test_acs_lines(build_dataset):
     data = next(iter(build_dataset))
