@@ -8,9 +8,7 @@ import contextlib
 import json
 
 from ml_recon.models.varnet import VarNet
-
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
-#from ml_recon.models.varnet_unet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -46,6 +44,7 @@ parser.add_argument('--use_subset', action='store_true', help='')
 
 def main():
     args = parser.parse_args()
+    torch.manual_seed(0)
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
@@ -61,7 +60,7 @@ def main():
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    if current_device == 0:
+    if current_device == 0: 
         writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model
         writer = SummaryWriter(writer_dir)
         save_config(args, writer_dir)
@@ -84,6 +83,7 @@ def main():
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
+            plot_recon(model, train_loader, current_device, writer, epoch, args.supervised, type='train')
             val_loss = validate(model, loss_fn, val_loader, current_device, args.supervised)
             plot_recon(model, val_loader, current_device, writer, epoch, args.supervised)
         
@@ -111,7 +111,7 @@ def setup_model_backbone(args, current_device):
         backbone = SwinUNETR(img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2)
         print('loaded swinunet!')
 
-    model = VarNet(backbone, num_cascades=5)
+    model = VarNet(backbone, num_cascades=6)
     model.to(current_device)
 
     return model
@@ -165,7 +165,6 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     train_dataset = SelfSupervisedSampling(
         os.path.join(data_dir, 'multicoil_train'),
         transforms=transforms,
-        #raw_sample_filter=lambda x: x['coils'] == 16,
         R=4,
         R_hat=2
         )
@@ -215,6 +214,7 @@ def train(model, loss_function, dataloader, optimizer, device, supervised):
     with cm as prof:
         for i, data in enumerate(dataloader):
             if PROFILE:
+                print('PROFILING')
                 if i > (1 + 1 + 3) * 2:
                     break
                 prof.step()
@@ -251,6 +251,7 @@ def train_step(model, loss_function, optimizer, data, device, supervised):
             torch.view_as_real(predicted_sampled * loss_mask),
             torch.view_as_real(target_slice * loss_mask)
             )
+    
     # normalize to number of ssdu indecies not number of voxels
     loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
@@ -345,7 +346,7 @@ def to_device(data: Dict, device: str, supervised: bool):
     return mask, input_slice, target_slice, loss_mask
 
 
-def plot_recon(model, val_loader, device, writer, epoch, supervised):
+def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val'):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
 
@@ -358,45 +359,49 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised):
     """
     if device == 0:
         # difference magnitude
-        difference_scaling = 4
+        difference_scaling = 1
 
         # forward pass
         sample = next(iter(val_loader))
         mask, input_slice, target_slice, loss_mask = to_device(sample, device, True)
         
         output = model(input_slice, mask)
+        output = output * (input_slice == 0) + input_slice
         
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
         ground_truth = root_sum_of_squares(ifft_2d_img(sample['k_space']), coil_dim=1)
+        x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1).cpu()
 
         diff = (output - ground_truth).abs()
 
         # get scaling factor (skull is high intensity)
-        image_scaling_factor = ground_truth[0].max() * 0.40
+        image_scaling_factor = ground_truth.amax((1, 2)).unsqueeze(1).unsqueeze(1) * 0.60
 
         # scale images and difference
-        image_scaled = output[[0], :, :].abs()/image_scaling_factor
-        diff_scaled = diff[[0], :, :]/(image_scaling_factor/difference_scaling)
+        image_scaled = output.abs()/image_scaling_factor
+        diff_scaled = diff/(image_scaling_factor/difference_scaling)
+        input_scaled = x_input.abs()/(image_scaling_factor)
 
         # clamp to 0-1 range
         image_scaled = image_scaled.clamp(0, 1)
         diff_scaled = diff_scaled.clamp(0, 1)
+        input_scaled = input_scaled.clamp(0, 1)
 
-        writer.add_image('val/recon', image_scaled, epoch)
-        writer.add_image('val/diff', diff_scaled, epoch)
+        writer.add_images(type + '_recon', image_scaled.unsqueeze(1), epoch)
+        writer.add_images(type + '_diff', diff_scaled.unsqueeze(1), epoch)
+        writer.add_images(type + '_input', input_scaled.unsqueeze(1), epoch)
 
         if not supervised:
             mask, input_slice, target_slice, loss_mask = to_device(sample, device, supervised)
-            writer.add_image('loss_mask', loss_mask[0, [0]], epoch)
-            writer.add_image('current_mask', mask[0, [0]], epoch)
-            writer.add_image('omega_mask', sample['mask'][[0]], epoch)
+            writer.add_images(type + '_loss_mask', loss_mask[:, [0], :, :], epoch)
+            writer.add_images(type + '_current_mask', mask[:, [0], :, :], epoch)
+            writer.add_images(type + '_omega_mask', sample['mask'].unsqueeze(1), epoch)
             
         # plot target if it's the first epcoh
-        if epoch == 0:
-            recon_scaled = ground_truth[[0], :, :]/image_scaling_factor
-            recon_scaled = recon_scaled.clamp(0, 1)
-            writer.add_image('val/target', recon_scaled, epoch)
+        recon_scaled = ground_truth/image_scaling_factor
+        recon_scaled = recon_scaled.clamp(0, 1)
+        writer.add_images(type + '_target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
 def save_config(args, writer_dir):
@@ -404,6 +409,7 @@ def save_config(args, writer_dir):
     with open(os.path.join(writer_dir, 'config.txt'), 'w') as f:
         f.write(json.dumps(args_dict, indent=4))
 
+    
 
 def load_config(args):
     """ loads yaml file """
