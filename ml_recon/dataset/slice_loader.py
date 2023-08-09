@@ -51,6 +51,7 @@ class SliceLoader(Dataset):
     def __getitem__(self, index):
         images = self._get_data_from_index(index)
         images = self.resample(images)
+        images = np.flip(images, axis=1)
 
         return images
 
