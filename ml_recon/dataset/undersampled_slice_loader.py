@@ -45,7 +45,7 @@ class UndersampledSliceDataset(SliceLoader):
     def get_item_from_index(self, index):
         data = super().__getitem__(index)
 
-        rng = self.get_random_generator()
+        rng = self.get_random_generator(index=index)
 
         # get k-space data
         k_space = data['k_space']
@@ -59,9 +59,9 @@ class UndersampledSliceDataset(SliceLoader):
         data['prob_omega'] = prob_map.copy()
         return data
 
-    def get_random_generator(self):
+    def get_random_generator(self, index=None):
         if self.deterministic:
-            rng = np.random.default_rng(8)
+            rng = np.random.default_rng(index)
         else:
             rng = np.random.default_rng()
         return rng
