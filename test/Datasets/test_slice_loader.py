@@ -1,21 +1,21 @@
-from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
-from ml_recon.dataset.filereader.read_h5 import H5FileReader
-from torch.utils.data import DataLoader
+import numpy as np
+import pytest
 
 import torch
-import numpy as np
-from ml_recon.transforms import toTensor, pad, pad_recon
+from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
+
 from ml_recon.utils.collate_function import collate_fn
+from ml_recon.transforms import toTensor, pad, pad_recon
 from ml_recon.utils.read_headers import make_header
-import pytest
+from ml_recon.dataset.undersampled_slice_loader import UndersampledSliceDataset
+from ml_recon.dataset.filereader.read_h5 import H5FileReader
 
 
 @pytest.fixture
 def build_dataset(get_data_dir, scope='session') -> UndersampledSliceDataset:
     torch.manual_seed(0)
-    dataset = UndersampledSliceDataset(get_data_dir, 4)
-    dataset.set_file_reader(H5FileReader)
+    dataset = UndersampledSliceDataset(get_data_dir, H5FileReader, 4)
     return dataset
 
 @pytest.fixture
@@ -51,7 +51,6 @@ def test_undersampled_slice(build_dataset):
 def test_undersampled_slice_batching(get_data_dir):
     transforms = Compose((pad((640, 320)), pad_recon((320, 320)), toTensor()))
     dataset = UndersampledSliceDataset(get_data_dir, R=4, transforms=transforms)
-    dataset.set_file_reader(H5FileReader)
     dataloader = DataLoader(dataset, collate_fn=collate_fn, batch_size=5)
     data = next(iter(dataloader))
     assert data['k_space'].shape[0] == 5
@@ -61,8 +60,7 @@ def test_undersampled_slice_batching(get_data_dir):
 # Test if we are able to batch slices. This requires some overhead by padding reconstruction and k-space so it is 
 # same number of dimensions. Pads the coil dimensions as zeros
 def test_filter(get_data_dir):
-    dataset = UndersampledSliceDataset(get_data_dir, R=4, raw_sample_filter=lambda sample: sample['coils'] >= 16, transforms=toTensor())
-    dataset.set_file_reader(H5FileReader)
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, raw_sample_filter=lambda sample: sample['coils'] >= 16, transforms=toTensor(), build_new_header=True)
     dataloader = DataLoader(dataset, collate_fn=collate_fn, batch_size=1)
     data = next(iter(dataloader))
     assert data['k_space'].shape[0] == 1
@@ -90,5 +88,20 @@ def test_non_determanistic(get_data_dir):
 
     data1 = dataset[0]
     data2 = dataset[0]
+
+    assert (data1['mask'] != data2['mask']).any()
+
+def test_non_determanistic_between_slices(get_data_dir):
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, deterministic=False)
+
+    data1 = dataset[0]
+    data2 = dataset[1]
+
+    assert (data1['mask'] != data2['mask']).any()
+
+    dataset = UndersampledSliceDataset(get_data_dir, R=4, deterministic=True)
+
+    data1 = dataset[0]
+    data2 = dataset[1]
 
     assert (data1['mask'] != data2['mask']).any()

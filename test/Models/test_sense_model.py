@@ -3,7 +3,7 @@ import torch
 
 def test_passthrough():
     x = torch.rand((2, 6, 640, 320))
-    mask = torch.rand((1, 640, 320))
+    mask = torch.rand((1, 6, 640, 320))
     sense_model = SensetivityModel(2, 2, 4)
     output = sense_model(x, mask)
 
@@ -11,9 +11,9 @@ def test_passthrough():
 
 def test_mask():
     x = torch.rand((2, 20, 640, 320))
-    mask = torch.zeros(2, 640, 320)
-    mask[1, :, 150:160] = 1
-    mask[0, :, 160:170] = 1
+    mask = torch.zeros(2, 20, 640, 320)
+    mask[1, :, :, 150:160] = 1
+    mask[0, :, :, 160:170] = 1
     mask = mask.to(torch.bool)
     
     sense_model = SensetivityModel(2, 2, 4)
@@ -29,8 +29,8 @@ def test_mask():
 
 def test_scaling():
     x = torch.rand((2, 20, 640, 320))
-    mask = torch.zeros(2, 640, 320)
-    mask[:, :, 150:170] = 1
+    mask = torch.zeros(2, 20, 640, 320)
+    mask[:, :, :, 150:170] = 1
     mask = mask.to(torch.bool)
 
     sense_model = SensetivityModel(2, 2, 4)
