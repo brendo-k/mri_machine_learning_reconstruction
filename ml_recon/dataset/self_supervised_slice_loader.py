@@ -11,11 +11,12 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
             R, 
             R_hat, 
             transforms=None,
-            raw_sample_filter: Optional[Callable] = lambda x: True
+            raw_sample_filter: Optional[Callable] = lambda x: True,
+            build_new_header: bool = True
             ):
 
         # determanistic set to true so mask doesn't change every epoch
-        super().__init__(h5_directory, R=R, raw_sample_filter=raw_sample_filter, deterministic=True)
+        super().__init__(h5_directory, R=R, raw_sample_filter=raw_sample_filter, deterministic=True, build_new_header=False)
         self.R_hat = R_hat
         self.transforms = transforms
 
@@ -39,8 +40,9 @@ class SelfSupervisedSampling(UndersampledSliceDataset):
 
         data['double_undersample'] = undersampled * omega_mask
         data['omega_mask'] = omega_mask
+
         K = (1 - prob_omega) / (1 - prob_omega * prob_lambda)
-        K = np.expand_dims(np.expand_dims(K, 0), 0).astype(float)
+        K = K.astype(float)
         data['K'] = K
 
         if self.transforms:

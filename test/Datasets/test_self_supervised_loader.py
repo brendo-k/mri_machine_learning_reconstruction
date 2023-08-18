@@ -14,7 +14,6 @@ def get_data_dir():
 def build_dataset(get_data_dir):
     torch.manual_seed(0)
     dataset = SelfSupervisedSampling(get_data_dir, 4, 2)
-    dataset.set_file_reader(H5FileReader)
     return dataset
     
 
