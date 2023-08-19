@@ -6,6 +6,7 @@ import time
 import yaml
 import contextlib
 import json
+from functools import partial
 
 from ml_recon.models.varnet import VarNet
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
@@ -13,8 +14,9 @@ from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_recon.transforms import toTensor, normalize, pad_recon, pad, normalize_mean
-from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
+from ml_recon.transforms import to_tensor, normalize
+from ml_recon.dataset.sliceloader import SliceDataset 
+from ml_recon.dataset.undersampled_decorator import UndersamplingDecorator
 from ml_recon.utils import save_model, ifft_2d_img, collate_fn, root_sum_of_squares
 
 from torchvision.transforms import Compose
@@ -27,13 +29,14 @@ PROFILE = False
 
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
-parser.add_argument('--lr', type=float, default=1e-3, help='')
+parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=0, help='')
-parser.add_argument('--supervised', action='store_true', help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
 parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
+parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
+parser.add_argument('--R_hat', type=float, default=2)
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
@@ -50,10 +53,7 @@ def main():
 
     model = setup_model_backbone(args, current_device)
 
-    if distributed:
-        print(f'Setting up DDP in device {current_device}')
-        model = DDP(model, device_ids=[current_device])
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model = setup_ddp(current_device, distributed, model)
 
     train_loader, val_loader = prepare_data(args, distributed)
 
@@ -61,15 +61,15 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     if current_device == 0: 
-        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model
+        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
         writer = SummaryWriter(writer_dir)
         save_config(args, writer_dir)
     else: 
         writer = None
 
-    path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 40, gamma=0.1)
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 10, 1e-4)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 2, T_mult=2, eta_min=5e-5, last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, 8, mode='triangular2', cycle_momentum=False)
+
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -77,38 +77,46 @@ def main():
             train_loader.sampler.set_epoch(epoch)
 
         model.train()
-        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.supervised)
+        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, epoch)
         model.eval()
 
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
-            plot_recon(model, train_loader, current_device, writer, epoch, args.supervised, type='train')
-            val_loss = validate(model, loss_fn, val_loader, current_device, args.supervised)
-            plot_recon(model, val_loader, current_device, writer, epoch, args.supervised)
+            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, type='train')
+            val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
+            plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
         
-        scheduler.step()
         
         if current_device == 0:
             writer.add_scalar('train/loss', train_loss, epoch)
             writer.add_scalar('val/loss', val_loss, epoch)
+            writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
-    save_model(path, model, optimizer, args.max_epochs, current_device)
+    save_model(writer_dir, model, optimizer, args.max_epochs, current_device)
 
     if distributed:
         destroy_process_group()
+
+def setup_ddp(current_device, distributed, model):
+    if distributed:
+        print(f'Setting up DDP in device {current_device}')
+        model = DDP(model, device_ids=[current_device])
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    return model
 
 
 def setup_model_backbone(args, current_device):
 
     if args.model == 'unet':
-        backbone = Unet(in_chan=2, out_chan=2, depth=4, chans=32)
+        # TODO: for some reason I have a 14 parameter difference between charlie and my code. Odd
+        backbone = partial(Unet, in_chan=2, out_chan=2, depth=4, chans=18)
     elif args.model == 'resnet':
-        backbone = ResNet(itterations=12, chans=32)
+        backbone = partial(ResNet, itterations=12, chans=32)
     elif args.model == 'dncnn':
-        backbone = DnCNN(in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
+        backbone = partial(DnCNN, in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
     elif args.model == 'transformer':
-        backbone = SwinUNETR(img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2)
+        backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
 
     model = VarNet(backbone, num_cascades=6)
@@ -132,8 +140,8 @@ def setup_devices(dist_backend, init_method, world_size):
         print("Starting DPP...")
 
         """ This next line is the key to getting DistributedDataParallel working on SLURM:
-		SL  URM_NODEID is 0 or 1 in this example, SLURM_LOCALID is the id of the 
- 		c   urrent process inside a node and is also 0 or 1 in this example."""
+		SLURM_NODEID is 0 or 1 in this example, SLURM_LOCALID is the id of the 
+ 		current process inside a node and is also 0 or 1 in this example."""
 
         current_device = int(os.environ.get("SLURM_LOCALID")) 
 
@@ -157,23 +165,23 @@ def setup_devices(dist_backend, init_method, world_size):
 def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     transforms = Compose(
         (
-            toTensor(),
+            to_tensor(),
             normalize(),
         )
     )
     data_dir = arg.data_dir
-    train_dataset = SelfSupervisedSampling(
-        os.path.join(data_dir, 'multicoil_train'),
+    train_dataset = UndersamplingDecorator(
+        SliceDataset(os.path.join(data_dir, 'multicoil_train'), build_new_header=True),
         transforms=transforms,
         R=4,
-        R_hat=2
+        R_hat=arg.R_hat
         )
     
-    val_dataset = SelfSupervisedSampling(
-        os.path.join(data_dir, 'multicoil_val'),
+    val_dataset = UndersamplingDecorator(
+        SliceDataset(os.path.join(data_dir, 'multicoil_val')),
         transforms=transforms,
         R=4,
-        R_hat=2
+        R_hat=arg.R_hat
         )
     
     if arg.use_subset:
@@ -206,7 +214,7 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
 
 
 
-def train(model, loss_function, dataloader, optimizer, device, supervised):
+def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler, epoch):
     running_loss = 0
 
     cm = setup_profile_context_manager()
@@ -219,9 +227,10 @@ def train(model, loss_function, dataloader, optimizer, device, supervised):
                     break
                 prof.step()
 
-            running_loss += train_step(model, loss_function, optimizer, data, device, supervised)
+            running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
+            scheduler.step(epoch + i / len(dataloader))
 
-    return running_loss/len(dataloader)
+    return running_loss.item()/len(dataloader)
 
 def setup_profile_context_manager():
     """ create a context manager if global PROFILE flag is set to true else retruns
@@ -232,7 +241,7 @@ def setup_profile_context_manager():
     """
     context_manager = torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch1_workers0'),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch5_workers1'),
         record_shapes=True,
         profile_memory=True,
         with_stack=True
@@ -241,8 +250,8 @@ def setup_profile_context_manager():
     return context_manager
 
 
-def train_step(model, loss_function, optimizer, data, device, supervised):
-    mask, input_slice, target_slice, loss_mask = to_device(data, device, supervised)
+def train_step(model, loss_function, optimizer, data, device, loss_type):
+    mask, input_slice, target_slice, loss_mask = to_device(data, device, loss_type)
 
     optimizer.zero_grad()
     predicted_sampled = model(input_slice, mask)
@@ -253,11 +262,11 @@ def train_step(model, loss_function, optimizer, data, device, supervised):
             )
     
     # normalize to number of ssdu indecies not number of voxels
-    loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
     loss.backward()
     optimizer.step()
-    loss_step = loss.item()*target_slice.shape[0]
+    loss_step = loss.detach() * target_slice.shape[0]
     return loss_step
 
 
@@ -277,7 +286,7 @@ def validate(model, loss_function, dataloader, device, supervised):
     val_running_loss = 0
     for data in dataloader:
         val_running_loss += val_step(model, loss_function, device, data, supervised)
-    return val_running_loss/len(dataloader)
+    return val_running_loss.item()/len(dataloader)
 
 
 def val_step(model, loss_function, device, data, supervised):
@@ -301,12 +310,12 @@ def val_step(model, loss_function, device, data, supervised):
             torch.view_as_real(target_slice * loss_mask)
             )
 
-    loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
-    return loss.item()*target_slice.shape[0]
+    return loss.detach() * target_slice.shape[0]
 
 
-def to_device(data: Dict, device: str, supervised: bool):
+def to_device(data: Dict, device: str, loss_type: str):
     """ moves tensors in data to the device specified
 
     Args:
@@ -317,31 +326,31 @@ def to_device(data: Dict, device: str, supervised: bool):
     Returns:
         torch.Tensor: returns multiple tensors now on the device
     """
-
-    if supervised:
-        input_slice = data['undersampled']
-        target_slice = data['k_space']
-        mask_omega = data['mask']
-
-        input_slice = input_slice.to(device)
-        target_slice = target_slice.to(device)
-        mask = mask_omega.to(device)
-        mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
-        loss_mask = torch.ones((target_slice.shape)).to(device)
+    double_undersaple, undersample, k_space, k = data
+    if loss_type == 'supervised':
+        input_slice = undersample
+        target_slice = k_space
+        mask = undersample != 0
+        loss_mask = torch.ones_like(mask)
     else:
-        undersampled = data['undersampled']
-        mask_lambda = data['omega_mask']
-        double_undersampled = data['double_undersample']
-        omega_mask = data['mask']
-        K = data['k']
+        input_slice = double_undersaple
+        target_slice = undersample
 
-        input_slice = double_undersampled.to(device)
-        target_slice = undersampled.to(device)
+        if loss_type == 'nosier2noise':
+            loss_mask = target_slice != 0
+            mask = input_slice != 0
+        elif loss_type == 'ssdu' or loss_type == 'k-weighted':
+            loss_mask = (target_slice != 0) & (input_slice == 0)
+            mask = input_slice != 0
 
-        loss_mask = (~mask_lambda * omega_mask).detach()
-        loss_mask = loss_mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
-        mask = (mask_lambda * omega_mask)
-        mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
+        if loss_type == 'k-weighted' or 'nosier2noise':
+            loss_mask = loss_mask.type(torch.float32)
+            loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
+            
+    input_slice = input_slice.to(device)
+    target_slice = target_slice.to(device)
+    mask = mask.to(device)
+    loss_mask = loss_mask.to(device)
 
     return mask, input_slice, target_slice, loss_mask
 
@@ -359,18 +368,18 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
     """
     if device == 0:
         # difference magnitude
-        difference_scaling = 1
+        difference_scaling = 4
 
         # forward pass
         sample = next(iter(val_loader))
-        mask, input_slice, target_slice, loss_mask = to_device(sample, device, True)
+        mask, input_slice, target_slice, loss_mask = to_device(sample, device, 'supervised')
         
         output = model(input_slice, mask)
         output = output * (input_slice == 0) + input_slice
         
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
-        ground_truth = root_sum_of_squares(ifft_2d_img(sample['k_space']), coil_dim=1)
+        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1)
         x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1).cpu()
 
         diff = (output - ground_truth).abs()
