@@ -52,34 +52,34 @@ def test_probability_mask(build_dataset):
     assert pdf.shape == (600, 300)
     np.testing.assert_equal(pdf[:, 150 - 5: 150 + 5], np.ones((600, 10)))
 
-def test_determanistic(get_data_dir):
-    dataset = SliceDataset(get_data_dir, R=4, deterministic=True)
+def test_deterministic(get_data_dir):
+    dataset = UndersamplingDecorator(SliceDataset(get_data_dir), R=4, deterministic=True)
 
     data1 = dataset[0]
     data2 = dataset[0]
 
-    np.testing.assert_equal(data1[0] != 0, data2[0] != 0)
+    np.testing.assert_equal(data1[1] != 0, data2[1] != 0)
 
 
-def test_non_determanistic(get_data_dir):
-    dataset = SliceDataset(get_data_dir, R=4, deterministic=False)
+def test_non_deterministic(get_data_dir):
+    dataset = UndersamplingDecorator(SliceDataset(get_data_dir), R=4, deterministic=False)
 
     data1 = dataset[0]
     data2 = dataset[0]
 
-    assert ((data1 != 0) == (data2 != 0)).any()
+    assert ((data1[1] != 0) != (data2[1] != 0)).any()
 
-def test_non_determanistic_between_slices(get_data_dir):
-    dataset = SliceDataset(get_data_dir, R=4, deterministic=False)
+def test_non_deterministic_between_slices(get_data_dir):
+    dataset = UndersamplingDecorator(SliceDataset(get_data_dir), R=4, deterministic=False)
 
     data1 = dataset[0]
     data2 = dataset[1]
 
-    assert ((data1 != 0) == (data2 != 0)).any()
+    assert ((data1[1] != 0) == (data2[1] != 0)).any()
 
-    dataset = SliceDataset(get_data_dir, R=4, deterministic=True)
+    dataset = UndersamplingDecorator(SliceDataset(get_data_dir), R=4, deterministic=True)
 
     data1 = dataset[0]
     data2 = dataset[1]
     
-    assert ((data1 != 0) == (data2 != 0)).any()
+    assert ((data1[1] != 0) == (data2[1] != 0)).any()

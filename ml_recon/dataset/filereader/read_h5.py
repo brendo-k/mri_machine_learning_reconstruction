@@ -1,5 +1,7 @@
 import h5py
 from .filereader import FileReader
+import xmltodict
+import numpy as np
 
 class H5FileReader(FileReader):
     def __init__(self, file_name):
@@ -7,7 +9,15 @@ class H5FileReader(FileReader):
 
     def __enter__(self):
         self.file_object = h5py.File(self.file_name, 'r')
-        return self.file_object
+        header = xmltodict.parse(np.array(self.file_object['ismrmrd_header'], dtype=bytes))
+        data_object = {
+                'coils': self.file_object['kspace'].shape[1],
+                'kspace': self.file_object['kspace'],
+                'T': header['ismrmrdHeader']['acquisitionSystemInformation']['systemFieldStrength_T'],
+                'recon': self.file_object['reconstruction_rss']
+                }
+
+        return data_object
 
     def get_keys(self):
         return self.file_object.keys()  
@@ -18,4 +28,3 @@ class H5FileReader(FileReader):
             print(exec_value)
             print(traceback)
         self.file_object.close()
-

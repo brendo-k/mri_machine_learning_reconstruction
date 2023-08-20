@@ -4,12 +4,15 @@ import torch
 import einops
 
 
-def only_apply_to(sample, function, keys):
-    for key in keys:
-        if key not in sample.keys():
-            continue
-        sample[key] = function(sample[key])
-    return sample
+def only_apply_to(sample, function, indecies):
+    transofrmed_data = []
+    for i, value in enumerate(sample):
+        if i in indecies:
+            transofrmed_data.append(function(value))
+        else:
+            transofrmed_data.append(value)
+
+    return tuple(transofrmed_data)
 
 
 class trim_coils(object):
@@ -17,7 +20,7 @@ class trim_coils(object):
         self.coil_size = coil_size
 
     def __call__(self, sample):
-        return only_apply_to(sample, self.trim_coil, keys=['undersampled', 'k_space'])
+        return only_apply_to(sample, self.trim_coil, indecies=[0, 1, 2])
 
     def trim_coil(self, sample):
         sample = sample[:, :self.coil_size, :, :]
@@ -29,7 +32,7 @@ class pad(object):
         self.pad_dim = pad_dim
 
     def __call__(self, sample):
-        return only_apply_to(sample, self.pad, keys=['undersampled', 'k_space', 'mask', 'omega_mask', 'double_undersample'])
+        return only_apply_to(sample, self.pad, indecies=[0, 1, 2])
 
     def pad(self, sample):
         x_diff = self.pad_dim[0] - sample.shape[-2]
@@ -95,43 +98,23 @@ class combine_coil(object):
 
         return sample
 
-
-class view_as_real(object):
-    def __call__(self, sample: torch.Tensor):
-        return only_apply_to(sample, self.complex_to_real, keys=['undersampled', 'k_space'])
-
-    def complex_to_real(self, sample):
-        sample = torch.view_as_real(sample)
-        return einops.rearrange(sample, 'c h w cmplx-> (c cmplx) h w')
-
-
-class toTensor(object):
+class to_tensor(object):
     def __call__(self, sample: np.ndarray):
-        return only_apply_to(sample, torch.from_numpy, keys=['undersampled', 'k_space', 'mask', 'recon', 'double_undersample', 'omega_mask', 'k', 'prob_omega'])
+        return only_apply_to(sample, torch.from_numpy, indecies=[0, 1, 2, 3])
 
-
-class remove_slice_dim(object):
-    def __call__(self, sample: np.ndarray):
-        return only_apply_to(sample, self.remove_first_dim, keys=['undersampled', 'k_space'])
-
-    def remove_first_dim(self, sample):
-        return sample.reshape(((-1,) + sample.shape[2:]))
 
 
 # Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
-        undersampled, k_space,  = sample['undersampled'], sample['k_space']
-        undersample_max = root_sum_of_squares(ifft_2d_img(undersampled), coil_dim=1).max()
-        undersampled /= undersample_max
-        k_space /= undersample_max
-        if 'double_undersample' in sample.keys():
-            sample['double_undersample'] = sample['double_undersample'] / undersample_max
+        doub_under, under, sampled, k = sample
+        undersample_max = root_sum_of_squares(ifft_2d_img(under), coil_dim=1).max()
 
-        sample['undersampled'] = undersampled
-        sample['k_space'] = k_space
-        sample['scaling_factor'] = undersample_max
-        return sample
+        under /= undersample_max
+        sampled /= undersample_max
+        doub_under /= undersample_max
+
+        return (doub_under, under, sampled, k)
 
 
 # Normalize to [0, 1] range

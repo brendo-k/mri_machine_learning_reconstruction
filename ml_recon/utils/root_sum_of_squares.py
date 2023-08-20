@@ -8,6 +8,6 @@ def root_sum_of_squares(data, coil_dim=0):
     Returns:
         torch.Tensor: Coil combined data
     """
-    assert data.ndims > coil_dim
+    assert data.ndim > coil_dim
     return data.abs().pow(2).sum(coil_dim).sqrt()
     
