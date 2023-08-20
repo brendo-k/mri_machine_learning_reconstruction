@@ -1,6 +1,6 @@
 import pytest
 import torch
-from ml_recon.models.unet import double_conv, down, up, concat
+from ml_recon.models.unet import double_conv, down, up, concat, Unet, Unet_down, Unet_up
 
 # Unit tests for double_conv module
 def test_double_conv():

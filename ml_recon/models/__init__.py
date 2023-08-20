@@ -4,3 +4,4 @@ from .dnCNN import DnCNN
 from .swin_unetr import SwinUNETR
 from .NormUnet import NormUnet
 from .SensetivityModel import SensetivityModel
+from .varnet import VarNet
