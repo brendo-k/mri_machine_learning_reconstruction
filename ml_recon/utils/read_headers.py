@@ -1,43 +1,44 @@
-from ml_recon.dataset.filereader.read_h5 import H5FileReader
+from typing import Callable
 import os
 import json
-import xmltodict
 import numpy as np
 
-def make_header(path, output=None):
-    # check to make sure it is directory
-    if path[-1] != '/':
-        path += '/'
+from ml_recon.dataset.filereader.filereader import FileReader
 
-    if output == None:
-        output = path + 'header.json'
+def make_header(path, filereader: FileReader, output=None, sample_filter:Callable = lambda _ : True):
+    # check to make sure it is directory
+    path = os.path.join(path, '')
 
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    files.sort()
 
     header_index = {}
     index = 0
     for file_number, file in enumerate(files):
         full_path = os.path.join(path, file)
         try:
-            with H5FileReader(full_path) as fr:
+            with filereader(full_path) as fr:
                 # loop through all the slices
-                for i_slice in range(fr['reconstruction_rss'].shape[0]):
-                    header = xmltodict.parse(np.array(fr['ismrmrd_header'], dtype=bytes))
-                    header_index[index] = {
-                        'slice_index': i_slice,
-                        'file_name': full_path,
-                        'coils': fr['kspace'].shape[1],
-                        'T': header['ismrmrdHeader']['acquisitionSystemInformation']['systemFieldStrength_T'],
-                        'file_number': file_number
-                    }
-                    index += 1
+                if sample_filter(fr):
+                    for i_slice in range(fr['recon'].shape[0]):
+                        header_index[index] = {
+                            'slice_index': i_slice,
+                            'file_name': full_path,
+                            'file_number': file_number
+                        }
+                        if 'coils' in fr.keys():
+                            header_index[index]['coils'] = fr['coils']
+                        else:
+                            header_index[index]['coils'] = 1
+
+                        index += 1
         except OSError:
             print(full_path)
+    if output:    
+        with open(output, 'w') as fp:
+            json.dump(header_index, fp, indent=4)
     
-    with open(output, 'w') as fp:
-        json.dump(header_index, fp, indent=4)
-    
-    return(output)
+    return header_index
 
 
 if __name__ == "__main__":
