@@ -7,14 +7,14 @@ class UndersamplingDecorator(Dataset):
                  R:int = 4, 
                  R_hat:int = 2, 
                  acs_width = 10, 
-                 determentistic:bool = True, 
+                 deterministic:bool = True, 
                  transforms = None):
         super().__init__()
 
         self.dataset = dataset
         self.R = R
         self.R_hat = R_hat
-        self.determinestic = determentistic
+        self.determinestic = deterministic
         self.acs_width = acs_width
         self.transforms = transforms
 
