@@ -41,10 +41,11 @@ class SliceDataset(Dataset):
             with open(header_file, 'r') as f:
                 print('Header file found!')
                 self.index_info = json.load(f)
-                print(f'Found {len(self.index_info)} slices')
                 for index in self.index_info:
                     if raw_sample_filter(self.index_info[index]):
                         self.data_list.append(self.index_info[index])
+        
+        print(f'Found {len(self.data_list)} slices')
 
         # add transforms
         self.transforms = transforms

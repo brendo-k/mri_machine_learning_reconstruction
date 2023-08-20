@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_recon.transforms import toTensor, normalize, pad_recon, pad, normalize_mean
+from ml_recon.transforms import to_tensor, normalize, pad_recon, pad, normalize_mean
 from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
 from ml_recon.utils import save_model, ifft_2d_img
 from ml_recon.utils.collate_function import collate_fn
@@ -31,6 +31,7 @@ parser.add_argument('--lr', type=float, default=1e-4, help='')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=1, help='')
+parser.add_argument('--loss_type', type=str, default='ssdu', help='')
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
@@ -56,11 +57,10 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 
-    path = '/home/kadotab/python/ml/ml_recon/Model_Weights/'
-    lr = torch.linspace(0, 0.01, 1000)
+    lr = torch.linspace(1e-5, 0.01, 500)
     losses = []
     sample = next(iter(train_loader))
-    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device)
+    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device, args.loss_type)
     for lrs in lr:
         optimizer = torch.optim.Adam(model.parameters(), lr=lrs)
         output = model(undersampled_slice, mask)
@@ -70,7 +70,7 @@ def main():
         losses.append(loss.item())
 
     plt.plot(lr, losses)
-    plt.yscale('log')
+    plt.xscale('log')
     plt.savefig('/home/kadotab/python/ml/loss_vs_lr.png')
 
    
@@ -117,19 +117,19 @@ def setup_devices(args):
 def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     transforms = Compose(
         (
-            toTensor(),
-            normalize_mean(),
+            to_tensor(),
+            normalize()
         )
     )
     train_dataset = SelfSupervisedSampling(
-        '/home/kadotab/train.json',
+        '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train',
         transforms=transforms,
         R=4,
         R_hat=2
         )
     
     val_dataset = SelfSupervisedSampling(
-        '/home/kadotab/val.json',
+        '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_val',
         transforms=transforms,
         R=4,
         R_hat=2
@@ -163,166 +163,54 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     return train_loader, val_loader
 
 
-
-def train(model, loss_function, dataloader, optimizer, device):
-    running_loss = 0
-
-    cm = setup_profile_context_manager()
- 
-    with cm as prof:
-        for i, data in enumerate(dataloader):
-            if PROFILE:
-                if i > (1 + 1 + 3) * 2:
-                    break
-                prof.step()
-
-            running_loss += train_step(model, loss_function, optimizer, data, device)
-
-    return running_loss/len(dataloader)
-
-def setup_profile_context_manager():
-    context_manager = torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch1_workers0'),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True
-        ) if PROFILE else contextlib.nullcontext()
-    
-    return context_manager
-
-
-def train_step(model, loss_function, optimizer, data, device):
-    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(data, device)
-
-    optimizer.zero_grad()
-    predicted_sampled = model(undersampled_slice, mask)
-    loss = loss_function(
-            torch.view_as_real(predicted_sampled * ssdu_indecies),
-            torch.view_as_real(sampled_slice * ssdu_indecies)
-            )
-    # normalize to number of ssdu indecies not number of voxels
-    loss = loss * predicted_sampled.numel() / ssdu_indecies.sum()
-
-    loss.backward()
-    optimizer.step()
-    loss_step = loss.item()*sampled_slice.shape[0]
-    return loss_step
-
-
-def validate(model, loss_function, dataloader, device):
-    """ Validation loop. Loops through the entire validation dataset
-
-    Args:
-        model (nn.Module): model being trained
-        loss_function (nn.LossFunction): loss function to be used
-        dataloader (nn.utils.DataLoader): validation dataloader to be used
-        device (str): device name (gpu, cpu)
-
-    Returns:
-        int: average validation loss per sample
-    """
-    val_running_loss = 0
-    for data in dataloader:
-        val_running_loss += val_step(model, loss_function, device, data)
-    return val_running_loss/len(dataloader)
-
-
-def val_step(model, loss_function, device, data):
-    """ validation step. Performs a validation step for a single mini-batch
-
-    Args:
-        model (nn.Module): model being validated
-        loss_function (nn.LossFunction): loss function used as metric
-        device (str): device name (gpu, cpu)
-        data (torch.Tensor): tensor of the current mini-batch
-
-    Returns:
-        torch.Tensor[float]: loss of invdividual sample (mini-batch * num_batches)
-    """
-    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(data, device)
-
-    predicted_sampled = model(undersampled_slice,  mask)
-    loss = loss_function(
-            torch.view_as_real(predicted_sampled * ssdu_indecies),
-            torch.view_as_real(sampled_slice * ssdu_indecies)
-            )
-
-    loss = loss * predicted_sampled.numel() / ssdu_indecies.sum()
-
-    return loss.item()*sampled_slice.shape[0]
-
-
-def to_device(data: Dict, device: str):
+def to_device(data: Dict, device: str, loss_type: bool):
     """ moves tensors in data to the device specified
 
     Args:
         data (Dict): data dictionary returned from dataloader
         device (str): device to move data onto
+        supervised (bool): return supervised data if true
 
     Returns:
         torch.Tensor: returns multiple tensors now on the device
     """
-    undersampled = data['undersampled']
-    mask_lambda = data['omega_mask']
-    mask = data['mask']
-    double_undersampled = data['double_undersample']
-    K = data['k']
 
-    undersampled_slice = double_undersampled.to(device)
-    sampled_slice = undersampled.to(device)
-    set_1_mask = (mask_lambda * mask).to(device)
+    if loss_type == 'supervised':
+        input_slice = data['undersampled']
+        target_slice = data['k_space']
+        mask = data['mask']
+        loss_mask = torch.ones_like(mask)
+    else:
+        input_slice = data['double_undersample']
+        target_slice = data['undersampled']
+        mask_lambda = data['omega_mask']
+        mask_omega = data['mask']
 
-    ssdu_indecies = (~mask_lambda * mask).detach()
-    ssdu_indecies = ssdu_indecies[:, None, :, :].repeat(1, undersampled_slice.shape[1], 1, 1).to(device)
+        if loss_type == 'nosier2noise':
+            loss_mask = mask_omega
+            mask = mask_omega * mask_labmda
+        elif loss_type == 'ssdu' or 'k-weighted':
+            loss_mask = (~mask_lambda * mask_omega).detach()
+            mask = (mask_lambda * mask_omega)
 
-    return set_1_mask, undersampled_slice, sampled_slice, ssdu_indecies
+        if loss_type == 'k-weighted':
+            loss_mask = loss_mask.type(torch.float32)
+            loss_mask /= torch.sqrt(1 - data['K'])
+    
+    
+    loss_mask = loss_mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
+    mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
 
+    input_slice = input_slice.to(device)
+    target_slice = target_slice.to(device)
+    mask = mask.to(device)
+    loss_mask = loss_mask.to(device)
 
-def plot_recon(model, val_loader, device, writer, epoch):
-    """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
-    and error magnified by 4
-
-    Args:
-        model (nn.Module): model to reconstruct
-        val_loader (nn.utils.DataLoader): dataloader to take slice
-        device (str | int): device number/type
-        writer (torch.utils.SummaryWriter): tensorboard summary writer
-        epoch (int): epoch
-    """
-    if device == 0:
-        sample = next(iter(val_loader))
-        sampled = sample['undersampled']
-        output = model(sampled.to(device), sample['mask'].to(device))
-        output = output * sample['scaling_factor'].to(device)[:, None, None, None]
-        output = ifft_2d_img(output)
-        output = output.abs().pow(2).sum(1).sqrt()
-        output = output[:, 160:-160, :].cpu()
-        diff = (output - sample['recon']).abs()
-
-        image_scaling_factor = sample['recon'][0].abs().max() * 0.50
-        image_scaled = output[0].abs().unsqueeze(0)/image_scaling_factor
-        image_scaled[image_scaled > 1] = 1
-
-        diff_scaled = diff[0].abs().unsqueeze(0)/(image_scaling_factor/4)
-        diff_scaled[diff_scaled > 1] = 1
-
-        writer.add_image('val/recon', image_scaled, epoch)
-        writer.add_image('val/diff', diff_scaled, epoch)
-
-        if epoch == 0:
-            recon_scaled = sample['recon'][0].abs().unsqueeze(0)/image_scaling_factor
-            recon_scaled[recon_scaled> 1] = 1
-            writer.add_image('val/target', recon_scaled, epoch)
+    return mask, input_slice, target_slice, loss_mask
 
 
-def load_config(cname):
-    """ loads yaml file """
-    with open(cname, 'r') as stream:
-        configs = yaml.safe_load_all(stream)
-        config = next(configs)
 
-    return config
+
 
 if __name__ == '__main__':
     main()
