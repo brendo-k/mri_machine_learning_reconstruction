@@ -5,8 +5,8 @@ import torchvision
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from ml_recon.transforms import toTensor, normalize
-from ml_recon.dataset.slice_loader import SliceLoader
+from ml_recon.transforms import to_tensor, normalize
+from ml_recon.dataset.sliceloader import SliceLoader
 from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
 from ml_recon.utils.read_headers import make_header
 
@@ -29,7 +29,7 @@ class fastMRIDataLoader(pl.LightningDataModule):
         self.supervised = supervised
 
         # transforms, convert to tensor and normalize
-        self.transform = torchvision.transforms.Compose((toTensor(), normalize()))
+        self.transform = torchvision.transforms.Compose((to_tensor(), normalize()))
 
     def prepare_data(self):
         train_dir = os.path.join(self.data_dir, 'multicoil_train')
