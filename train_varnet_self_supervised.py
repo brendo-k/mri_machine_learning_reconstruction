@@ -5,13 +5,14 @@ import argparse
 import time
 import yaml
 import contextlib
+import math
 import json
 from functools import partial
+import torch
 
 from ml_recon.models.varnet import VarNet
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 from torch.utils.data import DataLoader, random_split
-import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from ml_recon.transforms import to_tensor, normalize
@@ -51,7 +52,7 @@ def main():
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args, current_device)
+    model = setup_model_backbone(args.model, current_device)
 
     model = setup_ddp(current_device, distributed, model)
 
@@ -68,7 +69,7 @@ def main():
         writer = None
 
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 2, T_mult=2, eta_min=5e-5, last_epoch=-1)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, 8, mode='triangular2', cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
 
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
@@ -93,7 +94,7 @@ def main():
             writer.add_scalar('val/loss', val_loss, epoch)
             writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
-    save_model(writer_dir, model, optimizer, args.max_epochs, current_device)
+    save_model(os.path.join(writer_dir, ''), model, optimizer, args.max_epochs, current_device)
 
     if distributed:
         destroy_process_group()
@@ -106,20 +107,22 @@ def setup_ddp(current_device, distributed, model):
     return model
 
 
-def setup_model_backbone(args, current_device):
+def setup_model_backbone(model_name, current_device):
 
-    if args.model == 'unet':
+    if model_name == 'unet':
         # TODO: for some reason I have a 14 parameter difference between charlie and my code. Odd
         backbone = partial(Unet, in_chan=2, out_chan=2, depth=4, chans=18)
-    elif args.model == 'resnet':
-        backbone = partial(ResNet, itterations=12, chans=32)
-    elif args.model == 'dncnn':
-        backbone = partial(DnCNN, in_chan=2, out_chan=2, feature_size=32, num_of_layers=12)
-    elif args.model == 'transformer':
+    elif model_name == 'resnet':
+        backbone = partial(ResNet, itterations=15, chans=32)
+    elif model_name == 'dncnn':
+        backbone = partial(DnCNN, in_chan=2, out_chan=2, feature_size=32, num_of_layers=15)
+    elif model_name == 'transformer':
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
 
     model = VarNet(backbone, num_cascades=6)
+    params = sum([x.numel()  for x in model.parameters()])
+    print(f'Model has {params:,}')
     model.to(current_device)
 
     return model
@@ -228,7 +231,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
                 prof.step()
 
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
-            scheduler.step(epoch + i / len(dataloader))
+            scheduler.step()
 
     return running_loss.item()/len(dataloader)
 
@@ -241,7 +244,7 @@ def setup_profile_context_manager():
     """
     context_manager = torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch5_workers1'),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch0_workers1'),
         record_shapes=True,
         profile_memory=True,
         with_stack=True
@@ -376,10 +379,11 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
         
         output = model(input_slice, mask)
         output = output * (input_slice == 0) + input_slice
+        output = output.cpu()
         
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
-        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1)
+        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1).cpu()
         x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1).cpu()
 
         diff = (output - ground_truth).abs()
