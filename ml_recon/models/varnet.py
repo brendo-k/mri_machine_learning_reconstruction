@@ -21,7 +21,7 @@ class VarNet(nn.Module):
         for _ in range(num_cascades):
             self.cascade.append(
                 VarnetBlock(
-                    model_backbone
+                    model_backbone()
                 )
             )
 
@@ -45,7 +45,7 @@ class VarNet(nn.Module):
             # zero where not in mask
             data_consistency = torch.where(mask, current_k - reference_k, zero)
             # gradient descent step
-            current_k = current_k - self.lambda_reg[i] * data_consistency - refined_k
+            current_k = current_k - self.lambda_reg[i] * data_consistency + refined_k
         return current_k
 
 class VarnetBlock(nn.Module):
