@@ -5,11 +5,15 @@ from typing import (
     Union,
 )
 from torch.utils.data import Dataset
-from scipy.interpolate import interpn
+import torch
+#from scipy.interpolate import interpn
 import numpy as np
 
 from ml_recon.dataset.filereader.filereader import FileReader
 from ml_recon.dataset.filereader.nifti import NiftiFileReader
+from ml_recon.dataset.sliceloader import SliceDataset
+from ml_recon.utils import ifft_2d_img, fft_2d_img
+
 
 
 class MultiContrastLoader(Dataset):
@@ -59,18 +63,18 @@ class MultiContrastLoader(Dataset):
         return self.volume_index_mapping[-1]
 
     def __getitem__(self, index):
-        volume_index, slice_index = self.get_indexes(index)
-        images = self._get_data_from_index(volume_index, slice_index)
+        volume_index, slice_index = self.get_vol_slice_index(index)
+        images = self.get_data_from_indecies(volume_index, slice_index)
         images = self.resample(images)
-        return images
+        k_space = self.simulate_k_space(images)
+        return k_space
 
-    def get_indexes(self, index):
+    def get_vol_slice_index(self, index):
         volume_index = np.argmax(self.volume_index_mapping < index)
         slice_index = self.volume_index_mapping[index] - volume_index
         return volume_index,slice_index
-
-
-    def _get_data_from_index(self, volume_index, slice_index):
+    
+    def get_data_from_indecies(self, volume_index, slice_index):
         files = self.data_list[volume_index]
         data = []
         for modality, file_name in files.items():
@@ -81,6 +85,43 @@ class MultiContrastLoader(Dataset):
         data = np.stack(data, axis=0)
 
         return data 
+
+    def simulate_k_space(self, image):
+        image_w_sense = self.apply_sensetivity(image)
+        image_w_phase = self.generate_and_apply_phase(image_w_sense)
+        k_space = ifft_2d_img(image_w_phase)
+        k_space_w_noise = self.apply_noise(k_space)
+        return k_space_w_noise
+
+    def build_phase(self, nx, ny, center_region):
+        phase_frequency = torch.zeros((nx, ny))
+        center = (nx//2, ny//2)
+        center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center/2))
+        center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center/2))
+        coeff = torch.rand(len(center_box_x), len(center_box_y))
+        phase_frequency[center_box_x, center_box_y] = coeff
+
+        phase = ifft_2d_img(phase_frequency)
+        
+        return phase
+
+    def apply_phase_map(self, data, phase):
+        data = data * torch.exp(1j* phase)
+        return data
+
+    def generate_and_apply_phase(self, data):
+        center_region = 40
+        phase = self.build_phase(data.shape[-1], data.shape[-2], center_region)
+        data = self.apply_phase_map(data, phase)
+        return data
+
+    def apply_noise(self, k_space):
+        rng = np.random.default_rng()
+        noise = rng.normal(scale=1, size=k_space.shape) + 1j * rng.normal(scale=1, size=k_space.shape)
+        k_space += noise
+        return k_space
+
+
     
     def resample(self, data):
         resample_height = 128

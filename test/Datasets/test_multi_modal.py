@@ -1,12 +1,13 @@
 import torch
-import pytest
+import unittest
+#import pytest
 
 from ml_recon.dataset.multicontrast_loader import MultiContrastLoader
 
 @pytest.fixture
 def build_dataset() -> MultiContrastLoader:
     torch.manual_seed(0)
-    dataset = MultiContrastLoader('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/')
+    dataset = MultiContrastLoader('/home/brend/Documents/Data/brats/')
     return dataset
 
 def test_init(build_dataset: MultiContrastLoader):
