@@ -68,9 +68,9 @@ def main():
     else: 
         writer = None
 
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 2, T_mult=2, eta_min=5e-5, last_epoch=-1)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
-
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 2, T_mult=2, eta_min=0)
+    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
+    scheduler = None
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -92,7 +92,7 @@ def main():
         if current_device == 0:
             writer.add_scalar('train/loss', train_loss, epoch)
             writer.add_scalar('val/loss', val_loss, epoch)
-            writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+            #writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
     save_model(os.path.join(writer_dir, ''), model, optimizer, args.max_epochs, current_device)
 
@@ -174,7 +174,7 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
     )
     data_dir = arg.data_dir
     train_dataset = UndersamplingDecorator(
-        SliceDataset(os.path.join(data_dir, 'multicoil_train'), build_new_header=True),
+        SliceDataset(os.path.join(data_dir, 'multicoil_train')),
         transforms=transforms,
         R=4,
         R_hat=arg.R_hat
@@ -231,7 +231,8 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
                 prof.step()
 
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
-            scheduler.step()
+            if scheduler:
+                scheduler.step()
 
     return running_loss.item()/len(dataloader)
 
