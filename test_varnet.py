@@ -1,5 +1,3 @@
-
-# %%
 from functools import partial
 import os
 import numpy as np
@@ -39,10 +37,11 @@ def test(weight_path, data_dir,  model):
     )
  
     test_dataset = UndersamplingDecorator(
-        SliceDataset(os.path.join(data_dir, 'multicoil_val')),
+        SliceDataset(os.path.join(data_dir, 'multicoil_test')),
         transforms=transforms,
         R=4,
-        R_hat=2
+        R_hat=2, 
+        deterministic=True
         )
 
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
@@ -62,6 +61,7 @@ def test(weight_path, data_dir,  model):
             
             predicted_sampled = model(input, mask)
             predicted_sampled = predicted_sampled * (input == 0) + input
+            
             predicted_sampled = ifft_2d_img(predicted_sampled)
             target = ifft_2d_img(target)
 
