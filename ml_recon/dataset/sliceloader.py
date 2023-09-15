@@ -1,13 +1,16 @@
 import numpy as np
 import os
 import json
-from typing import Union, Callable
+from typing import Union, Callable, Collection
 from torch.utils.data import Dataset
-from scipy.interpolate import interpn
+import torchvision.transforms.functional as F
+import torch
+import h5py
+import random
+from argparse import ArgumentParser
 
-from ml_recon.dataset.filereader.read_h5 import H5FileReader
-from ml_recon.dataset.filereader.filereader import FileReader
 from ml_recon.utils.read_headers import make_header
+from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 
 class SliceDataset(Dataset):
     """This is a supervised slice dataloader. 
@@ -20,55 +23,79 @@ class SliceDataset(Dataset):
     def __init__(
             self,
             data_dir: Union[str, os.PathLike],
-            file_reader: FileReader = H5FileReader,
+            nx:int = 256,
+            ny:int = 256,
+            R: int = 4, 
+            R_hat: int = 2,
+            poly_order: int = 8,
+            acs_lines: int = 10,
             raw_sample_filter: Callable = lambda _: True,
+            build_new_header: bool = False,
             transforms: Callable = None,
-            build_new_header: bool = False
             ):
 
         # call super constructor
         super().__init__()
 
-        self.data_list = []
-        self.file_reader = file_reader
+        self.transforms = transforms
+        self.nx = nx
+        self.ny = ny
+        self.random_index = random.randint(0, 10000)
+
+        data_list = []
 
         header_file = os.path.join(data_dir, 'header.json')
 
         if not os.path.isfile(header_file) or build_new_header:
             print(f'Making header in {data_dir}')
-            self.data_list = make_header(data_dir, self.file_reader, output=header_file, sample_filter=raw_sample_filter)
+            data_list = make_header(data_dir, output=header_file, sample_filter=raw_sample_filter)
         else:    
             with open(header_file, 'r') as f:
                 print('Header file found!')
-                self.index_info = json.load(f)
-                for index in self.index_info:
-                    if raw_sample_filter(self.index_info[index]):
-                        self.data_list.append(self.index_info[index])
+                index_info = json.load(f)
+                for value in index_info:
+                    if raw_sample_filter(value):
+                        data_list.append(value)
         
-        print(f'Found {len(self.data_list)} slices')
+        slices = np.array([volume['slices'] for volume in data_list])
+        self.file_names = np.array([volume['file_name'] for volume in data_list])
+        self.slice_cumulative_sum = np.cumsum(slices)
+        self.length = self.slice_cumulative_sum[-1]
 
-        # add transforms
-        self.transforms = transforms
+        self.omega_prob = gen_pdf_columns(nx, ny, 1/R, poly_order, acs_lines)
+        self.lambda_prob = gen_pdf_columns(nx, ny, 1/R_hat, poly_order, acs_lines)
+
+        one_minus_eps = 1 - 1e-3
+        self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
+
+        self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
+        
+        print(f'Found {self.slice_cumulative_sum[-1]} slices')
+
 
     def __len__(self):
-        return len(self.data_list)
+        return self.length
 
     def __getitem__(self, index):
-        data = self.get_data_from_file(index)
-        data = self.resample_or_pad(data)
-        assert data.shape == (16, 128, 128)
+        k_space = self.get_data_from_file(index)
+        k_space = k_space.flip(1)
+        k_space = self.resample_or_pad(k_space)
+
+        under = apply_undersampling(index + self.random_index, self.omega_prob, k_space, True)
+        doub_under = apply_undersampling(index, self.lambda_prob, under, False)
+        
+        data = (doub_under, under, k_space, self.k)
 
         if self.transforms:
             data = self.transforms(data)
         return data
     
     def get_data_from_file(self, index):
-        slice_index = self.data_list[index]['slice_index']
-        file_name = self.data_list[index]['file_name']
-        with self.file_reader(file_name) as fr:
-            k_space = np.ascontiguousarray(np.flip(fr['kspace'][slice_index], axis=1))
-            assert not np.isnan(k_space).any()
-            recon_slice = np.ascontiguousarray(np.flip(fr['recon'][slice_index], axis=1))
+        volume_index = np.sum(self.slice_cumulative_sum <= index)
+        slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
+        file_name = self.file_names[volume_index]
+        with h5py.File(file_name) as fr:
+            k_space = torch.as_tensor(fr['kspace'][slice_index])
         return k_space 
 
     def resample_or_pad(self, k_space, reduce_fov=True):
@@ -82,25 +109,71 @@ class SliceDataset(Dataset):
         Returns:
             np.ndarray: cropped k_space
         """
-        resample_height = 128
-        resample_width = 128
+        resample_height = self.ny
+        resample_width = self.nx
         if reduce_fov:
             k_space = k_space[:, ::2, :]
-        _, height, width = k_space.shape
-        height_cent, width_cent = int(height/2), int(width/2)
-        if height > resample_height:
-            k_space = k_space[:, height_cent - resample_height//2:height_cent + resample_height//2, :]
-        else:
-            pad_top = (resample_height - height)//2
-            pad_bottom = (resample_height - height)- pad_top
-            k_space = np.pad(k_space, [pad_top, pad_bottom, 0, 0])
 
-        if width > resample_width:
-            k_space = k_space[:, :, width_cent - resample_width//2: width_cent + resample_width//2]
-        else:
-            pad_left = (resample_width - width)//2
-            pad_right = (resample_width - width) - pad_top
-            k_space = np.pad(k_space, [0, 0, pad_left, pad_right])
-        return k_space
+        return F.center_crop(k_space, (resample_height, resample_width))
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):  # pragma: no-cover
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+
+        parser.add_argument(
+                "--R", 
+                default=4,
+                type=int,
+                help="Omega undersampling factor"
+                )
+
+        parser.add_argument(
+                "--R_hat", 
+                default=2,
+                type=int,
+                help="Lambda undersampling factor"
+                )
+
+        parser.add_argument(
+                "--poly_order", 
+                default=8,
+                type=int,
+                help="Polynomial order for undersampling"
+                )
+
+        parser.add_argument(
+                "--nx", 
+                default=256,
+                type=int,
+                help="Number of points in the x direction"
+                )
+
+        parser.add_argument(
+                "--ny", 
+                default=256,
+                type=int,
+                help="Number of points in the y direction"
+                )
+
+        parser.add_argument(
+                "--acs_lines", 
+                default=10,
+                type=int,
+                help="Number of lines to keep in auto calibration region"
+                )
+
+        parser.add_argument(
+                '--data_dir', 
+                type=str, 
+                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', 
+                help=''
+                )
+
+        return parser
 
 
+if __name__ == '__main__':
+    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
+    dataset = SliceDataset(dir)
+    l = dataset[0]
+    t = dataset[100]

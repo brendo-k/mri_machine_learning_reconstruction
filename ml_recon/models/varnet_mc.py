@@ -1,15 +1,14 @@
 import torch.nn as nn
 import torch
-from typing import Tuple, Union
-from functools import partial
+from typing import Tuple
 
-from ml_recon.models import SensetivityModel
+from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 
-class VarNet(nn.Module):
+class VarNet_mc(nn.Module):
     def __init__(self, 
-                 model_backbone: Union[nn.Module, partial],
+                 model_backbone: nn.Module,
                  num_cascades=6,
                  sens_chans=8,
                  ):
@@ -26,13 +25,12 @@ class VarNet(nn.Module):
             )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel(2, 2, chans=sens_chans, mask_center=True)
+        self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)
         # regularizer weight
         self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
 
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
-        assert mask.ndim == 4
         # get sensetivity maps
         sense_maps = self.sens_model(reference_k, mask)
         # current k_space 
@@ -60,18 +58,26 @@ class VarnetBlock(nn.Module):
     # sensetivities data [B, C, H, W]
     def forward(self, images, sensetivities):
         # Reduce
-        images = ifft_2d_img(images, axes=[2, 3])
-        combined_images = torch.sum(images * sensetivities.conj(), dim=1, keepdim=True)
 
+        images = ifft_2d_img(images, axes=[-1, -2])
+        combined_images = torch.sum(images * sensetivities.conj(), dim=2)
+
+        batch, contrast, chan, height, width = images.shape
+        print(images.shape)
+
+        combined_images = combined_images.view(batch, contrast*chan, height, width)
         combined_images = complex_conversion.complex_to_real(combined_images)
         combined_images, mean, std = self.norm(combined_images)
         combined_images = self.model(combined_images)
         combined_images = self.unnorm(combined_images, mean, std)
         combined_images = complex_conversion.real_to_complex(combined_images)
+        combined_images = combined_images.view(batch, contrast, chan, height, width)
+
+        combined_images = complex_conversion.complex_to_real(combined_images)
 
         # Expand
-        images = sensetivities * combined_images
-        images = fft_2d_img(images, axes=[2, 3])
+        images = sensetivities * combined_images[:, :, None, :, :]
+        images = fft_2d_img(images, axes=[-1, -2])
 
         return images
     

@@ -3,13 +3,13 @@ import torch
 import math
 
 import torch.nn as nn
-from ml_recon.utils import ifft_2d_img, complex_to_real, real_to_complex
-from ml_recon.models import Unet  
- 
+from ml_recon.utils import ifft_2d_img
+from ml_recon.models import Unet
+from ml_recon.utils import real_to_complex, complex_to_real, root_sum_of_squares
 
-from typing import Optional, Tuple
+from typing import Tuple
 
-class SensetivityModel(nn.Module):
+class SensetivityModel_mc(nn.Module):
     def __init__(
             self, 
             in_chans: int, 
@@ -23,33 +23,36 @@ class SensetivityModel(nn.Module):
         self.mask_center = mask_center
 
     # recieve coil maps as [B, C, H, W]
-    def forward(self, images: torch.Tensor, mask: torch.Tensor):
+    def forward(self, images, mask):
         if self.mask_center:
             images = self.mask(images, mask) 
 
-        images = ifft_2d_img(images)
-        number_of_coils = images.shape[-3]
+        images = ifft_2d_img(images, axes=[2, 3])
+        number_of_coils = images.shape[2]
+        num_contrasts = images.shape[1]
         # combine all coils along batch dimension. Leave coil dims to be 1
-        images = einops.rearrange(images, 'b c h w -> (b c) 1 h w')
+        images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
         # convert to real numbers 
         images = complex_to_real(images)
-        # norm
+        # norm 
         images, mean, std = self.norm(images)
         # pass through model
         images = self.model(images)
-        #unorm
+        # unnorm
         images = self.unnorm(images, mean, std)
         # convert back to complex
         images = real_to_complex(images)
         # rearange back to original format
-        images = einops.rearrange(images, '(b c) 1 h w -> b c h w', c=number_of_coils)
+        images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
-        images = images / self.root_sum_of_squares(images)
+        print(images.shape)
+        print(root_sum_of_squares(images, coil_dim=1).shape)
+        images = images / root_sum_of_squares(images, coil_dim=1).unsqueze(1)
         return images
 
     def mask(self, coil_images, mask):
         masked_images = coil_images.clone()
-        squeezed_mask = mask[:, 0, 0, :].to(torch.int8)
+        squeezed_mask = mask[:, 0, 0, 0, :].to(torch.int8)
 
         cent = squeezed_mask.shape[1] // 2
         # running argmin returns the first non-zero
@@ -61,15 +64,10 @@ class SensetivityModel(nn.Module):
             ) 
 
         for i in range(masked_images.shape[0]):
-            masked_images[i, :, :, :cent - num_low_frequencies_tensor[i]//2] = 0
-            masked_images[i, :, :, cent + math.ceil(num_low_frequencies_tensor[i]/2):] = 0
+            masked_images[i, :, :, :, :cent - num_low_frequencies_tensor[i]//2] = 0
+            masked_images[i, :, :, :, cent + math.ceil(num_low_frequencies_tensor[i]/2):] = 0
 
         return masked_images
-
-    # sense_map [batches channel height width], take absolute root sum of squares
-    def root_sum_of_squares(self, sense_map):
-        sense_map = sense_map.abs().pow(2).sum(1, keepdim=True).sqrt()
-        return sense_map
     
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm

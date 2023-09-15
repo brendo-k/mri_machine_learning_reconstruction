@@ -1,37 +1,35 @@
 from typing import Callable
 import os
 import json
-import numpy as np
+import h5py
 
-from ml_recon.dataset.filereader.filereader import FileReader
 
-def make_header(path, filereader: FileReader, output=None, sample_filter:Callable = lambda _ : True):
+def make_header(path, output=None, sample_filter:Callable = lambda _ : True):
     # check to make sure it is directory
     path = os.path.join(path, '')
 
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     files.sort()
 
-    header_index = {}
-    index = 0
-    for file_number, file in enumerate(files):
+    header_index = []
+    for file in files:
         full_path = os.path.join(path, file)
+        if 'json' in file: 
+            continue
         try:
-            with filereader(full_path) as fr:
+            with h5py.File(full_path) as fr:
                 # loop through all the slices
                 if sample_filter(fr):
-                    for i_slice in range(fr['recon'].shape[0]):
-                        header_index[index] = {
-                            'slice_index': i_slice,
-                            'file_name': full_path,
-                            'file_number': file_number
-                        }
-                        if 'coils' in fr.keys():
-                            header_index[index]['coils'] = fr['coils']
-                        else:
-                            header_index[index]['coils'] = 1
+                    slices = fr['kspace'].shape[0]
+                    header_index.append({
+                        'slices': slices,
+                        'file_name': full_path,
+                    })
+                    if 'coils' in fr.keys():
+                        header_index[-1]['coils'] = fr['coils']
+                    else:
+                        header_index[-1]['coils'] = 1
 
-                        index += 1
         except OSError:
             print(full_path)
     if output:    

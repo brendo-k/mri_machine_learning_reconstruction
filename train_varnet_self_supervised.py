@@ -5,20 +5,19 @@ import argparse
 import time
 import yaml
 import contextlib
-import math
 import json
 from functools import partial
 import torch
+from typing import Union
 
 from ml_recon.models.varnet import VarNet
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 from torch.utils.data import DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 
-from ml_recon.transforms import to_tensor, normalize
+from ml_recon.transforms import normalize
 from ml_recon.dataset.sliceloader import SliceDataset 
-from ml_recon.dataset.undersampled_decorator import UndersamplingDecorator
-from ml_recon.utils import save_model, ifft_2d_img, collate_fn, root_sum_of_squares
+from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 
 from torchvision.transforms import Compose
 from torch.distributed import init_process_group, destroy_process_group
@@ -29,26 +28,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 PROFILE = False
 
 # Argparse
-parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
-parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
-parser.add_argument('--batch_size', type=int, default=5, help='')
-parser.add_argument('--max_epochs', type=int, default=50, help='')
-parser.add_argument('--num_workers', type=int, default=0, help='')
-parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
-parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
-parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
-parser.add_argument('--R_hat', type=float, default=2)
-
-parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
-parser.add_argument('--dist_backend', default='nccl', type=str, help='')
-parser.add_argument('--world_size', default=2, type=int, help='')
-parser.add_argument('--distributed', action='store_true', help='')
-parser.add_argument('--use_subset', action='store_true', help='')
 
 
-def main():
-    args = parser.parse_args()
-    torch.manual_seed(0)
+def main(args):
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
@@ -61,43 +43,57 @@ def main():
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+    os.makedirs(os.path.join(writer_dir, 'model_weights'))
+    save_config(args, writer_dir)
     if current_device == 0: 
-        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
         writer = SummaryWriter(writer_dir)
-        save_config(args, writer_dir)
     else: 
         writer = None
 
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 2, T_mult=2, eta_min=0)
-    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
-    scheduler = None
+    scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
         if distributed:
-            train_loader.sampler.set_epoch(epoch)
+            train_loader.sampler.set_epoch(epoch) #pyright: ignore
 
         model.train()
-        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, epoch)
+        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler)
         model.eval()
 
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
-            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, type='train')
+            if writer:
+                plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, type='train')
+                plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
             val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
-            plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
-        
         
         if current_device == 0:
-            writer.add_scalar('train/loss', train_loss, epoch)
-            writer.add_scalar('val/loss', val_loss, epoch)
-            #writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+            if writer:
+                writer.add_scalar('train/loss', train_loss, epoch)
+                writer.add_scalar('val/loss', val_loss, epoch)
+                if scheduler:
+                    writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+        if epoch % 24 == 0: 
+            save_model(os.path.join(writer_dir, 'model_weights'), model, optimizer, args.max_epochs, current_device)
 
-    save_model(os.path.join(writer_dir, ''), model, optimizer, args.max_epochs, current_device)
+    save_model(os.path.join(writer_dir, 'model_weights'), model, optimizer, args.max_epochs, current_device)
 
     if distributed:
         destroy_process_group()
+
+def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.optim.lr_scheduler._LRScheduler, None]:
+    if scheduler_type == 'cosine_anneal':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, len(train_loader)*10, T_mult=1, eta_min=1e-4)
+    elif scheduler_type == 'cyclic':
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
+    elif scheduler_type == 'steplr':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, len(train_loader)*200)
+    elif scheduler_type == 'none':
+        scheduler = None
+    return scheduler
 
 def setup_ddp(current_device, distributed, model):
     if distributed:
@@ -107,18 +103,18 @@ def setup_ddp(current_device, distributed, model):
     return model
 
 
-def setup_model_backbone(model_name, current_device):
-
+def setup_model_backbone(model_name, current_device, in_chan=2, out_chan=2):
     if model_name == 'unet':
-        # TODO: for some reason I have a 14 parameter difference between charlie and my code. Odd
-        backbone = partial(Unet, in_chan=2, out_chan=2, depth=4, chans=18)
+        backbone = partial(Unet, in_chan=in_chan, out_chan=out_chan, depth=4, chans=18)
     elif model_name == 'resnet':
-        backbone = partial(ResNet, itterations=15, chans=32)
+        backbone = partial(ResNet, in_chan=in_chan, out_chan=out_chan, itterations=15, chans=32)
     elif model_name == 'dncnn':
-        backbone = partial(DnCNN, in_chan=2, out_chan=2, feature_size=32, num_of_layers=15)
+        backbone = partial(DnCNN, in_chan=in_chan, out_chan=out_chan, feature_size=32, num_of_layers=15)
     elif model_name == 'transformer':
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
+    else:
+        raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 
     model = VarNet(backbone, num_cascades=6)
     params = sum([x.numel()  for x in model.parameters()])
@@ -146,7 +142,11 @@ def setup_devices(dist_backend, init_method, world_size):
 		SLURM_NODEID is 0 or 1 in this example, SLURM_LOCALID is the id of the 
  		current process inside a node and is also 0 or 1 in this example."""
 
-        current_device = int(os.environ.get("SLURM_LOCALID")) 
+        slurm_id = os.environ.get("SLURM_LOCALID")
+        if not slurm_id:
+            raise ValueError('Did not get a slurm id')
+        
+        current_device = int(slurm_id) 
 
         """ this block initializes a process group and initiate communications
 		be  tween all processes running on all nodes """
@@ -165,27 +165,31 @@ def setup_devices(dist_backend, init_method, world_size):
     return current_device, distributed
 
 
-def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
+def prepare_data(arg, distributed: bool):
     transforms = Compose(
         (
-            to_tensor(),
             normalize(),
         )
     )
     data_dir = arg.data_dir
-    train_dataset = UndersamplingDecorator(
-        SliceDataset(os.path.join(data_dir, 'multicoil_train')),
-        transforms=transforms,
-        R=4,
-        R_hat=arg.R_hat
-        )
+
+    dataset_args = {
+            'nx': arg.nx,
+            'ny': arg.ny,  
+            'R': arg.R,
+            'R_hat': arg.R_hat,
+            'poly_order': arg.poly_order,
+            }
     
-    val_dataset = UndersamplingDecorator(
-        SliceDataset(os.path.join(data_dir, 'multicoil_val')),
-        transforms=transforms,
-        R=4,
-        R_hat=arg.R_hat
-        )
+    train_dataset = SliceDataset(os.path.join(data_dir, 'multicoil_train'),
+                                 transforms=transforms,
+                                 **dataset_args
+                                 )
+    
+    val_dataset = SliceDataset(os.path.join(data_dir, 'multicoil_val'),
+                                 transforms=transforms,
+                                 **dataset_args
+                                 )
     
     if arg.use_subset:
         train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
@@ -204,21 +208,20 @@ def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
                               num_workers=arg.num_workers,
                               shuffle=shuffle, 
                               sampler=train_sampler,
-                              collate_fn=collate_fn
+                              pin_memory=True,
                               )
 
     val_loader = DataLoader(val_dataset, 
                             batch_size=arg.batch_size, 
                             num_workers=arg.num_workers, 
-                            collate_fn=collate_fn,
                             sampler=val_sampler,
+                            pin_memory=True,
                             )
     return train_loader, val_loader
 
 
-
-def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler, epoch):
-    running_loss = 0
+def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler):
+    running_loss = torch.Tensor([0]).to(device)
 
     cm = setup_profile_context_manager()
  
@@ -228,7 +231,8 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
                 print('PROFILING')
                 if i > (1 + 1 + 3) * 2:
                     break
-                prof.step()
+                if prof:
+                    prof.step()
 
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
             if scheduler:
@@ -254,11 +258,12 @@ def setup_profile_context_manager():
     return context_manager
 
 
-def train_step(model, loss_function, optimizer, data, device, loss_type):
-    mask, input_slice, target_slice, loss_mask = to_device(data, device, loss_type)
+def train_step(model, loss_function, optimizer, data, device, loss_type) -> torch.Tensor:
+    mask, input_slice, target_slice, loss_mask, zf_mask  = to_device(data, device, loss_type)
 
     optimizer.zero_grad()
     predicted_sampled = model(input_slice, mask)
+    predicted_sampled *= zf_mask
 
     loss = loss_function(
             torch.view_as_real(predicted_sampled * loss_mask),
@@ -266,7 +271,7 @@ def train_step(model, loss_function, optimizer, data, device, loss_type):
             )
     
     # normalize to number of ssdu indecies not number of voxels
-    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
     loss.backward()
     optimizer.step()
@@ -287,7 +292,7 @@ def validate(model, loss_function, dataloader, device, supervised):
     Returns:
         int: average validation loss per sample
     """
-    val_running_loss = 0
+    val_running_loss = torch.Tensor([0]).to(device)
     for data in dataloader:
         val_running_loss += val_step(model, loss_function, device, data, supervised)
     return val_running_loss.item()/len(dataloader)
@@ -306,15 +311,16 @@ def val_step(model, loss_function, device, data, supervised):
     Returns:
         torch.Tensor[float]: loss of invdividual sample (mini-batch * num_batches)
     """
-    mask, input_slice, target_slice, loss_mask = to_device(data, device, supervised)
+    mask, input_slice, target_slice, loss_mask, zf_mask = to_device(data, device, supervised)
 
     predicted_sampled = model(input_slice,  mask)
+    predicted_sampled *= zf_mask
     loss = loss_function(
             torch.view_as_real(predicted_sampled * loss_mask),
             torch.view_as_real(target_slice * loss_mask)
             )
 
-    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
     return loss.detach() * target_slice.shape[0]
 
@@ -331,6 +337,7 @@ def to_device(data: Dict, device: str, loss_type: str):
         torch.Tensor: returns multiple tensors now on the device
     """
     double_undersaple, undersample, k_space, k = data
+    zero_fill_mask = k_space != 0
     if loss_type == 'supervised':
         input_slice = undersample
         target_slice = k_space
@@ -346,8 +353,10 @@ def to_device(data: Dict, device: str, loss_type: str):
         elif loss_type == 'ssdu' or loss_type == 'k-weighted':
             loss_mask = (target_slice != 0) & (input_slice == 0)
             mask = input_slice != 0
+        else:
+            raise ValueError(f'loss mask should be ssdu, noiser2noise, k-weighted, or supervised but got {loss_type}')
 
-        if loss_type == 'k-weighted' or 'nosier2noise':
+        if loss_type == 'k-weighted' or loss_type == 'nosier2noise':
             loss_mask = loss_mask.type(torch.float32)
             loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
             
@@ -355,8 +364,9 @@ def to_device(data: Dict, device: str, loss_type: str):
     target_slice = target_slice.to(device)
     mask = mask.to(device)
     loss_mask = loss_mask.to(device)
+    zero_fill_mask = zero_fill_mask.to(device)
 
-    return mask, input_slice, target_slice, loss_mask
+    return mask, input_slice, target_slice, loss_mask, zero_fill_mask 
 
 
 def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val'):
@@ -376,9 +386,10 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
 
         # forward pass
         sample = next(iter(val_loader))
-        mask, input_slice, target_slice, loss_mask = to_device(sample, device, 'supervised')
+        mask, input_slice, target_slice, _, zf_mask = to_device(sample, device, 'supervised')
         
         output = model(input_slice, mask)
+        output *= zf_mask
         output = output * (input_slice == 0) + input_slice
         output = output.cpu()
         
@@ -402,20 +413,20 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
         diff_scaled = diff_scaled.clamp(0, 1)
         input_scaled = input_scaled.clamp(0, 1)
 
-        writer.add_images(type + '_recon', image_scaled.unsqueeze(1), epoch)
-        writer.add_images(type + '_diff', diff_scaled.unsqueeze(1), epoch)
-        writer.add_images(type + '_input', input_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + type + '/recon', image_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + type + '/diff', diff_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + type + '/input', input_scaled.unsqueeze(1), epoch)
 
-        if not supervised:
-            mask, input_slice, target_slice, loss_mask = to_device(sample, device, supervised)
-            writer.add_images(type + '_loss_mask', loss_mask[:, [0], :, :], epoch)
-            writer.add_images(type + '_current_mask', mask[:, [0], :, :], epoch)
-            writer.add_images(type + '_omega_mask', sample['mask'].unsqueeze(1), epoch)
+        if supervised != 'supervised':
+            mask_lambda_omega, _, _, loss_mask, zf_mask = to_device(sample, device, supervised)
+            writer.add_images('mask/' + type + '/omega_lambda_mask', mask_lambda_omega[:, [0], :, :], epoch)
+            writer.add_images('mask/' + type + '/omega_mask', mask[:, [0], :, :], epoch)
+            writer.add_images('mask/' + type + '/omega_not_lambda', loss_mask[:, [0], :, :], epoch)
             
         # plot target if it's the first epcoh
         recon_scaled = ground_truth/image_scaling_factor
         recon_scaled = recon_scaled.clamp(0, 1)
-        writer.add_images(type + '_target', recon_scaled.unsqueeze(1).abs(), epoch)
+        writer.add_images('images/' + type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
 def save_config(args, writer_dir):
@@ -427,7 +438,7 @@ def save_config(args, writer_dir):
 
 def load_config(args):
     """ loads yaml file """
-    with open(args.config_file, 'r') as f:
+    with open(args.config, 'r') as f:
         configs_dict = yaml.load(f)
         
     for k, v in configs_dict.items():
@@ -436,4 +447,24 @@ def load_config(args):
     return args
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
+    parser.add_argument('--batch_size', type=int, default=5, help='')
+    parser.add_argument('--max_epochs', type=int, default=50, help='')
+    parser.add_argument('--num_workers', type=int, default=0, help='')
+    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
+    parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
+    parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
+    parser.add_argument('--use_subset', action='store_true', help='')
+    parser.add_argument('--config', default='', help='')
+    
+    parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
+    parser.add_argument('--dist_backend', default='nccl', type=str, help='')
+    parser.add_argument('--world_size', default=2, type=int, help='')
+    parser.add_argument('--distributed', action='store_true', help='')
+
+    parser = SliceDataset.add_model_specific_args(parser)
+    args = parser.parse_args()
+
+    main(args)

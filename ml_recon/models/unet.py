@@ -112,11 +112,11 @@ class double_conv(nn.Module):
 
         self.layers = nn.Sequential(
             nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans),
+            nn.InstanceNorm2d(out_chans, affine=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),
             nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans),
+            nn.InstanceNorm2d(out_chans, affine=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),
         )
@@ -140,7 +140,7 @@ class up(nn.Module):
     super().__init__()
     self.layers = nn.Sequential(
       nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-      nn.InstanceNorm2d(out_chan),
+      nn.InstanceNorm2d(out_chan, affine=True),
       nn.LeakyReLU(negative_slope=0.2, inplace=True),
     )
 
