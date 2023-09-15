@@ -1,6 +1,5 @@
 from torch import optim, nn
 from ml_recon.models.varnet import VarNet
-from ml_recon.pl_modules.mri_module import mri_module
 import pytorch_lightning as pl
 import torch
 

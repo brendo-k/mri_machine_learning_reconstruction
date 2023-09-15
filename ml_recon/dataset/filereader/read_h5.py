@@ -1,23 +1,21 @@
 import h5py
-from .filereader import FileReader
-import xmltodict
 import numpy as np
 
-class H5FileReader(FileReader):
+class H5FileReader():
     def __init__(self, file_name):
         self.file_name = file_name
 
     def __enter__(self):
         self.file_object = h5py.File(self.file_name, 'r')
-        header = xmltodict.parse(np.array(self.file_object['ismrmrd_header'], dtype=bytes))
-        data_object = {
-                'coils': self.file_object['kspace'].shape[1],
-                'kspace': self.file_object['kspace'],
-                'T': header['ismrmrdHeader']['acquisitionSystemInformation']['systemFieldStrength_T'],
-                'recon': self.file_object['reconstruction_rss']
-                }
+        #header = xmltodict.parse(np.array(self.file_object['ismrmrd_header'], dtype=bytes))
+        #data_object = {
+        #        'coils': self.file_object['kspace'].shape[1],
+        #        'kspace': self.file_object['kspace'],
+        #        'T': header['ismrmrdHeader']['acquisitionSystemInformation']['systemFieldStrength_T'],
+        #        'recon': self.file_object['reconstruction_rss']
+        #        }
 
-        return data_object
+        return np.array(self.file_object['kspace'])
 
     def get_keys(self):
         return self.file_object.keys()  

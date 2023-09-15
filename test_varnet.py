@@ -9,17 +9,16 @@ import torch
 
 from ml_recon.transforms import to_tensor, normalize
 from ml_recon.dataset.sliceloader import SliceDataset 
-from ml_recon.dataset.undersampled_decorator import UndersamplingDecorator
 from ml_recon.utils import ifft_2d_img
 from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.Loss.ssim_loss import SSIMLoss
-from train_varnet_self_supervised import to_device
+from train_multi_contrast import to_device
 
 from torchvision.transforms import Compose
 
 def main():
-    path = '/home/kadotab/python/ml/ml_recon/Model_Weights/self/20230525-173845VarNet.pt'
+    path = '/home/kadotab/scratch/0910-08:57:44VarNet-unet-ssdu/80.pt'
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/'
     backbone = partial(Unet, 2, 2)
     test(path, data_dir, backbone)
@@ -36,8 +35,16 @@ def test(weight_path, data_dir,  model):
         )
     )
  
-    test_dataset = UndersamplingDecorator(
+    test_dataset = Undersampling(
         SliceDataset(os.path.join(data_dir, 'multicoil_test')),
+        transforms=transforms,
+        R=4,
+        R_hat=2, 
+        deterministic=True
+        )
+    
+    val_dataset = Undersampling(
+        SliceDataset(os.path.join(data_dir, 'multicoil_val')),
         transforms=transforms,
         R=4,
         R_hat=2, 
@@ -45,6 +52,7 @@ def test(weight_path, data_dir,  model):
         )
 
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
+    val_loader = DataLoader(val_dataset, batch_size=1, num_workers=1)
 
     checkpoint = torch.load(weight_path, map_location=torch.device('cpu'))
     model.load_state_dict(checkpoint['model'])
@@ -57,7 +65,7 @@ def test(weight_path, data_dir,  model):
     model.eval()
     for data in test_loader:
         with torch.no_grad():
-            mask, input, target, loss_mask = to_device(data, device, 'supervised')
+            mask, input, target, loss_mask, zero_filled = to_device(data, device, 'supervised')
             
             predicted_sampled = model(input, mask)
             predicted_sampled = predicted_sampled * (input == 0) + input

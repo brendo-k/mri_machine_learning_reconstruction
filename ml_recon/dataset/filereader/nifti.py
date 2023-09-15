@@ -1,8 +1,6 @@
 import nibabel as nib 
 
-from .filereader import FileReader
-
-class NiftiFileReader(FileReader):
+class NiftiFileReader():
     def __init__(self, file_name):
         self.file_name = file_name
 

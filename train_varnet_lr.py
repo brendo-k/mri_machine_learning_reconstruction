@@ -7,15 +7,17 @@ import yaml
 import contextlib
 import matplotlib.pyplot as plt
 
-from ml_recon.models.varnet_unet import VarNet
+from ml_recon.models.varnet import VarNet
 from torch.utils.data import DataLoader, random_split
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from ml_recon.transforms import to_tensor, normalize, pad_recon, pad, normalize_mean
-from ml_recon.dataset.self_supervised_slice_loader import SelfSupervisedSampling
+from ml_recon.dataset.sliceloader import SliceDataset
+from ml_recon.dataset.undersample import Undersampling
 from ml_recon.utils import save_model, ifft_2d_img
 from ml_recon.utils.collate_function import collate_fn
+from train_multi_contrast import prepare_data, setup_model_backbone, to_device
 
 from torchvision.transforms import Compose
 from torch.distributed import init_process_group, destroy_process_group
@@ -27,31 +29,33 @@ PROFILE = False
 
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
-parser.add_argument('--lr', type=float, default=1e-4, help='')
+parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
 parser.add_argument('--batch_size', type=int, default=5, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
-parser.add_argument('--num_workers', type=int, default=1, help='')
-parser.add_argument('--loss_type', type=str, default='ssdu', help='')
+parser.add_argument('--num_workers', type=int, default=0, help='')
+parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
+parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
+parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='supervised')
+parser.add_argument('--R_hat', type=float, default=2)
 
 parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
 parser.add_argument('--dist_backend', default='nccl', type=str, help='')
 parser.add_argument('--world_size', default=2, type=int, help='')
-parser.add_argument('--distributed', action='store_false', help='')
+parser.add_argument('--distributed', action='store_true', help='')
+parser.add_argument('--use_subset', action='store_true', help='')
 
 def main():
     args = parser.parse_args()
     
     current_device, distributed = setup_devices(args)
-
-    model = VarNet(num_cascades=5)
-    model.to(current_device)
+    train_loader, val_loader = prepare_data(args, distributed)
+    model = setup_model_backbone('unet', current_device)
 
     if distributed:
         print(f'Setting up DDP in device {current_device}')
         model = DDP(model, device_ids=[current_device])
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
-    train_loader, val_loader = prepare_data(args, distributed)
 
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -60,17 +64,20 @@ def main():
     lr = torch.linspace(1e-5, 0.01, 500)
     losses = []
     sample = next(iter(train_loader))
-    mask, undersampled_slice, sampled_slice, ssdu_indecies = to_device(sample, current_device, args.loss_type)
     for lrs in lr:
+        data = next(iter(train_loader))
+        mask, input_slice, target_slice, loss_mask, zf_mask = to_device(data, current_device, args.loss_type)
+        
         optimizer = torch.optim.Adam(model.parameters(), lr=lrs)
-        output = model(undersampled_slice, mask)
-        loss = loss_fn(torch.view_as_real(output * ssdu_indecies), torch.view_as_real(sampled_slice * ssdu_indecies))
+        output = model(input_slice, mask)
+        loss = loss_fn(torch.view_as_real(output * loss_mask), torch.view_as_real(target_slice * loss_mask))
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
 
     plt.plot(lr, losses)
     plt.xscale('log')
+    plt.yscale('log')
     plt.savefig('/home/kadotab/python/ml/loss_vs_lr.png')
 
    
@@ -112,105 +119,6 @@ def setup_devices(args):
         current_device = 'cpu'
         distributed = False
     return current_device, distributed
-
-
-def prepare_data(arg: argparse.ArgumentParser, distributed: bool):
-    transforms = Compose(
-        (
-            to_tensor(),
-            normalize()
-        )
-    )
-    train_dataset = SelfSupervisedSampling(
-        '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train',
-        transforms=transforms,
-        R=4,
-        R_hat=2
-        )
-    
-    val_dataset = SelfSupervisedSampling(
-        '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_val',
-        transforms=transforms,
-        R=4,
-        R_hat=2
-        )
-
-    train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
-
-    if distributed:
-        print('Setting up distributed sampler')
-        train_sampler = DistributedSampler(train_dataset)
-        val_sampler = DistributedSampler(val_dataset)
-        shuffle = False
-    else:
-        train_sampler, val_sampler = None, None
-        shuffle = True
-
-    train_loader = DataLoader(train_dataset, 
-                              batch_size=arg.batch_size,
-                              num_workers=arg.num_workers,
-                              shuffle=shuffle, 
-                              sampler=train_sampler,
-                              collate_fn=collate_fn
-                              )
-
-    val_loader = DataLoader(val_dataset, 
-                            batch_size=arg.batch_size, 
-                            num_workers=arg.num_workers, 
-                            collate_fn=collate_fn,
-                            sampler=val_sampler,
-                            )
-    return train_loader, val_loader
-
-
-def to_device(data: Dict, device: str, loss_type: bool):
-    """ moves tensors in data to the device specified
-
-    Args:
-        data (Dict): data dictionary returned from dataloader
-        device (str): device to move data onto
-        supervised (bool): return supervised data if true
-
-    Returns:
-        torch.Tensor: returns multiple tensors now on the device
-    """
-
-    if loss_type == 'supervised':
-        input_slice = data['undersampled']
-        target_slice = data['k_space']
-        mask = data['mask']
-        loss_mask = torch.ones_like(mask)
-    else:
-        input_slice = data['double_undersample']
-        target_slice = data['undersampled']
-        mask_lambda = data['omega_mask']
-        mask_omega = data['mask']
-
-        if loss_type == 'nosier2noise':
-            loss_mask = mask_omega
-            mask = mask_omega * mask_labmda
-        elif loss_type == 'ssdu' or 'k-weighted':
-            loss_mask = (~mask_lambda * mask_omega).detach()
-            mask = (mask_lambda * mask_omega)
-
-        if loss_type == 'k-weighted':
-            loss_mask = loss_mask.type(torch.float32)
-            loss_mask /= torch.sqrt(1 - data['K'])
-    
-    
-    loss_mask = loss_mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
-    mask = mask.unsqueeze(1).repeat(1, input_slice.shape[1], 1, 1).to(device)
-
-    input_slice = input_slice.to(device)
-    target_slice = target_slice.to(device)
-    mask = mask.to(device)
-    loss_mask = loss_mask.to(device)
-
-    return mask, input_slice, target_slice, loss_mask
-
-
-
-
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,8 @@
-def root_sum_of_squares(data, coil_dim=0):
+import numpy as np
+from typing import Union
+import torch
+
+def root_sum_of_squares(data: Union[torch.Tensor, np.ndarray], coil_dim=0) -> Union[torch.Tensor, np.ndarray]:
     """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
 
     Args:
@@ -9,5 +13,8 @@ def root_sum_of_squares(data, coil_dim=0):
         torch.Tensor: Coil combined data
     """
     assert data.ndim > coil_dim
-    return data.abs().pow(2).sum(coil_dim).sqrt()
+    if isinstance(data, np.ndarray):
+        return np.sqrt(np.sum(np.power(np.abs(data), 2), axis=coil_dim))
+    elif isinstance(data, torch.Tensor):
+        return data.abs().pow(2).sum(coil_dim).sqrt()
     

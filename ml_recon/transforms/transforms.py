@@ -15,18 +15,6 @@ def only_apply_to(sample, function, indecies):
     return tuple(transofrmed_data)
 
 
-class trim_coils(object):
-    def __init__(self, coil_size):
-        self.coil_size = coil_size
-
-    def __call__(self, sample):
-        return only_apply_to(sample, self.trim_coil, indecies=[0, 1, 2])
-
-    def trim_coil(self, sample):
-        sample = sample[:, :self.coil_size, :, :]
-        return sample
-
-
 class pad(object):
     def __init__(self, pad_dim):
         self.pad_dim = pad_dim
@@ -103,16 +91,23 @@ class to_tensor(object):
         return only_apply_to(sample, torch.from_numpy, indecies=[0, 1, 2, 3])
 
 
-
 # Normalize to [0, 1] range
 class normalize(object):
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
-        undersample_max = root_sum_of_squares(ifft_2d_img(under), coil_dim=1).max()
 
-        under /= undersample_max
-        sampled /= undersample_max
-        doub_under /= undersample_max
+        image = root_sum_of_squares(ifft_2d_img(under), coil_dim=0)
+        undersample_max = image.max()
+
+        #undersample_min = image.min()
+        
+        #under = under_mask * fft_2d_img(ifft_2d_img(under) - undersample_min)
+        #doub_under = doub_under_mask * fft_2d_img(ifft_2d_img(doub_under) - undersample_min)
+        #sampled = fft_2d_img(ifft_2d_img(sampled) - undersample_min)
+
+        under = under / undersample_max
+        sampled = sampled / undersample_max
+        doub_under = doub_under / undersample_max
 
         return (doub_under, under, sampled, k)
 
@@ -123,64 +118,35 @@ class normalize_mean(object):
         self.norm_chan = norm_chan
 
     def __call__(self, sample):
-        undersampled, k_space = sample['undersampled'], sample['k_space']
-        undersampled, undersampled_mean, undersampled_std = self.normalize(undersampled)
-        k_space, _, _ = self.normalize(k_space)
-
-        if 'double_undersample' in sample.keys():
-            double_undersampled = sample['double_undersample']
-            double_undersampled, double_undersampled_mean, double_undersampled_std = self.normalize(undersampled)
-            sample['double_undersample'] = double_undersampled
-            sample['double_undersample_mean'] = double_undersampled_mean
-            sample['double_undersample_std'] = double_undersampled_std
-
-        sample['undersampled'] = undersampled
-        sample['k_space'] = k_space
-        sample['undersample_mean'] = undersampled_mean
-        sample['undersample_std'] = undersampled_std
+        doub_under, under, sampled, k = sample
+        under, mean_real, mean_imag, std_real, std_imag = self.normalize(under)
+        sampled, _, _, _, _ = self.normalize(sampled, (mean_real, mean_imag), (std_real, std_imag))
+        doub_under, _, _, _, _ = self.normalize(doub_under)
 
         return sample
     
-    def normalize(self, k_space):
+    def normalize(self, k_space, mean=None, std=None):
         image = ifft_2d_img(k_space)
         image_real = image.real
         image_imag = image.imag
-
-        image_mean_real = image_real.mean()
-        image_mean_imag = image_imag.mean()
-
-        image_real_std = image_real.std()
-        image_imag_std = image_imag.std()
-
-        image_real_norm = (image_real - image_mean_real)/image_real_std
-        image_imag_norm = (image_imag - image_mean_imag)/image_imag_std
-
-        k_space = fft_2d_img(image_real_norm + 1j * image_imag_nomr)
         
-        return k_space, image_mean_real, image_std
+        if mean:
+            mean_real = mean[0]
+            mean_imag = mean[1] 
+
+            std_real = std[0] 
+            std_imag = std[1] 
+        else:
+            mean_real = image_real.mean()
+            mean_imag = image_imag.mean()
+
+            std_real = image_real.std()
+            std_imag = image_imag.std()
 
 
-class permute(object):
-    def __call__(self, sample):
-        return only_apply_to(sample, self.permute, keys=['undersampled', 'k_space'])
+        image_real_norm = (image_real - mean_real)/std_real
+        image_imag_norm = (image_imag - mean_imag)/std_imag
 
-    def permute(self, sample):
-        return sample.permute(0, 3, 1, 2)
-
-
-class addChannels(object):
-    def __call__(self, sample):
-        return only_apply_to(sample, self.add_dim, keys=['undersampled', 'k_space'])
-
-    def add_dim(self, sample):
-        return sample.unsqueeze(0)
-
-
-class convert_to_float(object):
-    def __call__(self, sample):
-        return only_apply_to(sample, self.convert_to_float, keys=['undersampled', 'k_space', 'recon'])
-    
-    def convert_to_float(self, sample):
-        return sample.float()
-
-
+        k_space = fft_2d_img(image_real_norm + 1j * image_imag_norm)
+        
+        return k_space, mean_real, mean_imag, std_real, std_imag

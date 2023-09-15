@@ -1,6 +1,4 @@
 from torch import nn
-import torch 
-from typing import Tuple
 
 class residual_block(nn.Module):
     def __init__(self, chans, scaling) -> None:
@@ -18,7 +16,7 @@ class residual_block(nn.Module):
         return self.res_block(x) * self.scaling + x
 
 class ResNet(nn.Module):
-    def __init__(self, itterations, chans=32, scaling=0.1) -> None:
+    def __init__(self, itterations, in_chan=2, out_chan=2, chans=32, scaling=0.1) -> None:
         super().__init__()
 
         self.cascade = nn.Sequential()
@@ -26,8 +24,8 @@ class ResNet(nn.Module):
             self.cascade.append(residual_block(chans, scaling))
         self.cascade.append(nn.Conv2d(chans, chans, 3, padding=1, bias=False))
 
-        self.encode = nn.Conv2d(2, chans, 3, padding=1, bias=False)
-        self.decode = nn.Conv2d(chans, 2, 3, padding=1, bias=False)
+        self.encode = nn.Conv2d(in_chan, chans, 3, padding=1, bias=False)
+        self.decode = nn.Conv2d(chans, out_chan, 3, padding=1, bias=False)
     
 
     def forward(self, x):
