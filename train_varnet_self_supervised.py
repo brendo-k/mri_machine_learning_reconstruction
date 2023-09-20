@@ -44,7 +44,14 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
-    os.makedirs(os.path.join(writer_dir, 'model_weights'))
+
+    try:
+        os.makedirs(os.path.join(writer_dir, 'model_weights'))
+    except FileExistsError as e:
+        print(f'Found {e}, creating new directory')
+        os.makedirs(os.path.join(writer_dir + 2, 'model_weights'))
+
+        
     save_config(args, writer_dir)
     if current_device == 0: 
         writer = SummaryWriter(writer_dir)

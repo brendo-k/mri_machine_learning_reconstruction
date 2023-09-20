@@ -45,9 +45,7 @@ class SensetivityModel_mc(nn.Module):
         # rearange back to original format
         images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
-        print(images.shape)
-        print(root_sum_of_squares(images, coil_dim=1).shape)
-        images = images / root_sum_of_squares(images, coil_dim=1).unsqueze(1)
+        images = images / root_sum_of_squares(images, coil_dim=1).unsqueeze(1)
         return images
 
     def mask(self, coil_images, mask):

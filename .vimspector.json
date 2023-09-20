@@ -1,0 +1,44 @@
+{
+    "configurations": {
+        "run - default": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Python: Current File",
+                "type": "python",
+                "request": "launch",
+                "program": "${file}",
+                "cwd": "${workspaceRoot}",
+                "console": "integratedTerminal",
+                "python": "/home/kadotab/ENV/bin/python",
+                "stopOnEntry": true
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "MultiContrast": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Multicontrast dataset",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "module": "ml_recon.dataset.multicontrast_loader",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal"
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        }
+    }
+}
