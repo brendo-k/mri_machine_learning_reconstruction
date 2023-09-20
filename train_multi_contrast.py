@@ -5,11 +5,14 @@ import time
 import yaml
 import json
 import torch
+from functools import partial
 
 from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from ml_recon.transforms import normalize
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
+from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.multicontrast_loader import MultiContrastLoader 
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from torch.distributed import destroy_process_group
@@ -18,7 +21,6 @@ from torchvision.transforms import Compose
 from torch.utils.data.distributed import DistributedSampler
 from train_varnet_self_supervised import (
         to_device, 
-        setup_model_backbone,
         setup_devices,
         setup_scheduler,
         setup_ddp,
@@ -35,7 +37,7 @@ PROFILE = False
 # Argparse
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
 parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
-parser.add_argument('--batch_size', type=int, default=5, help='')
+parser.add_argument('--batch_size', type=int, default=1, help='')
 parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=0, help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/training_subset', help='')
@@ -53,9 +55,6 @@ parser.add_argument('--use_subset', action='store_true', help='')
 
 def main():
     args = parser.parse_args()
-    #torch.manual_seed(0)
-    #np.random.seed(0)
-    #torch.cuda.manual_seed(0)
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
@@ -218,6 +217,27 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
         recon_scaled = ground_truth/image_scaling_factor
         recon_scaled = recon_scaled.clamp(0, 1)
         writer.add_images('images/' + type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
+
+
+def setup_model_backbone(model_name, current_device, in_chan=8, out_chan=8):
+    if model_name == 'unet':
+        backbone = partial(Unet, in_chan=in_chan, out_chan=out_chan, depth=4, chans=18)
+    elif model_name == 'resnet':
+        backbone = partial(ResNet, in_chan=in_chan, out_chan=out_chan, itterations=15, chans=32)
+    elif model_name == 'dncnn':
+        backbone = partial(DnCNN, in_chan=in_chan, out_chan=out_chan, feature_size=32, num_of_layers=15)
+    elif model_name == 'transformer':
+        backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
+        print('loaded swinunet!')
+    else:
+        raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
+
+    model = VarNet_mc(backbone, num_cascades=6)
+    params = sum([x.numel()  for x in model.parameters()])
+    print(f'Model has {params:,}')
+    model.to(current_device)
+
+    return model
 
 
 def save_config(args, writer_dir):

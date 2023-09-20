@@ -8,7 +8,7 @@ import numpy as np
 
 from ml_recon.dataset.filereader.nifti import NiftiFileReader
 from ml_recon.utils import fft_2d_img, ifft_2d_img
-from ml_recon.dataset.undersample import gen_pdf_columns, calc_k
+from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 
 class MultiContrastLoader(Dataset):
     """
@@ -33,6 +33,8 @@ class MultiContrastLoader(Dataset):
         sample_dir.sort()
         self.slices = []
         self.data_list = []
+        self.nx = nx
+        self.ny = ny
         
         for sample in sample_dir:
             sample_path = os.path.join(data_dir, sample)
@@ -73,8 +75,16 @@ class MultiContrastLoader(Dataset):
         images = self.resample(images)
         k_space = self.simulate_k_space(images)
         k_space = torch.from_numpy(k_space)
-        omega_mask = torch.zeros((k_space.shape[0], k_space.shape[-2], k_space.shape[-1]))
-        return k_space
+
+        undersample = torch.zeros_like(k_space)
+        for i in range(k_space.shape[0]):
+            undersample[i, :, :, :] = apply_undersampling(index, self.omega_prob, k_space[i, :, :, :], deterministic=True)
+
+        doub_undersample = torch.zeros_like(k_space)
+        for i in range(k_space.shape[0]):
+            doub_undersample[i, :, :, :] = apply_undersampling(index, self.lambda_prob, undersample[i, :, :, :], deterministic=False)
+
+        return (doub_undersample, undersample, k_space, self.k)
 
     # get the volume index and slice index. This is done using the cumulative sum
     # of the number of slices.
@@ -114,11 +124,16 @@ class MultiContrastLoader(Dataset):
 
     def apply_sensetivities(self, image):
         sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/sens.npy')
-        sense_map = np.expand_dims(sense_map, 0).transpose((0, 3, 1, 2))
+        sense_map = sense_map.transpose((2, 0, 1))
+        sense_map = self.resample(sense_map)
+
+        sense_map = np.expand_dims(sense_map, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
         return image_sense      
 
-    def build_phase(self, nx, ny, center_region):
+    def build_phase(self, center_region):
+        nx = self.nx
+        ny = self.ny
         phase_frequency = np.zeros((nx, ny), dtype=np.complex64)
         center = (nx//2, ny//2)
         center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
@@ -137,7 +152,7 @@ class MultiContrastLoader(Dataset):
 
     def generate_and_apply_phase(self, data):
         center_region = 10
-        phase = self.build_phase(data.shape[-1], data.shape[-2], center_region)
+        phase = self.build_phase(center_region)
         data = self.apply_phase_map(data, phase)
         return data
 
@@ -149,8 +164,8 @@ class MultiContrastLoader(Dataset):
 
 
     def resample(self, data):
-        resample_height = 128
-        resample_width = 128 
+        resample_height = self.ny
+        resample_width = self.nx 
         contrasts, height, width = data.shape
         y = np.arange(0, height)
         x = np.arange(0, width)
@@ -160,17 +175,8 @@ class MultiContrastLoader(Dataset):
         xi = np.linspace(0, width - 1, resample_width)
         (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
 
-        new_data = interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten()))
+        new_data = np.array(interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten())))
         
         return np.reshape(new_data, (contrasts, resample_height, resample_width))
 
 
-import matplotlib.pyplot as plt 
-from ml_recon.utils import image_slices, root_sum_of_squares
-if __name__ == '__main__':
-    data = MultiContrastLoader('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/training_subset/')
-    print(data[50].shape)
-    image_slices(root_sum_of_squares(ifft_2d_img(data[100]), coil_dim=1), cmap='gray')
-    plt.savefig('contrasts')
-    image_slices(np.angle(ifft_2d_img(data[100])[0]), cmap='gray')
-    plt.savefig('angle')
