@@ -16,7 +16,8 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from ml_recon.transforms import normalize
-from ml_recon.dataset.sliceloader import SliceDataset 
+from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 
 from torchvision.transforms import Compose
@@ -99,6 +100,8 @@ def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.opti
     elif scheduler_type == 'steplr':
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, len(train_loader)*200)
     elif scheduler_type == 'none':
+        scheduler = None
+    else:
         scheduler = None
     return scheduler
 
@@ -183,20 +186,25 @@ def prepare_data(arg, distributed: bool):
     dataset_args = {
             'nx': arg.nx,
             'ny': arg.ny,  
+            }
+
+    undersampling_args = {
             'R': arg.R,
             'R_hat': arg.R_hat,
             'poly_order': arg.poly_order,
+            'acs_lines': arg.acs_lines,
+            'transforms': transforms
             }
     
-    train_dataset = SliceDataset(os.path.join(data_dir, 'multicoil_train'),
-                                 transforms=transforms,
+    train_dataset = FastMRIDataset(os.path.join(data_dir, 'multicoil_train'),
                                  **dataset_args
                                  )
     
-    val_dataset = SliceDataset(os.path.join(data_dir, 'multicoil_val'),
-                                 transforms=transforms,
+    val_dataset = FastMRIDataset(os.path.join(data_dir, 'multicoil_val'),
                                  **dataset_args
                                  )
+    train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
+    val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
     
     if arg.use_subset:
         train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
@@ -256,7 +264,7 @@ def setup_profile_context_manager():
     """
     context_manager = torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_batch0_workers1'),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/varnet_workers4'),
         record_shapes=True,
         profile_memory=True,
         with_stack=True
@@ -278,7 +286,7 @@ def train_step(model, loss_function, optimizer, data, device, loss_type) -> torc
             )
     
     # normalize to number of ssdu indecies not number of voxels
-    loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
     loss.backward()
     optimizer.step()
@@ -327,12 +335,12 @@ def val_step(model, loss_function, device, data, supervised):
             torch.view_as_real(target_slice * loss_mask)
             )
 
-    loss = loss * predicted_sampled.numel() / loss_mask.sum()
+    #loss = loss * predicted_sampled.numel() / loss_mask.sum()
 
     return loss.detach() * target_slice.shape[0]
 
 
-def to_device(data: Dict, device: str, loss_type: str):
+def to_device(data: tuple, device: str, loss_type: str):
     """ moves tensors in data to the device specified
 
     Args:
@@ -399,16 +407,27 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
         output *= zf_mask
         output = output * (input_slice == 0) + input_slice
         output = output.cpu()
-        
+         
+        # plot sensetivity maps
+        sensetivity_maps = model.sens_model(input_slice, mask)
+        writer.add_images(type + '-sense_map/image_0', sensetivity_maps[0, :, :, :].cpu().abs().unsqueeze(1), epoch)
+
         # coil combination
-        output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1).cpu()
-        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1).cpu()
-        x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1).cpu()
+        output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1)
+        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1)
+        x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1)
+        assert isinstance(output, torch.Tensor)
+        assert isinstance(ground_truth, torch.Tensor)
+        assert isinstance(x_input, torch.Tensor)
+
+        output = output.cpu()
+        ground_truth = ground_truth.cpu()
+        x_input = x_input.cpu()
 
         diff = (output - ground_truth).abs()
 
         # get scaling factor (skull is high intensity)
-        image_scaling_factor = ground_truth.amax((1, 2)).unsqueeze(1).unsqueeze(1) * 0.60
+        image_scaling_factor = ground_truth.max() * 0.6
 
         # scale images and difference
         image_scaled = output.abs()/image_scaling_factor
@@ -420,15 +439,15 @@ def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val')
         diff_scaled = diff_scaled.clamp(0, 1)
         input_scaled = input_scaled.clamp(0, 1)
 
-        writer.add_images('images/' + type + '/recon', image_scaled.unsqueeze(1), epoch)
-        writer.add_images('images/' + type + '/diff', diff_scaled.unsqueeze(1), epoch)
-        writer.add_images('images/' + type + '/input', input_scaled.unsqueeze(1), epoch)
+        writer.add_images(type + '-images/recon', image_scaled.unsqueeze(1), epoch)
+        writer.add_images(type + '-images/diff', diff_scaled.unsqueeze(1), epoch)
+        writer.add_images(type + '-images/input', input_scaled.unsqueeze(1), epoch)
 
         if supervised != 'supervised':
             mask_lambda_omega, _, _, loss_mask, zf_mask = to_device(sample, device, supervised)
-            writer.add_images('mask/' + type + '/omega_lambda_mask', mask_lambda_omega[:, [0], :, :], epoch)
-            writer.add_images('mask/' + type + '/omega_mask', mask[:, [0], :, :], epoch)
-            writer.add_images('mask/' + type + '/omega_not_lambda', loss_mask[:, [0], :, :], epoch)
+            writer.add_images(type + '-mask/omega_lambda_mask', mask_lambda_omega[:, [0], :, :], epoch)
+            writer.add_images(type + '-mask/omega_mask', mask[:, [0], :, :], epoch)
+            writer.add_images(type + '-mask/omega_not_lambda', loss_mask[:, [0], :, :], epoch)
             
         # plot target if it's the first epcoh
         recon_scaled = ground_truth/image_scaling_factor
@@ -471,7 +490,8 @@ if __name__ == '__main__':
     parser.add_argument('--world_size', default=2, type=int, help='')
     parser.add_argument('--distributed', action='store_true', help='')
 
-    parser = SliceDataset.add_model_specific_args(parser)
+    parser = FastMRIDataset.add_model_specific_args(parser)
+    parser = UndersampleDecorator.add_model_specific_args(parser)
     args = parser.parse_args()
 
     main(args)

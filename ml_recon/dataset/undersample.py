@@ -31,7 +31,7 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
 
     a = -1
     b = 1
-    eta = 1e-5
+    eta = 1e-7
     ii = 1
     while 1:
         c = (a + b) / 2

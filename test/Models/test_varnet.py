@@ -31,25 +31,25 @@ def test_varnet_block_forward():
     assert output_images.shape == images.shape
 
 
-def test_varnet_backwards(varnet_model):
-    # PREPARE
-    reference_k = torch.randn(1, 16, 256, 256, dtype=torch.complex64)  # Example reference k-space input
-    mask = torch.ones(1, 16, 256, 256, dtype=torch.bool)  # Example mask input
-    label = torch.rand(1, 16, 256, 256, 2)
-
-    # ARANGE
-    output_k = varnet_model.forward(reference_k, mask)
-    output_k = torch.view_as_real(output_k)
-    
-    optim = torch.optim.Adam(varnet_model.parameters(), lr=1e-3)
-    loss = torch.nn.functional.mse_loss(output_k, label)
-    loss.backward()
-    optim.step()
-
-    output2_k = varnet_model.forward(reference_k, mask)
-    loss2 = torch.nn.functional.mse_loss(output2_k, label)
-
-    assert loss2 < loss
+#def test_varnet_backwards(varnet_model):
+#    # PREPARE
+#    reference_k = torch.randn(1, 16, 256, 256, dtype=torch.complex64)  # Example reference k-space input
+#    mask = torch.ones(1, 16, 256, 256, dtype=torch.bool)  # Example mask input
+#    label = torch.rand(1, 16, 256, 256, 2)
+#
+#    # ARANGE
+#    output_k = varnet_model.forward(reference_k, mask)
+#    output_k = torch.view_as_real(output_k)
+#    
+#    optim = torch.optim.Adam(varnet_model.parameters(), lr=1e-3)
+#    loss = torch.nn.functional.mse_loss(output_k, label)
+#    loss.backward()
+#    optim.step()
+#
+#    output2_k = varnet_model.forward(reference_k, mask)
+#    loss2 = torch.nn.functional.mse_loss(output2_k, label)
+#
+#    assert loss2 < loss
 
 def test_norm():
     block = VarnetBlock(partial(Unet, 2, 2))

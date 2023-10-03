@@ -46,7 +46,7 @@ class VarNet_mc(nn.Module):
 
     def data_consistency(self, current_k, reference_k, mask):
         # mask values
-        zero = torch.zeros(1, 1, 1, 1).to(current_k).detach()
+        zero = torch.zeros(1, 1, 1, 1, 1).to(current_k).detach()
         # zero where not in mask
         dc_value = torch.where(mask, current_k - reference_k, zero)
         return dc_value
@@ -56,7 +56,7 @@ class VarnetBlock(nn.Module):
         super().__init__()
         self.model = model
 
-    # sensetivities data [B, C, H, W]
+    # sensetivities data [B, contrast, C, H, W]
     def forward(self, images, sensetivities):
         # Reduce
         images = ifft_2d_img(images, axes=[-1, -2])
@@ -74,8 +74,9 @@ class VarnetBlock(nn.Module):
 
         return images
     
+    # is this not just instance norm?
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # group norm
+        # instance norm
         b, c, h, w = x.shape
         x = x.view(b, 2, c // 2 * h * w)
 

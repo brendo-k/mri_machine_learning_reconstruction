@@ -14,7 +14,6 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
 
     fig, axes = plt.subplots(width, height, figsize=(10, 10))
 
-
     for i in range(data.shape[0]):
         (x, y) = np.unravel_index(i, (width, height))
         current_slice = np.squeeze(data[i, coil_num, :, :])
@@ -26,5 +25,6 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
         left=False,
         labelleft=False,
         labelbottom=False) 
+
     return fig, axes
 
