@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import json
-from typing import Union, Callable, Collection
+from typing import Union, Callable
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
 import torch
@@ -12,26 +12,19 @@ from argparse import ArgumentParser
 from ml_recon.utils.read_headers import make_header
 from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 
-class SliceDataset(Dataset):
-    """This is a supervised slice dataloader. 
+class M4Raw(Dataset):
+    """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
+    dataset. It does not do any subsampling
 
     Args:
-        meta_data (str, os.PathLike): path to metadata file holding slice information,
-        acs_width (int): width of auto calibration lines to keep
-        R (int): acceleration factor to use
     """
     def __init__(
             self,
             data_dir: Union[str, os.PathLike],
             nx:int = 256,
             ny:int = 256,
-            R: int = 4, 
-            R_hat: int = 2,
-            poly_order: int = 8,
-            acs_lines: int = 10,
-            raw_sample_filter: Callable = lambda _: True,
-            build_new_header: bool = False,
-            transforms: Callable = None,
+            transforms: Union[Callable, None] = None, 
+            build_new_header: bool = False
             ):
 
         # call super constructor
@@ -48,14 +41,13 @@ class SliceDataset(Dataset):
 
         if not os.path.isfile(header_file) or build_new_header:
             print(f'Making header in {data_dir}')
-            data_list = make_header(data_dir, output=header_file, sample_filter=raw_sample_filter)
+            data_list = make_header(data_dir, output=header_file)
         else:    
             with open(header_file, 'r') as f:
                 print('Header file found!')
                 index_info = json.load(f)
                 for value in index_info:
-                    if raw_sample_filter(value):
-                        data_list.append(value)
+                    data_list.append(value)
         
         slices = np.array([volume['slices'] for volume in data_list])
         self.file_names = np.array([volume['file_name'] for volume in data_list])

@@ -1,0 +1,17 @@
+{
+  "exclude": [
+    "**/__pycache__",
+  ],
+
+  "defineConstant": {
+    "DEBUG": true
+  },
+
+  "venv": "ENV",
+  "venvPath": "/home/kadotab/",
+
+  "reportMissingImports": true,
+
+  "pythonVersion": "3.9",
+  "pythonPlatform": "Linux",
+}

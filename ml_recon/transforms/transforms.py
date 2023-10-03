@@ -96,7 +96,7 @@ class normalize(object):
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
 
-        image = root_sum_of_squares(ifft_2d_img(under), coil_dim=0)
+        image = root_sum_of_squares(ifft_2d_img(under), coil_dim=1)
         undersample_max = image.max()
 
         #undersample_min = image.min()
@@ -114,39 +114,21 @@ class normalize(object):
 
 # Normalize to [0, 1] range
 class normalize_mean(object):
-    def __init__(self, norm_chan):
-        self.norm_chan = norm_chan
 
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
-        under, mean_real, mean_imag, std_real, std_imag = self.normalize(under)
-        sampled, _, _, _, _ = self.normalize(sampled, (mean_real, mean_imag), (std_real, std_imag))
-        doub_under, _, _, _, _ = self.normalize(doub_under)
 
-        return sample
-    
-    def normalize(self, k_space, mean=None, std=None):
-        image = ifft_2d_img(k_space)
-        image_real = image.real
-        image_imag = image.imag
+        image = root_sum_of_squares(ifft_2d_img(under), coil_dim=1)
+        undersample_max = image.mean()
+
+        #undersample_min = image.min()
         
-        if mean:
-            mean_real = mean[0]
-            mean_imag = mean[1] 
+        #under = under_mask * fft_2d_img(ifft_2d_img(under) - undersample_min)
+        #doub_under = doub_under_mask * fft_2d_img(ifft_2d_img(doub_under) - undersample_min)
+        #sampled = fft_2d_img(ifft_2d_img(sampled) - undersample_min)
 
-            std_real = std[0] 
-            std_imag = std[1] 
-        else:
-            mean_real = image_real.mean()
-            mean_imag = image_imag.mean()
+        under = under / undersample_max
+        sampled = sampled / undersample_max
+        doub_under = doub_under / undersample_max
 
-            std_real = image_real.std()
-            std_imag = image_imag.std()
-
-
-        image_real_norm = (image_real - mean_real)/std_real
-        image_imag_norm = (image_imag - mean_imag)/std_imag
-
-        k_space = fft_2d_img(image_real_norm + 1j * image_imag_norm)
-        
-        return k_space, mean_real, mean_imag, std_real, std_imag
+        return (doub_under, under, sampled, k)

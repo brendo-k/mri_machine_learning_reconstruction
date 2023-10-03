@@ -26,8 +26,8 @@ def test_supervised():
     prob = gen_pdf_columns(nx, ny, 1/4, 8, 10)
     prob2 = gen_pdf_columns(nx, ny, 1/2, 8, 10)
     rng = np.random.default_rng()
-    mask = torch.from_numpy(get_mask_from_distribution(prob, rng))
-    mask2 = torch.from_numpy(get_mask_from_distribution(prob2, rng))
+    mask = torch.from_numpy(get_mask_from_distribution(prob, rng, deterministic=True))
+    mask2 = torch.from_numpy(get_mask_from_distribution(prob2, rng, deterministic=True))
 
     k_space = torch.rand(3, 16, 256, 256, dtype=torch.complex64) 
     under = mask * k_space
@@ -50,8 +50,8 @@ def test_self():
     prob = gen_pdf_columns(nx, ny, 1/4, 8, 10)
     prob2 = gen_pdf_columns(nx, ny, 1/2, 8, 10)
     rng = np.random.default_rng()
-    mask = torch.from_numpy(get_mask_from_distribution(prob, rng))
-    mask2 = torch.from_numpy(get_mask_from_distribution(prob2, rng))
+    mask = torch.from_numpy(get_mask_from_distribution(prob, rng, deterministic=True))
+    mask2 = torch.from_numpy(get_mask_from_distribution(prob2, rng, deterministic=True))
 
     k_space = torch.rand(3, 16, 256, 256) 
     under = mask * k_space

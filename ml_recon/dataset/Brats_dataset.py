@@ -1,16 +1,16 @@
 import os
-from typing import Callable, Optional, Union
-from torch.utils.data import Dataset
+from typing import Callable, Optional, Union, Collection
 import torch
 from scipy.interpolate import interpn
 import nibabel as nib
 import numpy as np
+from argparse import ArgumentParser
 
 from ml_recon.dataset.filereader.nifti import NiftiFileReader
+from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils import fft_2d_img, ifft_2d_img
-from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 
-class MultiContrastLoader(Dataset):
+class BratsDataset(KSpaceDataset):
     """
     Takes data directory and creates a dataset. Before using you need to specify the file reader 
     to use in the filereader variable. 
@@ -21,20 +21,19 @@ class MultiContrastLoader(Dataset):
             data_dir: Union[str, os.PathLike], 
             nx:int = 256,
             ny:int = 256,
-            R: int = 4, 
-            R_hat: int = 2,
-            poly_order: int = 8,
-            acs_lines: int = 10,
+            contrasts: Collection[str] = [], 
             transforms: Optional[Callable] = None,
             ):
-        self.tranforms = transforms
+        super().__init__(nx=nx, ny=ny)
+
+        self.transforms = transforms
+        self.contrasts = [contrast.lower() for contrast in contrasts]
 
         sample_dir = os.listdir(data_dir)
         sample_dir.sort()
+
         self.slices = []
         self.data_list = []
-        self.nx = nx
-        self.ny = ny
         
         for sample in sample_dir:
             sample_path = os.path.join(data_dir, sample)
@@ -51,19 +50,12 @@ class MultiContrastLoader(Dataset):
                 patient_dict[modality_name] = modality_path
                 if i == 0:
                     with NiftiFileReader(modality_path) as fr:
-                        self.slices.append(fr.shape[2])
+                        self.slices.append(fr.shape[2]-50)
             self.data_list.append(patient_dict)
 
         self.slices = np.array(self.slices)
 
-        self.omega_prob = gen_pdf_columns(nx, ny, 1/R, poly_order, acs_lines)
-        self.lambda_prob = gen_pdf_columns(nx, ny, 1/R_hat, poly_order, acs_lines)
-
-        one_minus_eps = 1 - 1e-3
-        self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
-
-        self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
-        
+        print(f'Found {sum(self.slices)} slices')
 
     # length of dataset is the sum of the slices
     def __len__(self):
@@ -73,18 +65,13 @@ class MultiContrastLoader(Dataset):
         volume_index, slice_index = self.get_vol_slice_index(index)
         images = self.get_data_from_indecies(volume_index, slice_index)
         images = self.resample(images)
+        images = np.transpose(images, (0, 2, 1))
         k_space = self.simulate_k_space(images)
         k_space = torch.from_numpy(k_space)
 
-        undersample = torch.zeros_like(k_space)
-        for i in range(k_space.shape[0]):
-            undersample[i, :, :, :] = apply_undersampling(index, self.omega_prob, k_space[i, :, :, :], deterministic=True)
-
-        doub_undersample = torch.zeros_like(k_space)
-        for i in range(k_space.shape[0]):
-            doub_undersample[i, :, :, :] = apply_undersampling(index, self.lambda_prob, undersample[i, :, :, :], deterministic=False)
-
-        return (doub_undersample, undersample, k_space, self.k)
+        if self.transforms:
+            k_space = self.transforms(k_space)
+        return k_space
 
     # get the volume index and slice index. This is done using the cumulative sum
     # of the number of slices.
@@ -99,18 +86,20 @@ class MultiContrastLoader(Dataset):
         else:
             slice_index = index - cumulative_slice_sum[volume_index - 1] 
         
-        return volume_index, slice_index
+        return volume_index, slice_index + 30
     
     def get_data_from_indecies(self, volume_index, slice_index):
         files = self.data_list[volume_index]
         data = []
         modality_label = []
-        for modality, file_name in files.items():
-            file_object = nib.load(file_name) 
-            image = file_object.get_fdata()
-            slice = image[:, :, slice_index]
-            data.append(slice)
-            modality_label.append(modality)
+        for modality in sorted(files):
+            if modality.lower() in self.contrasts: 
+                file_name = files[modality]
+                file_object = nib.nifti1.load(file_name) 
+                image = file_object.get_fdata()
+                slice = image[:, :, slice_index]
+                data.append(slice)
+                modality_label.append(modality)
         
         data = np.stack(data, axis=0)
         return data 
@@ -151,7 +140,7 @@ class MultiContrastLoader(Dataset):
         return data
 
     def generate_and_apply_phase(self, data):
-        center_region = 10
+        center_region = 2
         phase = self.build_phase(center_region)
         data = self.apply_phase_map(data, phase)
         return data
@@ -175,8 +164,29 @@ class MultiContrastLoader(Dataset):
         xi = np.linspace(0, width - 1, resample_width)
         (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
 
-        new_data = np.array(interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten())))
+        new_data = interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten()))
         
+        assert isinstance(new_data, np.ndarray)
         return np.reshape(new_data, (contrasts, resample_height, resample_width))
 
+    @staticmethod
+    def add_model_specific_args(parent_parser):  # pragma: no-cover
+        parser = KSpaceDataset.add_model_specific_args(parent_parser)
+        parser = ArgumentParser(parents=[parser], add_help=False)
 
+        parser.add_argument(
+                '--data_dir', 
+                type=str, 
+                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/', 
+                help=''
+                )
+
+        parser.add_argument(
+                '--contrasts', 
+                type=str, 
+                nargs='+',
+                default=['t1', 't2', 'flair', 't1ce'], 
+                help=''
+                )
+
+        return parser

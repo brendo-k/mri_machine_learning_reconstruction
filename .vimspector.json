@@ -39,6 +39,27 @@
                     "userUnhandled": ""
                 }
             }
+        },
+        "Run Subset": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Subset",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "program": "train_multi_contrast.py",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": ["--use_subset"]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
         }
     }
 }
