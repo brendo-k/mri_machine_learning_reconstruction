@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import torch
-from train_varnet_self_supervised import to_device
+from train_utils import to_device
 from ml_recon.dataset.undersample import gen_pdf_columns, get_mask_from_distribution
 
 

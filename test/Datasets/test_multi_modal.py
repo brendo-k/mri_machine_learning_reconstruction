@@ -47,12 +47,21 @@ def test_samples(brats_dataset):
     assert doub_under.dtype == torch.complex64
     assert under.dtype == torch.complex64
     assert k_space.dtype == torch.complex64
+    
+    first_contrast_mask = doub_under[0, ...] != 0
+    for i in range(1, doub_under.shape[0]):
+        i_mask = doub_under[i, ...] != 0
+        assert not (first_contrast_mask == i_mask).all()
+
+    first_contrast_mask = under[0, ...] != 0
+    for i in range(1, doub_under.shape[0]):
+        i_mask = under[i, ...] != 0
+        assert not (first_contrast_mask == i_mask).all()
 
 def test_undersampling_all_same(brats_dataset):
     dataset = UndersampleDecorator(brats_dataset)
     doub_under, under, k_space, k = dataset[0]
     
-
     doub_mask = doub_under == 0
     reference_slice = doub_mask[:, 0, :, :]
     torch.testing.assert_close(doub_mask, reference_slice.unsqueeze(1).expand_as(doub_mask))

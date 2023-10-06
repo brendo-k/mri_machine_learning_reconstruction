@@ -3,12 +3,12 @@ import numpy as np
 fft  = lambda x, ax : np.fft.fftshift(np.fft.fftn(np.fft.ifftshift(x, axes=ax), axes=ax, norm='ortho'), axes=ax) 
 ifft = lambda X, ax : np.fft.fftshift(np.fft.ifftn(np.fft.ifftshift(X, axes=ax), axes=ax, norm='ortho'), axes=ax) 
 
-def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.01, eigen_threshold=0.99):
+def espirit(X, k, r, t, c):
     """
     Derives the ESPIRiT operator.
 
     Arguments:
-      X: Multi channel k-space data. Expected dimensions are (sz, sc, sy, size_x), where (size_x, sy, sz) are volumetric 
+      X: Multi channel k-space data. Expected dimensions are (sx, sy, sz, nc), where (sx, sy, sz) are volumetric 
          dimensions and (nc) is the channel dimension.
       k: Parameter that determines the k-space kernel size. If X has dimensions (1, 256, 256, 8), then the kernel 
          will have dimensions (1, k, k, 8)
@@ -18,111 +18,72 @@ def espirit(k_space, kernel_size, calibration_size, singular_value_threshold=0.0
          largest singular value are set to zero.
       c: Crop threshold that determines eigenvalues "=1".
     Returns:
-      maps: This is the ESPIRiT operator. It will have dimensions (size_x, sy, sz, nc, nc) with (size_x, sy, sz, :, idx)
+      maps: This is the ESPIRiT operator. It will have dimensions (sx, sy, sz, nc, nc) with (sx, sy, sz, :, idx)
             being the idx'th set of ESPIRiT maps.
     """
 
-    size_z = np.shape(k_space)[0]
-    size_chan = np.shape(k_space)[1]
-    size_y = np.shape(k_space)[2]
-    size_x = np.shape(k_space)[3]
+    sx = np.shape(X)[0]
+    sy = np.shape(X)[1]
+    sz = np.shape(X)[2]
+    nc = np.shape(X)[3]
 
-    acs_x_bounds = (size_x//2-calibration_size//2, size_x//2+calibration_size//2) if (size_x > 1) else (0, 1)
-    acs_y_bounds = (size_y//2-calibration_size//2, size_y//2+calibration_size//2) if (size_y > 1) else (0, 1)
-    acs_z_bounds = (size_z//2-calibration_size//2, size_z//2+calibration_size//2) if (size_z > 1) else (0, 1)
+    sxt = (sx//2-r//2, sx//2+r//2) if (sx > 1) else (0, 1)
+    syt = (sy//2-r//2, sy//2+r//2) if (sy > 1) else (0, 1)
+    szt = (sz//2-r//2, sz//2+r//2) if (sz > 1) else (0, 1)
 
     # Extract calibration region.    
-    calibration_region = k_space[
-                                 acs_z_bounds[0]:acs_z_bounds[1], 
-                                 :,
-                                 acs_y_bounds[0]:acs_y_bounds[1], 
-                                 acs_x_bounds[0]:acs_x_bounds[1], 
-                                 ].astype(np.complex64)
+    C = X[sxt[0]:sxt[1], syt[0]:syt[1], szt[0]:szt[1], :].astype(np.complex64)
 
     # Construct Hankel matrix.
-    p = (size_x > 1) + (size_y > 1) + (size_z > 1)
-    A = np.zeros([(calibration_size-kernel_size+1)**p, kernel_size**p * size_chan]).astype(np.complex64)
+    p = (sx > 1) + (sy > 1) + (sz > 1)
+    A = np.zeros([(r-k+1)**p, k**p * nc]).astype(np.complex64)
 
     idx = 0
-    for xdx in range(max(1, calibration_region.shape[3] - kernel_size + 1)):
-        for ydx in range(max(1, calibration_region.shape[2] - kernel_size + 1)):
-            for zdx in range(max(1, calibration_region.shape[0] - kernel_size + 1)):
-                # numpy handles when the indices are too big
-                block = calibration_region[zdx:zdx+kernel_size, 
-                                           :, 
-                                           xdx:xdx+kernel_size, 
-                                           ydx:ydx+kernel_size]
-                A[idx, :] = block.flatten()
-                idx = idx + 1
+    for xdx in range(max(1, C.shape[0] - k + 1)):
+      for ydx in range(max(1, C.shape[1] - k + 1)):
+        for zdx in range(max(1, C.shape[2] - k + 1)):
+          # numpy handles when the indices are too big
+          block = C[xdx:xdx+k, ydx:ydx+k, zdx:zdx+k, :].astype(np.complex64) 
+          A[idx, :] = block.flatten()
+          idx = idx + 1
 
     # Take the Singular Value Decomposition.
-    _, S, VH = np.linalg.svd(A, full_matrices=False)
+    U, S, VH = np.linalg.svd(A, full_matrices=True)
     V = VH.conj().T
 
     # Select kernels.
-    num_singular_values = np.sum(S >= singular_value_threshold * S[0])
-    V = V[:, 0:num_singular_values]
+    n = np.sum(S >= t * S[0])
+    V = V[:, 0:n]
 
-    kxt = (size_x//2-kernel_size//2, np.ceil(size_x/2-kernel_size/2).astype(int)) if (size_x > 1) else (0, 0)
-    kyt = (size_y//2-kernel_size//2, np.ceil(size_y/2-kernel_size/2).astype(int)) if (size_y > 1) else (0, 0)
-    kzt = (size_z//2-kernel_size//2, np.ceil(size_z/2-kernel_size/2).astype(int)) if (size_z > 1) else (0, 0)
+    kxt = (sx//2-k//2, sx//2+k//2) if (sx > 1) else (0, 1)
+    kyt = (sy//2-k//2, sy//2+k//2) if (sy > 1) else (0, 1)
+    kzt = (sz//2-k//2, sz//2+k//2) if (sz > 1) else (0, 1)
 
     # Reshape into k-space kernel, flips it and takes the conjugate
-    kernels = np.zeros(np.append(np.shape(k_space), num_singular_values)).astype(np.complex64)
-    kerdims = [(size_z > 1) * kernel_size + (size_z == 1) * 1, 
-               size_chan, 
-               (size_y > 1) * kernel_size + (size_y == 1) * 1, 
-               (size_x > 1) * kernel_size + (size_x == 1) * 1, 
-               ]
-    kernels = np.reshape(V, (kerdims) + [-1,])
-    kernels = kernels.conj()
-    kernels = np.pad(kernels, ((kzt[0], kzt[1]), (0, 0), (kyt[0], kyt[1]), (kxt[0], kxt[1]), (0, 0)))
+    kernels = np.zeros(np.append(np.shape(X), n)).astype(np.complex64)
+    kerdims = [(sx > 1) * k + (sx == 1) * 1, (sy > 1) * k + (sy == 1) * 1, (sz > 1) * k + (sz == 1) * 1, nc]
+    for idx in range(n):
+        kernels[kxt[0]:kxt[1],kyt[0]:kyt[1],kzt[0]:kzt[1], :, idx] = np.reshape(V[:, idx], kerdims)
 
-    # flip kernels along axes and conjugate (this is from the defention of convolution )
-    kernels = np.flip(kernels, axis=(0, 2, 3)).conj()
-
-    # Take the fft of the kernels
-    axes = (0, 2, 3)
-    kerimgs = fft(kernels, axes) * np.sqrt(size_x * size_y * size_z)/np.sqrt(kernel_size**p)
-    kerimgs = np.zeros((np.shape(k_space) + (num_singular_values,))).astype(np.complex64)
+    # Take the iucfft
+    axes = (0, 1, 2)
+    kerimgs = np.zeros(np.append(np.shape(X), n)).astype(np.complex64)
+    for idx in range(n):
+        for jdx in range(nc):
+            ker = kernels[::-1, ::-1, ::-1, jdx, idx].conj()
+            kerimgs[:,:,:,jdx,idx] = fft(ker, axes) * np.sqrt(sx * sy * sz)/np.sqrt(k**p)
 
     # Take the point-wise eigenvalue decomposition and keep eigenvalues greater than c
-    maps = np.zeros(np.shape(k_space)).astype(np.complex64)
-    for x in range(0, size_x):
-        for y in range(0, size_y):
-            for z in range(0, size_z):
+    maps = np.zeros(np.append(np.shape(X), nc)).astype(np.complex64)
+    for idx in range(0, sx):
+        for jdx in range(0, sy):
+            for kdx in range(0, sz):
 
-                Gq = kerimgs[z,:,y,x,:]
+                Gq = kerimgs[idx,jdx,kdx,:,:]
 
-                u, _, _ = np.linalg.svd(Gq, full_matrices=False)
-                maps[z, :, y, x] = u[:, 0]
+                u, s, vh = np.linalg.svd(Gq, full_matrices=True)
+                for ldx in range(0, nc):
+                    if (s[ldx]**2 > c):
+                        maps[idx, jdx, kdx, :, ldx] = u[:, ldx]
 
     return maps
-
-def espirit_proj(x, esp):
-    """
-    Construct the projection of multi-channel image x onto the range of the ESPIRiT operator. Returns the inner
-    product, complete projection and the null projection.
-
-    Arguments:
-      x: Multi channel image data. Expected dimensions are (size_x, sy, sz, nc), where (size_x, sy, sz) are volumetric 
-         dimensions and (nc) is the channel dimension.
-      esp: ESPIRiT operator as returned by function: espirit
-
-    Returns:
-      ip: This is the inner product result, or the image information in the ESPIRiT subspace.
-      proj: This is the resulting projection. If the ESPIRiT operator is E, then proj = E E^H x, where H is 
-            the hermitian.
-      null: This is the null projection, which is equal to x - proj.
-    """
-    ip = np.zeros(x.shape).astype(np.complex64)
-    proj = np.zeros(x.shape).astype(np.complex64)
-    for qdx in range(0, esp.shape[4]):
-        for pdx in range(0, esp.shape[3]):
-            ip[:, :, :, qdx] = ip[:, :, :, qdx] + x[:, :, :, pdx] * esp[:, :, :, pdx, qdx].conj()
-
-    for qdx in range(0, esp.shape[4]):
-        for pdx in range(0, esp.shape[3]):
-          proj[:, :, :, pdx] = proj[:, :, :, pdx] + ip[:, :, :, qdx] * esp[:, :, :, pdx, qdx]
-
-    return (ip, proj, x - proj)

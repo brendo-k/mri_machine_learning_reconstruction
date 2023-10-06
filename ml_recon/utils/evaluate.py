@@ -12,19 +12,18 @@ import numpy as np
 from ml_recon.Loss.ssim_loss import SSIMLoss
 
 
-def mse(gt: torch.Tensor, pred: torch.Tensor) -> np.ndarray:
+def mse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Mean Squared Error (MSE)"""
     return ((gt - pred) ** 2).mean()
 
 
-def nmse(gt: torch.Tensor, pred: torch.Tensor) -> np.ndarray:
+def nmse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Normalized Mean Squared Error (NMSE)"""
     return torch.linalg.vector_norm(gt - pred) ** 2 / torch.linalg.vector_norm(gt) ** 2
 
 
 def psnr(
-    gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
-) -> np.ndarray:
+    gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Peak Signal to Noise Ratio metric (PSNR)"""
     error = mse(gt, pred)
     return 10 * torch.log10(pred.max().pow(2)/error)

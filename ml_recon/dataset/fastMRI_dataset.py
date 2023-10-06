@@ -58,6 +58,9 @@ class FastMRIDataset(KSpaceDataset):
         k_space = k_space.flip(1)
         k_space = self.resample_or_pad(k_space)
 
+        # add contrast dimension
+        k_space = k_space.unsqueeze(0)
+
         if self.transforms:
             k_space = self.transforms(k_space)
         return k_space

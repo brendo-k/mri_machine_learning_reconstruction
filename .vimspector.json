@@ -27,7 +27,7 @@
                 "type": "python",
                 "request": "launch",
                 "cwd": "${workspaceRoot}",
-                "module": "ml_recon.dataset.multicontrast_loader",
+                "module": "ml_recon.dataset.Brats_dataset",
                 "stopOnEntry": true,
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal"
@@ -48,7 +48,7 @@
                 "request": "launch",
                 "cwd": "${workspaceRoot}",
                 "stopOnEntry": true,
-                "program": "train_multi_contrast.py",
+                "program": "train_model.py",
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
                 "args": ["--use_subset"]

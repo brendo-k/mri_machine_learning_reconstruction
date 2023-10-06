@@ -6,8 +6,10 @@ def calc_k(lambda_probability, omega_probability):
     return K
     
 def apply_undersampling(index, prob_map, k_space, deterministic):
-    mask = get_mask_from_distribution(prob_map, index, deterministic)
-    undersampled = k_space * mask
+    contrasts = k_space.shape[0]
+    rng = get_random_generator(index, deterministic)
+    mask = get_mask_from_distribution(prob_map, rng, contrasts)
+    undersampled = k_space * np.expand_dims(mask, 1)
     return undersampled
     
    
@@ -54,10 +56,9 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
 
     return prob_map
 
-def get_mask_from_distribution(prob_map, index, deterministic):
-    rng = get_random_generator(index, deterministic)
+def get_mask_from_distribution(prob_map, rng, contrasts):
     prob_map[prob_map > 0.99] = 1
-    (nx, _) = np.shape(prob_map)
-    mask1d = rng.binomial(1, prob_map[0:1]).astype(bool)
-    mask = np.repeat(mask1d, nx, axis=0)
+    (contrast, nx, _) = np.shape(prob_map)
+    mask1d = rng.binomial(1, prob_map[:, 0, :]).astype(bool)
+    mask = np.repeat(mask1d[:, np.newaxis, :], nx, axis=1)
     return mask
