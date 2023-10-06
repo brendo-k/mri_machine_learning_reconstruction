@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import random
 from torch.utils.data import Dataset
 from argparse import ArgumentParser
@@ -18,9 +19,13 @@ class UndersampleDecorator(Dataset):
         transforms: Union[Callable, None] = None
     ):
         self.dataset = dataset
+        contrasts = dataset[0].shape[0]
 
         self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
         self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
+
+        self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (contrasts, 1, 1))
+        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (contrasts, 1, 1))
 
         one_minus_eps = 1 - 1e-3
         self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
@@ -35,20 +40,9 @@ class UndersampleDecorator(Dataset):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
         
-        if k_space.ndim == 3:
-            under = apply_undersampling(index + self.random_index, self.omega_prob, k_space, True)
-            doub_under = apply_undersampling(index, self.lambda_prob, under, False)
-        elif k_space.ndim == 4:
-            # apply undersampling along each contrast
-            under = torch.zeros_like(k_space)
-            for i in range(k_space.shape[0]):
-                under[i, :, :, :] = apply_undersampling(index, self.omega_prob, k_space[i, :, :, :], deterministic=True)
+        under = apply_undersampling(index + self.random_index, self.omega_prob, k_space, deterministic=True)
+        doub_under = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-            doub_under = torch.zeros_like(k_space)
-            for i in range(k_space.shape[0]):
-                doub_under[i, :, :, :] = apply_undersampling(index, self.lambda_prob, under[i, :, :, :], deterministic=False)
-        else:
-            raise ValueError(f'k_space has too many dimensions! Found: {k_space.ndims}')
         data = (doub_under, under, k_space, self.k)
         if self.transforms:
             data = self.transforms(data)

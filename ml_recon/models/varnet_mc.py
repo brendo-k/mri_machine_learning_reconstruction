@@ -46,7 +46,7 @@ class VarNet_mc(nn.Module):
 
     def data_consistency(self, current_k, reference_k, mask):
         # mask values
-        zero = torch.zeros(1, 1, 1, 1, 1).to(current_k).detach()
+        zero = torch.zeros(1, 1, 1, 1, 1, device=current_k.device, dtype=current_k.dtype)
         # zero where not in mask
         dc_value = torch.where(mask, current_k - reference_k, zero)
         return dc_value

@@ -9,7 +9,9 @@ from functools import partial
 from ml_recon.utils import image_slices
 import matplotlib.pyplot as plt
 
-from torch.utils.data import DataLoader, random_split
+import torch
+from torch.distributed import destroy_process_group
+from torch.utils.data import DataLoader, random_split, Subset
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
@@ -18,17 +20,17 @@ from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from ml_recon.transforms import normalize
-from torch.distributed import destroy_process_group
+from test_varnet import test
 
 from torch.utils.data.distributed import DistributedSampler
-from train_varnet_self_supervised import (
+from train_utils import (
         to_device, 
+        save_config,
         setup_devices,
         setup_scheduler,
         setup_ddp,
         train,
         validate, 
-        to_device
         )
 
 
@@ -44,7 +46,7 @@ def main():
 
     model = setup_ddp(current_device, distributed, model)
 
-    train_loader, val_loader = prepare_data(args, distributed)
+    train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -65,13 +67,13 @@ def main():
             train_loader.sampler.set_epoch(epoch) #pyright: ignore
 
         model.train()
-        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler)
+        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, PROFILE)
         model.eval()
 
         end = time.time()
         print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
         with torch.no_grad():
-            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, type='train')
+            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
             val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
             plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
         
@@ -87,14 +89,38 @@ def main():
 
     if distributed:
         destroy_process_group()
+    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
+
+    
+    metrics = {}
+    dataset = test_loader.dataset.dataset
+
+    assert isinstance(dataset, BratsDataset)
+    for i in range(len(nmse)):
+        metrics['mse' + dataset.contrast_order[i]] = nmse[i]
+        metrics['ssim' + dataset.contrast_order[i]] = ssim[i]
+        metrics['psnr' + dataset.contrast_order[i]] = psnr[i]
+        
+
+    if writer:
+        writer.add_hparams(
+                {
+                    'lr': args.lr, 
+                    'batch_size': args.batch_size, 
+                    'loss_type': args.loss_type, 
+                    'scheduler': args.scheduler,
+                    'max_epochs': args.max_epochs
+                },
+                metrics
+                )
 
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
     
     train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-
     val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
 
     undersampling_args = {
                 'R': arg.R, 
@@ -106,9 +132,11 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
     
     train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
     val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
+    test_dataset = UndersampleDecorator(test_dataset, **undersampling_args)
     
     if arg.use_subset:
         train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
+        val_dataset, _ = random_split(val_dataset, [0.1, 0.9])
 
     if distributed:
         print('Setting up distributed sampler')
@@ -134,11 +162,16 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                             sampler=val_sampler,
                             pin_memory=True,
                             )
-    return train_loader, val_loader
+
+    test_loader = DataLoader(test_dataset, 
+                            batch_size=1, 
+                            pin_memory=True,
+                            )
+    return train_loader, val_loader, test_loader
 
 
 
-def plot_recon(model, val_loader, device, writer, epoch, loss_type, type='val'):
+def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_type='val'):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
 
@@ -154,7 +187,14 @@ def plot_recon(model, val_loader, device, writer, epoch, loss_type, type='val'):
         difference_scaling = 4
 
         # forward pass
-        sample = next(iter(val_loader))
+        if training_type == 'val':
+            sample = tuple(data.unsqueeze(0) for data in data_loader.dataset[10])
+
+        elif training_type == 'train':
+            sample = next(iter(data_loader))
+        else:
+            raise ValueError(f'type should be either val or test but got {training_type}')
+
         mask, input_slice, target_slice, _, zf_mask = to_device(sample, device, 'supervised')
         
         output = model(input_slice, mask)
@@ -163,10 +203,10 @@ def plot_recon(model, val_loader, device, writer, epoch, loss_type, type='val'):
         output = output.cpu()
         
         sensetivity_maps = model.sens_model(input_slice, mask)
-        writer.add_images(type + '-sense_map/image_0', sensetivity_maps[0, 0, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(type + '-sense_map/image_1', sensetivity_maps[0, 1, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(type + '-sense_map/image_2', sensetivity_maps[0, 2, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(type + '-sense_map/image_3', sensetivity_maps[0, 3, :, :, :].cpu().abs().unsqueeze(1), epoch)
+        writer.add_images(training_type + '-sense_map/image_0', sensetivity_maps[0, 0, :, :, :].cpu().abs().unsqueeze(1), epoch)
+        writer.add_images(training_type + '-sense_map/image_1', sensetivity_maps[0, 1, :, :, :].cpu().abs().unsqueeze(1), epoch)
+        writer.add_images(training_type + '-sense_map/image_2', sensetivity_maps[0, 2, :, :, :].cpu().abs().unsqueeze(1), epoch)
+        writer.add_images(training_type + '-sense_map/image_3', sensetivity_maps[0, 3, :, :, :].cpu().abs().unsqueeze(1), epoch)
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=2)
         ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=2)
@@ -197,20 +237,20 @@ def plot_recon(model, val_loader, device, writer, epoch, loss_type, type='val'):
         diff_scaled = diff_scaled.clamp(0, 1)
         input_scaled = input_scaled.clamp(0, 1)
 
-        writer.add_images('images/' + type + '/recon', image_scaled.unsqueeze(1), epoch)
-        writer.add_images('images/' + type + '/diff', diff_scaled.unsqueeze(1), epoch)
-        writer.add_images('images/' + type + '/input', input_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + training_type + '/recon', image_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + training_type + '/diff', diff_scaled.unsqueeze(1), epoch)
+        writer.add_images('images/' + training_type + '/input', input_scaled.unsqueeze(1), epoch)
 
         if loss_type != 'supervised':
             mask_lambda_omega, _, _, loss_mask, zf_mask = to_device(sample, device, loss_type)
-            writer.add_images('mask/' + type + '/omega_lambda_mask', mask_lambda_omega[0, :, [0], :, :], epoch)
-            writer.add_images('mask/' + type + '/omega_mask', mask[0, :, [0], :, :], epoch)
-            writer.add_images('mask/' + type + '/omega_not_lambda', loss_mask[0, :, [0], :, :].float(), epoch)
+            writer.add_images('mask/' + training_type + '/omega_lambda_mask', mask_lambda_omega[0, :, [0], :, :], epoch)
+            writer.add_images('mask/' + training_type + '/omega_mask', mask[0, :, [0], :, :], epoch)
+            writer.add_images('mask/' + training_type + '/omega_not_lambda', loss_mask[0, :, [0], :, :].float(), epoch)
             
         # plot target if it's the first epcoh
         recon_scaled = ground_truth/image_scaling_factor
         recon_scaled = recon_scaled.clamp(0, 1)
-        writer.add_images('images/' + type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
+        writer.add_images('images/' + training_type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
 def setup_model_backbone(model_name, current_device, chans=8):
@@ -232,12 +272,6 @@ def setup_model_backbone(model_name, current_device, chans=8):
     model.to(current_device)
 
     return model
-
-
-def save_config(args, writer_dir):
-    args_dict = vars(args)
-    with open(os.path.join(writer_dir, 'config.txt'), 'w') as f:
-        f.write(json.dumps(args_dict, indent=4))
 
 
 def load_config(args):

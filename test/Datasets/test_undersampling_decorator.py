@@ -39,28 +39,34 @@ def test_undersampled_slice_batching(dataset):
     dataloader = DataLoader(dataset, collate_fn=collate_fn, batch_size=5)
     data = next(iter(dataloader))
     assert data[0].shape[0] == 5
-    assert data[0].ndim == 4
+    assert data[0].ndim == 5
 
 
 def test_non_deterministic(dataset):
-
     data1 = dataset[0]
     data2 = dataset[0]
 
     assert ((data1[0] != 0) != (data2[0] != 0)).any()
 
 def test_non_deterministic_between_slices(dataset):
-
     data1 = dataset[0]
     data2 = dataset[1]
 
     assert ((data1[1] != 0) != (data2[1] != 0)).any()
 
 def test_undersampling(dataset):
-
     doub_under, under, k_space, _ = dataset[0]
 
     assert (doub_under == 0).sum() > (under == 0).sum()
     assert (under == 0).sum() > (k_space == 0).sum()
+    
+def test_columnwise(dataset):
+    doub_under, under, k_space, _ = dataset[0]
+
+    first_k_line_mask = doub_under[0, 0, 0, :] != 0
+    torch.testing.assert_close(doub_under != 0, first_k_line_mask.expand_as(doub_under))
+
+    first_k_line_mask = under[0, 0, 0, :] != 0
+    torch.testing.assert_close(under != 0, first_k_line_mask.expand_as(doub_under))
     
 

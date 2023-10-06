@@ -21,9 +21,12 @@ class BratsDataset(KSpaceDataset):
             data_dir: Union[str, os.PathLike], 
             nx:int = 256,
             ny:int = 256,
-            contrasts: Collection[str] = [], 
+            contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
+            extension: str = "npy"
             ):
+        assert contrasts, 'Contrast list should not be empty!'
+
         super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
@@ -40,19 +43,30 @@ class BratsDataset(KSpaceDataset):
             modalities = os.listdir(sample_path)
 
             patient_dict = {} 
-            for i, modality in enumerate(modalities):
+            first_file = True
+            for modality in modalities:
                 # remove segmentation maps
                 if 'seg' in modality:
                     continue
 
-                modality_path = os.path.join(sample_path, modality)
-                modality_name = modality.split('_')[-1].split('.')[0]
-                patient_dict[modality_name] = modality_path
-                if i == 0:
-                    with NiftiFileReader(modality_path) as fr:
-                        self.slices.append(fr.shape[2]-50)
+                if extension in modality:
+                    modality_path = os.path.join(sample_path, modality)
+                    modality_name = modality.split('_')[-1].split('.')[0]
+                    patient_dict[modality_name] = modality_path
+                    if first_file: 
+                        if extension == 'npy':
+                            self.slices.append(np.load(modality_path).shape[2] - 90)
+                        elif extension == 'nii.gz':
+                            with NiftiFileReader(modality_path) as fr:
+                                self.slices.append(fr.shape[2]-90)
+                        else:
+                            raise ValueError(f'no file reader for extension {extension}, only nii.gz and npy')
+                        first_file = False
+
             self.data_list.append(patient_dict)
 
+        _, self.contrast_order = self.get_data_from_indecies(0, 0)
+        print(self.contrast_order)
         self.slices = np.array(self.slices)
 
         print(f'Found {sum(self.slices)} slices')
@@ -63,7 +77,7 @@ class BratsDataset(KSpaceDataset):
 
     def __getitem__(self, index):
         volume_index, slice_index = self.get_vol_slice_index(index)
-        images = self.get_data_from_indecies(volume_index, slice_index)
+        images, _ = self.get_data_from_indecies(volume_index, slice_index)
         images = self.resample(images)
         images = np.transpose(images, (0, 2, 1))
         k_space = self.simulate_k_space(images)
@@ -86,7 +100,7 @@ class BratsDataset(KSpaceDataset):
         else:
             slice_index = index - cumulative_slice_sum[volume_index - 1] 
         
-        return volume_index, slice_index + 30
+        return volume_index, slice_index + 70
     
     def get_data_from_indecies(self, volume_index, slice_index):
         files = self.data_list[volume_index]
@@ -95,14 +109,21 @@ class BratsDataset(KSpaceDataset):
         for modality in sorted(files):
             if modality.lower() in self.contrasts: 
                 file_name = files[modality]
-                file_object = nib.nifti1.load(file_name) 
-                image = file_object.get_fdata()
+                ext = os.path.splitext(file_name)[1]
+                if 'gz' in ext:
+                    file_object = nib.nifti1.load(file_name) 
+                    image = file_object.get_fdata()
+                elif 'npy' in ext:
+                    image = np.load(file_name)
+                else:
+                    raise ValueError(f'Can not load file with extention {ext}')
+
                 slice = image[:, :, slice_index]
                 data.append(slice)
                 modality_label.append(modality)
         
         data = np.stack(data, axis=0)
-        return data 
+        return data, modality_label
 
     def simulate_k_space(self, image):
         image_w_sense = self.apply_sensetivities(image)
@@ -130,7 +151,7 @@ class BratsDataset(KSpaceDataset):
         coeff = np.random.normal(size=(center_region, center_region)) + 1j * np.random.normal(size=(center_region, center_region))
         phase_frequency[center_box_x, center_box_y] = coeff
 
-        phase = ifft_2d_img(phase_frequency)
+        phase = fft_2d_img(phase_frequency)
         phase = np.angle(phase)
         
         return phase
@@ -140,7 +161,7 @@ class BratsDataset(KSpaceDataset):
         return data
 
     def generate_and_apply_phase(self, data):
-        center_region = 2
+        center_region = 16
         phase = self.build_phase(center_region)
         data = self.apply_phase_map(data, phase)
         return data
@@ -190,3 +211,15 @@ class BratsDataset(KSpaceDataset):
                 )
 
         return parser
+
+from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+if __name__ == '__main__':
+    
+    parser = ArgumentParser()
+    parser = BratsDataset.add_model_specific_args(parser)
+    args = parser.parse_args()
+    dataset = BratsDataset(os.path.join(args.data_dir, 'train'))
+    dataset = UndersampleDecorator(dataset)
+
+    i = dataset[0]
+
