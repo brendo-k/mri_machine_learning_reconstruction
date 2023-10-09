@@ -3,7 +3,6 @@ import os
 import argparse
 import time
 import yaml
-import json
 import torch
 from functools import partial
 from ml_recon.utils import image_slices
@@ -11,8 +10,9 @@ import matplotlib.pyplot as plt
 
 import torch
 from torch.distributed import destroy_process_group
-from torch.utils.data import DataLoader, random_split, Subset
+from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
+from torch.utils.data.distributed import DistributedSampler
 
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 from ml_recon.models.varnet_mc import VarNet_mc
@@ -22,7 +22,6 @@ from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from ml_recon.transforms import normalize
 from test_varnet import test
 
-from torch.utils.data.distributed import DistributedSampler
 from train_utils import (
         to_device, 
         save_config,
@@ -52,6 +51,13 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+    if os.path.exists(writer_dir):
+        while os.path.exists(writer_dir):
+            if writer_dir[-1].isnumeric():
+                writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
+            else:
+                writer_dir += str(0)
+
     os.makedirs(os.path.join(writer_dir, 'weight_dir'))
     save_config(args, writer_dir)
     if current_device == 0: 
@@ -89,17 +95,17 @@ def main():
 
     if distributed:
         destroy_process_group()
-    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
 
+    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
     
     metrics = {}
     dataset = test_loader.dataset.dataset
 
     assert isinstance(dataset, BratsDataset)
     for i in range(len(nmse)):
-        metrics['mse' + dataset.contrast_order[i]] = nmse[i]
-        metrics['ssim' + dataset.contrast_order[i]] = ssim[i]
-        metrics['psnr' + dataset.contrast_order[i]] = psnr[i]
+        metrics['mse-' + dataset.contrast_order[i]] = nmse[i]
+        metrics['ssim-' + dataset.contrast_order[i]] = ssim[i]
+        metrics['psnr-' + dataset.contrast_order[i]] = psnr[i]
         
 
     if writer:
@@ -141,10 +147,8 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
     if distributed:
         print('Setting up distributed sampler')
         train_sampler = DistributedSampler(train_dataset)
-        val_sampler = DistributedSampler(val_dataset)
         shuffle = False
     else:
-        val_sampler = None
         train_sampler = None 
         shuffle = True
 
@@ -157,9 +161,8 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                               )
 
     val_loader = DataLoader(val_dataset, 
-                            batch_size=arg.batch_size, 
+                            batch_size=1, 
                             num_workers=arg.num_workers, 
-                            sampler=val_sampler,
                             pin_memory=True,
                             )
 
@@ -167,6 +170,7 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                             batch_size=1, 
                             pin_memory=True,
                             )
+
     return train_loader, val_loader, test_loader
 
 
@@ -203,10 +207,8 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         output = output.cpu()
         
         sensetivity_maps = model.sens_model(input_slice, mask)
-        writer.add_images(training_type + '-sense_map/image_0', sensetivity_maps[0, 0, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(training_type + '-sense_map/image_1', sensetivity_maps[0, 1, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(training_type + '-sense_map/image_2', sensetivity_maps[0, 2, :, :, :].cpu().abs().unsqueeze(1), epoch)
-        writer.add_images(training_type + '-sense_map/image_3', sensetivity_maps[0, 3, :, :, :].cpu().abs().unsqueeze(1), epoch)
+        for i in range(sensetivity_maps.shape[1]):
+            writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=2)
         ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=2)
