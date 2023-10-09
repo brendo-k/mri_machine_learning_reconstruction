@@ -1,30 +1,17 @@
-from datetime import datetime
-from typing import Dict
 import os
-import argparse
-import time
-import yaml
 import contextlib
 import json
 from functools import partial
 import torch
 from typing import Union
 
-from ml_recon.models.varnet import VarNet
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
-from torch.utils.data import DataLoader, random_split
-
-from ml_recon.transforms import normalize
-from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
-from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-
-from torchvision.transforms import Compose
-from torch.utils.data.distributed import DistributedSampler
+import torch.distributed as distributed
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from ml_recon.models.varnet import VarNet
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 
-def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.optim.lr_scheduler._LRScheduler, None]:
+def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.optim.lr_scheduler.LRScheduler, None]:
     if scheduler_type == 'cosine_anneal':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, len(train_loader)*10, T_mult=1, eta_min=1e-4)
     elif scheduler_type == 'cyclic':
@@ -37,8 +24,8 @@ def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.opti
         scheduler = None
     return scheduler
 
-def setup_ddp(current_device, distributed, model):
-    if distributed:
+def setup_ddp(current_device, is_distributed, model):
+    if is_distributed:
         print(f'Setting up DDP in device {current_device}')
         model = DDP(model, device_ids=[current_device])
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -76,8 +63,9 @@ def setup_devices(dist_backend, init_method, world_size):
 
     ngpus_per_node = torch.cuda.device_count()
     current_device = None
-    distributed = False
+    is_distributed = False
     if ngpus_per_node > 1:
+        # multiple gpu training
         print("Starting DPP...")
 
         """ This next line is the key to getting DistributedDataParallel working on SLURM:
@@ -95,76 +83,19 @@ def setup_devices(dist_backend, init_method, world_size):
 
         print(f'From Rank: {current_device}, ==> Initializing Process Group...')
         #init the process group
-        init_process_group(backend=dist_backend, init_method=init_method, world_size=world_size, rank=current_device)
+        distributed.init_process_group(backend=dist_backend, init_method=init_method, world_size=world_size, rank=current_device)
         print("process group ready!")
-        distributed = True
+        is_distributed = True
     elif ngpus_per_node == 1:
+        # one gpu training
         current_device = 0
-        distributed = False
+        is_distributed = False
     else:
+        #cpu training
         current_device = 'cpu'
-        distributed = False
-    return current_device, distributed
+        is_distributed = False
 
-
-def prepare_data(arg, distributed: bool):
-    transforms = Compose(
-        (
-            normalize(),
-        )
-    )
-    data_dir = arg.data_dir
-
-    dataset_args = {
-            'nx': arg.nx,
-            'ny': arg.ny,  
-            }
-
-    undersampling_args = {
-            'R': arg.R,
-            'R_hat': arg.R_hat,
-            'poly_order': arg.poly_order,
-            'acs_lines': arg.acs_lines,
-            'transforms': transforms
-            }
-    
-    train_dataset = FastMRIDataset(os.path.join(data_dir, 'multicoil_train'),
-                                 **dataset_args
-                                 )
-    
-    val_dataset = FastMRIDataset(os.path.join(data_dir, 'multicoil_val'),
-                                 **dataset_args
-                                 )
-    train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
-    val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
-    
-    if arg.use_subset:
-        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
-
-    if distributed:
-        print('Setting up distributed sampler')
-        train_sampler = DistributedSampler(train_dataset)
-        val_sampler = DistributedSampler(val_dataset)
-        shuffle = False
-    else:
-        train_sampler, val_sampler = None, None
-        shuffle = True
-
-    train_loader = DataLoader(train_dataset, 
-                              batch_size=arg.batch_size,
-                              num_workers=arg.num_workers,
-                              shuffle=shuffle, 
-                              sampler=train_sampler,
-                              pin_memory=True,
-                              )
-
-    val_loader = DataLoader(val_dataset, 
-                            batch_size=arg.batch_size, 
-                            num_workers=arg.num_workers, 
-                            sampler=val_sampler,
-                            pin_memory=True,
-                            )
-    return train_loader, val_loader
+    return current_device, is_distributed
 
 
 def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler, profile=False):
@@ -323,91 +254,9 @@ def to_device(data: tuple, device: str, loss_type: str):
     return mask, input_slice, target_slice, loss_mask, zero_fill_mask 
 
 
-def plot_recon(model, val_loader, device, writer, epoch, supervised, type='val'):
-    """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
-    and error magnified by 4
-
-    Args:
-        model (nn.Module): model to reconstruct
-        val_loader (nn.utils.DataLoader): dataloader to take slice
-        device (str | int): device number/type
-        writer (torch.utils.SummaryWriter): tensorboard summary writer
-        epoch (int): epoch
-    """
-    if device == 0:
-        # difference magnitude
-        difference_scaling = 4
-
-        # forward pass
-        sample = next(iter(val_loader))
-        mask, input_slice, target_slice, _, zf_mask = to_device(sample, device, 'supervised')
-        
-        output = model(input_slice, mask)
-        output *= zf_mask
-        output = output * (input_slice == 0) + input_slice
-        output = output.cpu()
-         
-        # plot sensetivity maps
-        sensetivity_maps = model.sens_model(input_slice, mask)
-        writer.add_images(type + '-sense_map/image_0', sensetivity_maps[0, :, :, :].cpu().abs().unsqueeze(1), epoch)
-
-        # coil combination
-        output = root_sum_of_squares(ifft_2d_img(output), coil_dim=1)
-        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=1)
-        x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=1)
-        assert isinstance(output, torch.Tensor)
-        assert isinstance(ground_truth, torch.Tensor)
-        assert isinstance(x_input, torch.Tensor)
-
-        output = output.cpu()
-        ground_truth = ground_truth.cpu()
-        x_input = x_input.cpu()
-
-        diff = (output - ground_truth).abs()
-
-        # get scaling factor (skull is high intensity)
-        image_scaling_factor = ground_truth.max() * 0.6
-
-        # scale images and difference
-        image_scaled = output.abs()/image_scaling_factor
-        diff_scaled = diff/(image_scaling_factor/difference_scaling)
-        input_scaled = x_input.abs()/(image_scaling_factor)
-
-        # clamp to 0-1 range
-        image_scaled = image_scaled.clamp(0, 1)
-        diff_scaled = diff_scaled.clamp(0, 1)
-        input_scaled = input_scaled.clamp(0, 1)
-
-        writer.add_images(type + '-images/recon', image_scaled.unsqueeze(1), epoch)
-        writer.add_images(type + '-images/diff', diff_scaled.unsqueeze(1), epoch)
-        writer.add_images(type + '-images/input', input_scaled.unsqueeze(1), epoch)
-
-        if supervised != 'supervised':
-            mask_lambda_omega, _, _, loss_mask, zf_mask = to_device(sample, device, supervised)
-            writer.add_images(type + '-mask/omega_lambda_mask', mask_lambda_omega[:, [0], :, :], epoch)
-            writer.add_images(type + '-mask/omega_mask', mask[:, [0], :, :], epoch)
-            writer.add_images(type + '-mask/omega_not_lambda', loss_mask[:, [0], :, :], epoch)
-            
-        # plot target if it's the first epcoh
-        recon_scaled = ground_truth/image_scaling_factor
-        recon_scaled = recon_scaled.clamp(0, 1)
-        writer.add_images('images/' + type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
-
-
 def save_config(args, writer_dir):
     args_dict = vars(args)
     with open(os.path.join(writer_dir, 'config.txt'), 'w') as f:
         f.write(json.dumps(args_dict, indent=4))
 
     
-
-def load_config(args):
-    """ loads yaml file """
-    with open(args.config, 'r') as f:
-        configs_dict = yaml.load(f)
-        
-    for k, v in configs_dict.items():
-        setattr(args, k, v)
-
-    return args
-
