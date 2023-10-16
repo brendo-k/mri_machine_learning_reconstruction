@@ -2,7 +2,7 @@ from functools import partial
 import os
 import numpy as np
 
-from ml_recon.models.varnet import VarNet
+from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.models import Unet
 from torch.utils.data import DataLoader
 import torch
@@ -31,7 +31,7 @@ def main():
 def setup_model(weight_path, device):
     checkpoint = torch.load(weight_path, map_location=device)
     backbone = partial(Unet, 2, 2)
-    model = VarNet(backbone)
+    model = VarNet_mc(backbone)
     model.load_state_dict(checkpoint['model'])
     return model
 
@@ -82,7 +82,7 @@ def test(model, test_loader, num_contrasts):
 
             for contrast in range(input.shape[1]):
                 nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
-                ssim_values[contrast, i] = ssim(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :], target[:, contrast, :, :].max() - target[:, contrast, :, :].min())
+                ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :], target[:, [contrast], :, :], target[:, contrast, :, :].max() - target[:, contrast, :, :].min())
                 psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
     
     ave_nmse = nmse_values.sum(1)/len(test_loader)

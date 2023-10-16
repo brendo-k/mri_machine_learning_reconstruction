@@ -93,17 +93,18 @@ class to_tensor(object):
 
 # Normalize to [0, 1] range per contrast
 class normalize(object):
+
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
 
         image = root_sum_of_squares(ifft_2d_img(under), coil_dim=1)
         assert isinstance(image, torch.Tensor)
 
-        undersample_max = image.amax((1, 2))
+        undersample_max = image.amax((1, 2), keepdim=True)
 
-        under = under / undersample_max.unsqueeze(1).unsqueeze(1)
-        sampled = sampled / undersample_max.unsqueeze(1).unsqueeze(1)
-        doub_under = doub_under / undersample_max.unsqueeze(1).unsqueeze(1)
+        under = under / undersample_max.unsqueeze(1)
+        sampled = sampled / undersample_max.unsqueeze(1)
+        doub_under = doub_under / undersample_max.unsqueeze(1)
 
         return (doub_under, under, sampled, k)
 

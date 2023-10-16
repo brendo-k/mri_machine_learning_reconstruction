@@ -136,31 +136,31 @@ class down(nn.Module):
 
 class up(nn.Module):
 
-  def __init__(self, in_chan, out_chan):
-    super().__init__()
-    self.layers = nn.Sequential(
-      nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-      nn.InstanceNorm2d(out_chan, affine=True),
-      nn.LeakyReLU(negative_slope=0.2, inplace=True),
-    )
+    def __init__(self, in_chan, out_chan):
+        super().__init__()
+        self.layers = nn.Sequential(
+          nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
+          nn.InstanceNorm2d(out_chan, affine=True),
+          nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        )
 
-  def forward(self, x):
-    return self.layers(x)
+    def forward(self, x):
+        return self.layers(x)
 
 
 class concat(nn.Module):
-  def __init__(self):
-    super().__init__()
+    def __init__(self):
+        super().__init__()
 
-  def forward(self, x: torch.Tensor, x_concat: torch.Tensor):
-    x_concat_shape = x_concat.shape[-2:]
-    x_shape = x.shape[-2:]
-    diff_x = x_concat_shape[0] - x_shape[0]
-    diff_y = x_concat_shape[1] - x_shape[1]
-    x_concat_trimmed = x_concat
-    if diff_x != 0:
-      x_concat_trimmed = x_concat_trimmed[:, :, diff_x//2:-diff_x//2, :]
-    if diff_y != 0:
-      x_concat_trimmed = x_concat_trimmed[:, :, :, diff_y//2:-diff_y//2]
-    concated_data = torch.cat((x, x_concat_trimmed), dim=1)
-    return concated_data
+    def forward(self, x: torch.Tensor, x_concat: torch.Tensor):
+        x_concat_shape = x_concat.shape[-2:]
+        x_shape = x.shape[-2:]
+        diff_x = x_concat_shape[0] - x_shape[0]
+        diff_y = x_concat_shape[1] - x_shape[1]
+        x_concat_trimmed = x_concat
+        if diff_x != 0:
+            x_concat_trimmed = x_concat_trimmed[:, :, diff_x//2:-diff_x//2, :]
+        if diff_y != 0:
+            x_concat_trimmed = x_concat_trimmed[:, :, :, diff_y//2:-diff_y//2]
+        concated_data = torch.cat((x, x_concat_trimmed), dim=1)
+        return concated_data

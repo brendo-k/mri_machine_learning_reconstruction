@@ -5,6 +5,8 @@ import time
 import yaml
 import torch
 from functools import partial
+from ml_recon.utils import image_slices
+import matplotlib.pyplot as plt
 
 import torch
 from torch.distributed import destroy_process_group
@@ -13,9 +15,9 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
-from ml_recon.models.varnet_mc import VarNet_mc
+#from ml_recon.models.varnet_mc import VarNet_mc
+from fastmri.models.varnet import VarNet
 from ml_recon.dataset.Brats_dataset import BratsDataset 
-from ml_recon.dataset.kspace_brats import KSpaceBrats
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from ml_recon.transforms import normalize
@@ -33,23 +35,23 @@ from train_utils import (
 
 
 # Globals
-PROFILE = True
+PROFILE = False
 
 def main():
     args = parser.parse_args()
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args.model, current_device, chans=2*len(args.contrasts))
 
-    model = setup_ddp(current_device, distributed, model)
+    model = VarNet(num_cascades=6)
+    model.to(current_device)
 
     train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + 'fastmri' + '-' + args.loss_type
     if os.path.exists(writer_dir):
         while os.path.exists(writer_dir):
             if writer_dir[-1].isnumeric():
@@ -92,49 +94,42 @@ def main():
                     if scheduler:
                         writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
-    save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
+    #save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
 
-    if distributed:
-        destroy_process_group()
+    #if distributed:
+    #    destroy_process_group()
 
-    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
-    
-    metrics = {}
-    dataset = test_loader.dataset.dataset
+    #nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
+    #
+    #metrics = {}
+    #dataset = test_loader.dataset.dataset
 
-    contrast_order = dataset.contrast_order
-    all_contrasts = ['t1', 't1ce', 'flair', 't2']
-    remaining_contrasts = [contrast for contrast in all_contrasts if contrast not in contrast_order]
-    for i in range(len(nmse)):
-        metrics['mse-' + contrast_order[i]] = nmse[i]
-        metrics['ssim-' + contrast_order[i]] = ssim[i]
-        metrics['psnr-' + contrast_order[i]] = psnr[i]
+    #assert isinstance(dataset, BratsDataset)
+    #for i in range(len(nmse)):
+    #    metrics['mse-' + dataset.contrast_order[i]] = nmse[i]
+    #    metrics['ssim-' + dataset.contrast_order[i]] = ssim[i]
+    #    metrics['psnr-' + dataset.contrast_order[i]] = psnr[i]
+    #    
 
-    for contrast in remaining_contrasts:
-        metrics['mse-' + contrast] = 0
-        metrics['ssim-' + contrast] = 0
-        metrics['psnr-' + contrast] = 0
-        
-
-    if writer:
-        writer.add_hparams(
-                {
-                    'lr': args.lr, 
-                    'batch_size': args.batch_size, 
-                    'loss_type': args.loss_type, 
-                    'scheduler': args.scheduler,
-                    'max_epochs': args.max_epochs
-                },
-                metrics
-                )
+    #if writer:
+    #    writer.add_hparams(
+    #            {
+    #                'lr': args.lr, 
+    #                'batch_size': args.batch_size, 
+    #                'loss_type': args.loss_type, 
+    #                'scheduler': args.scheduler,
+    #                'max_epochs': args.max_epochs
+    #            },
+    #            metrics
+    #            )
 
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
     
-    train_dataset = KSpaceBrats(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    val_dataset = KSpaceBrats(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    test_dataset = KSpaceBrats(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
+    val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
+    test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
 
     undersampling_args = {
                 'R': arg.R, 
@@ -164,7 +159,7 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
     train_loader = DataLoader(train_dataset, 
                               batch_size=arg.batch_size,
                               num_workers=arg.num_workers,
-                              shuffle=shuffle, 
+                              shuffle=False, 
                               sampler=train_sampler,
                               pin_memory=True,
                               )
@@ -216,7 +211,10 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         output = output * (input_slice == 0) + input_slice
         output = output.cpu()
         
-        sensetivity_maps = model.sens_model(input_slice, mask)
+        fast_mri_input = torch.view_as_real(input_slice).squeeze(1)
+        fast_mri_mask = fast_mri_input != 0
+        sensetivity_maps = model.sens_net(fast_mri_input, fast_mri_mask)
+        sensetivity_maps = torch.view_as_complex(sensetivity_maps).unsqueeze(1)
         for i in range(sensetivity_maps.shape[1]):
             writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
         # coil combination
@@ -308,7 +306,6 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help='')
     parser.add_argument('--max_epochs', type=int, default=50, help='')
     parser.add_argument('--num_workers', type=int, default=0, help='')
-    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     

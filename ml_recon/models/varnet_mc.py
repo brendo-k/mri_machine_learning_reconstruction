@@ -3,6 +3,7 @@ import torch
 from typing import Tuple, Union
 from functools import partial
 
+from ml_recon.models import Unet
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
@@ -18,12 +19,9 @@ class VarNet_mc(nn.Module):
         # module cascades
         self.cascade = nn.ModuleList()
 
-        for _ in range(num_cascades):
-            self.cascade.append(
-                VarnetBlock(
-                    model_backbone()
-                )
-            )
+        self.cascades = nn.ModuleList(
+            [VarnetBlock(model_backbone()) for _ in range(num_cascades)]
+        )
 
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)
@@ -36,20 +34,15 @@ class VarNet_mc(nn.Module):
         sense_maps = self.sens_model(reference_k, mask)
         # current k_space 
         current_k = reference_k.clone()
-        for i, cascade in enumerate(self.cascade):
+        for i, cascade in enumerate(self.cascades):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
-            data_consistency = self.data_consistency(current_k, reference_k, mask)
+
+            data_consistency = mask * (current_k - reference_k)
             # gradient descent step
-            current_k = current_k - self.lambda_reg[i] * data_consistency - refined_k
+            current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
         return current_k
 
-    def data_consistency(self, current_k, reference_k, mask):
-        # mask values
-        zero = torch.zeros(1, 1, 1, 1, 1, device=current_k.device, dtype=current_k.dtype)
-        # zero where not in mask
-        dc_value = torch.where(mask, current_k - reference_k, zero)
-        return dc_value
 
 class VarnetBlock(nn.Module):
     def __init__(self, model: nn.Module) -> None:
@@ -60,8 +53,11 @@ class VarnetBlock(nn.Module):
     def forward(self, images, sensetivities):
         # Reduce
         images = ifft_2d_img(images, axes=[-1, -2])
+
+        # Images now [B, contrast, h, w] (complex)
         images = torch.sum(images * sensetivities.conj(), dim=2)
 
+        # Images now [B, contrast * 2, h, w] (real)
         images = complex_conversion.complex_to_real(images)
         images, mean, std = self.norm(images)
         images = self.model(images)
@@ -77,25 +73,16 @@ class VarnetBlock(nn.Module):
     # is this not just instance norm?
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
-        b, c, h, w = x.shape
-        x = x.view(b, 2, c // 2 * h * w)
-
-        mean = x.mean(dim=2).view(b, 2, 1).detach()
-        std = x.std(dim=2).view(b, 2, 1).detach()
-
-        std = std + 1e-8
+        mean = x.mean(dim=(2, 3), keepdim=True)
+        std = x.std(dim=(2, 3), keepdim=True)
 
         x = (x - mean) / std
-        x = x.view(b, c, h, w)
         return x, mean, std
 
 
     def unnorm(
         self, x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
     ) -> torch.Tensor:
-        b, c, h, w = x.shape
-        x = x.view(b, 2, c // 2 * h * w)
         x = x * std + mean
-        x = x.view(b, c, h, w)
         return x
 
