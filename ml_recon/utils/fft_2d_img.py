@@ -26,8 +26,8 @@ def fft_2d_img(data: Union[torch.Tensor, np.ndarray], axes=[-1, -2]):
         data = torch.fft.fft2(data, dim=axes, norm='ortho')
         data = torch.fft.fftshift(data, dim=axes)
     if isinstance(data, np.ndarray):
-        data = np.fft.fftshift(data, axes=axes)
-        data = np.fft.fft2(data, axes=axes, norm='ortho')
         data = np.fft.ifftshift(data, axes=axes)
+        data = np.fft.fft2(data, axes=axes, norm='ortho')
+        data = np.fft.fftshift(data, axes=axes)
         data = data.astype(np.complex64)
     return data

@@ -8,9 +8,6 @@ from typing import Union
 import torch.distributed as distributed
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from ml_recon.models.varnet import VarNet
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
-
 def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.optim.lr_scheduler.LRScheduler, None]:
     if scheduler_type == 'cosine_anneal':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, len(train_loader)*10, T_mult=1, eta_min=1e-4)
@@ -31,26 +28,6 @@ def setup_ddp(current_device, is_distributed, model):
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     return model
 
-
-def setup_model_backbone(model_name, current_device, in_chan=2, out_chan=2):
-    if model_name == 'unet':
-        backbone = partial(Unet, in_chan=in_chan, out_chan=out_chan, depth=4, chans=18)
-    elif model_name == 'resnet':
-        backbone = partial(ResNet, in_chan=in_chan, out_chan=out_chan, itterations=15, chans=32)
-    elif model_name == 'dncnn':
-        backbone = partial(DnCNN, in_chan=in_chan, out_chan=out_chan, feature_size=32, num_of_layers=15)
-    elif model_name == 'transformer':
-        backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
-        print('loaded swinunet!')
-    else:
-        raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
-
-    model = VarNet(backbone, num_cascades=6)
-    params = sum([x.numel()  for x in model.parameters()])
-    print(f'Model has {params:,}')
-    model.to(current_device)
-
-    return model
 
 def setup_devices(dist_backend, init_method, world_size):
     """set up ddp, gpu, or cpu based on arguments and current number of devices 
@@ -99,22 +76,24 @@ def setup_devices(dist_backend, init_method, world_size):
 
 
 def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler, profile=False):
-    running_loss = torch.Tensor([0]).to(device)
+    if profile:
+        print('PROFILING')
 
+    running_loss = torch.Tensor([0]).to(device)
     cm = setup_profile_context_manager(profile)
  
     with cm as prof:
-        for i, data in enumerate(dataloader):
-            if profile:
-                print('PROFILING')
-                if i > (1 + 1 + 3) * 2:
-                    break
-                if prof:
-                    prof.step()
-
+        for step, data in enumerate(dataloader):
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
+
+            if prof:
+                prof.step()
+                if step >= (1 + 1 + 3) * 2:
+                    break
+
             if scheduler:
                 scheduler.step()
+
 
     return running_loss.item()/len(dataloader)
 
@@ -132,13 +111,16 @@ def setup_profile_context_manager(profile):
     else: 
         max_files_number = 0
     
-    context_manager = torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile-' + str(max_files_number + 1)),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True
-        ) if profile else contextlib.nullcontext()
+    if profile:
+        context_manager = torch.profiler.profile(
+            schedule=torch.profiler.schedule(wait=1, warmup=1, active=10, repeat=2),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile-' + str(max_files_number + 1)),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True
+            ) 
+    else:
+        context_manager = contextlib.nullcontext()
     
     return context_manager
 
@@ -224,20 +206,17 @@ def to_device(data: tuple, device: str, loss_type: str):
     double_undersaple, undersample, k_space, k = data
     zero_fill_mask = k_space != 0
     if loss_type == 'supervised':
-        input_slice = undersample
-        target_slice = k_space
-        mask = undersample != 0
-        loss_mask = torch.ones_like(mask)
+        input_slice = undersample.to(device)
+        target_slice = k_space.to(device)
+        loss_mask = torch.ones_like(target_slice)
     else:
-        input_slice = double_undersaple
-        target_slice = undersample
+        input_slice = double_undersaple.to(device)
+        target_slice = undersample.to(device)
 
         if loss_type == 'nosier2noise':
             loss_mask = target_slice != 0
-            mask = input_slice != 0
         elif loss_type == 'ssdu' or loss_type == 'k-weighted':
             loss_mask = (target_slice != 0) & (input_slice == 0)
-            mask = input_slice != 0
         else:
             raise ValueError(f'loss mask should be ssdu, noiser2noise, k-weighted, or supervised but got {loss_type}')
 
@@ -245,10 +224,7 @@ def to_device(data: tuple, device: str, loss_type: str):
             loss_mask = loss_mask.type(torch.float32)
             loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
             
-    input_slice = input_slice.to(device)
-    target_slice = target_slice.to(device)
-    mask = mask.to(device)
-    loss_mask = loss_mask.to(device)
+    mask = input_slice != 0
     zero_fill_mask = zero_fill_mask.to(device)
 
     return mask, input_slice, target_slice, loss_mask, zero_fill_mask 

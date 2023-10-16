@@ -40,7 +40,7 @@ class SensetivityModel_mc(nn.Module):
             images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
         assert isinstance(images, torch.Tensor)
 
-        # convert to real numbers 
+        # convert to real numbers [b * contrast * coils, cmplx, h, w]
         images = complex_to_real(images)
         # norm 
         images, mean, std = self.norm(images)
@@ -59,45 +59,35 @@ class SensetivityModel_mc(nn.Module):
         images = images / root_sum_of_squares(images, coil_dim=2).unsqueeze(2)
         return images
 
-    def mask(self, coil_images, mask):
+    def mask(self, coil_images, center_mask):
         masked_k_space = coil_images.clone()
-        if mask.ndim == 5:
-            squeezed_mask = mask[:, :, 0, 0, :].to(torch.int8)
-        else: 
-            squeezed_mask = mask[:, 0, 0, :].to(torch.int8)
+        
+        # height doesn't matter (since column wise sampling) 
+        squeezed_mask = center_mask[:, :, 0, 0, :].to(torch.int8)
+        center = squeezed_mask.shape[-1] // 2
+        # Get the first zero index starting from the center. This gives us "left"
+        # and "right" sides of ACS
+        left = torch.argmin(squeezed_mask[..., :center].flip(-1), dim=-1)
+        right = torch.argmin(squeezed_mask[..., center:], dim=-1)
 
-
-        cent = squeezed_mask.shape[-1] // 2
-        # running argmin returns the first zero index
-        left = torch.argmin(squeezed_mask[..., :cent].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask[..., cent:], dim=-1)
-
-        # force symmetric
+        # force symmetric left and right acs boundries
         num_low_frequencies_tensor = torch.min(left, right)
 
-        mask = torch.zeros_like(masked_k_space, dtype=torch.bool)
-        if mask.ndim == 5:
-            # If we have an additional contrast dimension
-            for i in range(masked_k_space.shape[0]):
-                for j in range(masked_k_space.shape[1]):
-                    mask[i, j, ..., cent-num_low_frequencies_tensor[i, j]:cent + num_low_frequencies_tensor[i, j]] = True
-        else:
-            # if we don't have a contrast dimension
-            for i in range(masked_k_space.shape[0]):
-                mask[i, ..., cent-num_low_frequencies_tensor[i]:cent + num_low_frequencies_tensor[i]] = True
+        center_mask = torch.zeros_like(masked_k_space, dtype=torch.bool)
+        # loop through num_low freq tensor and set acs lines to true
+        for i in range(num_low_frequencies_tensor.shape[0]):
+            for j in range(num_low_frequencies_tensor.shape[1]):
+                center_mask[i, j, ..., center-num_low_frequencies_tensor[i, j]:center + num_low_frequencies_tensor[i, j]] = True
 
-
-        return masked_k_space * mask
+        return masked_k_space * center_mask
     
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
         b, c, h, w = x.shape
         x = x.view(b, 2, c // 2 * h * w)
 
-        mean = x.mean(dim=2).view(b, 2, 1, 1).detach()
-        std = x.std(dim=2).view(b, 2, 1, 1).detach()
-
-        std = std + 1e-8
+        mean = x.mean(dim=2).view(b, 2, 1, 1)
+        std = x.std(dim=2).view(b, 2, 1, 1)
 
         x = x.view(b, c, h, w)
 

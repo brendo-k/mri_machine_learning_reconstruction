@@ -60,6 +60,67 @@
                     "userUnhandled": ""
                 }
             }
+        },
+        "Run Supervised": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Supervised",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "program": "train_model.py",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": ["--loss_type", "supervised", "--contrast", "t1", "--max_epoch", "1"]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },"Run Supervised Fastmri": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Supervised",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "program": "train_varnet.py",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": ["--loss_type", "supervised", "--contrast", "t1", "--max_epoch", "1"]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },"kSpace Brats": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Supervised",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "module": "ml_recon.dataset.kspace_brats",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal"
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
         }
+
     }
 }
