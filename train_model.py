@@ -235,7 +235,10 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         output = output.cpu()
         
         # plot sensetivity maps
-        sensetivity_maps = model.sens_model(input_slice, mask)
+        cur_model = model
+        if isinstance(cur_model, torch.nn.parallel.DistributedDataParallel):
+            cur_model = cur_model.module
+        sensetivity_maps = cur_model.sens_model(input_slice, mask)
         for i in range(sensetivity_maps.shape[1]):
             writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
 
