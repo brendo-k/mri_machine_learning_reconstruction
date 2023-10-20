@@ -101,7 +101,8 @@
                     "userUnhandled": ""
                 }
             }
-        },"kSpace Brats": {
+        },
+        "kSpace Brats": {
             "adapter": "debugpy",
             "configuration": {
                 "name": "Run Supervised",
@@ -121,6 +122,5 @@
                 }
             }
         }
-
     }
 }

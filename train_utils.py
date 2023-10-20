@@ -80,7 +80,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
         print('PROFILING')
 
     running_loss = torch.Tensor([0]).to(device)
-    cm = setup_profile_context_manager(profile)
+    cm = setup_profile_context_manager(profile, 'train')
  
     with cm as prof:
         for step, data in enumerate(dataloader):
@@ -88,7 +88,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
 
             if prof:
                 prof.step()
-                if step >= (1 + 1 + 3) * 2:
+                if step >= (1 + 1 + 10) * 2:
                     break
 
             if scheduler:
@@ -97,7 +97,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
 
     return running_loss.item()/len(dataloader)
 
-def setup_profile_context_manager(profile):
+def setup_profile_context_manager(profile, train_type):
     """ create a context manager if global PROFILE flag is set to true else retruns
     null context manager
 
@@ -114,7 +114,7 @@ def setup_profile_context_manager(profile):
     if profile:
         context_manager = torch.profiler.profile(
             schedule=torch.profiler.schedule(wait=1, warmup=1, active=10, repeat=2),
-            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile-' + str(max_files_number + 1)),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile_' + train_type + '-' + str(max_files_number + 1)),
             record_shapes=True,
             profile_memory=True,
             with_stack=True
@@ -146,7 +146,7 @@ def train_step(model, loss_function, optimizer, data, device, loss_type) -> torc
     return loss_step
 
 
-def validate(model, loss_function, dataloader, device, supervised):
+def validate(model, loss_function, dataloader, device, supervised, profile=False):
     """ Validation loop. Loops through the entire validation dataset
 
     Args:
@@ -159,9 +159,16 @@ def validate(model, loss_function, dataloader, device, supervised):
     Returns:
         int: average validation loss per sample
     """
+
+    cm = setup_profile_context_manager(profile, 'val')
     val_running_loss = torch.Tensor([0]).to(device)
-    for data in dataloader:
-        val_running_loss += val_step(model, loss_function, device, data, supervised)
+    with cm as prof:
+        for step, data in enumerate(dataloader):
+            if prof:
+                prof.step()
+                if step >= (1 + 1 + 10) * 2:
+                    break
+            val_running_loss += val_step(model, loss_function, device, data, supervised)
     return val_running_loss.item()/len(dataloader)
 
 
@@ -208,7 +215,7 @@ def to_device(data: tuple, device: str, loss_type: str):
     if loss_type == 'supervised':
         input_slice = undersample.to(device)
         target_slice = k_space.to(device)
-        loss_mask = torch.ones_like(target_slice)
+        loss_mask = torch.ones_like(target_slice, dtype=torch.bool)
     else:
         input_slice = double_undersaple.to(device)
         target_slice = undersample.to(device)

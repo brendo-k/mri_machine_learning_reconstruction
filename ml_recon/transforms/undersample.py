@@ -8,10 +8,12 @@ from typing import Union, Callable
 from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 
-class UndersampleDecorator(Dataset):
+class Undersampling:
     def __init__(
         self, 
-        dataset: KSpaceDataset, 
+        nx: int = 256, 
+        ny: int = 256, 
+        contrasts: int = 4, 
         R: int = 4, 
         R_hat: int = 2,
         poly_order: int = 8,
@@ -20,11 +22,8 @@ class UndersampleDecorator(Dataset):
     ):
         super().__init__()
 
-        self.dataset = dataset
-        contrasts = dataset[0].shape[0]
-
-        self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
-        self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
+        self.omega_prob = gen_pdf_columns(nx, ny, 1/R, poly_order, acs_lines)
+        self.lambda_prob = gen_pdf_columns(nx, ny, 1/R_hat, poly_order, acs_lines)
 
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (contrasts, 1, 1))
         self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (contrasts, 1, 1))
@@ -36,21 +35,15 @@ class UndersampleDecorator(Dataset):
         self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
         self.transforms = transforms
 
-    def __len__(self):
-        return self.dataset.__len__()
-
-    def __getitem__(self, index):
-        k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
+    def __call__(self, k_space, index):
         
         under = apply_undersampling(index, self.omega_prob, k_space, deterministic=True)
         doub_under = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-        ones = torch.ones_like(under, dtype=torch.bool, requires_grad=False)
-        under = under * ones.detach()
+        ones = np.ones_like(under, dtype=bool)
+        under = under * ones
 
         data = (doub_under, under, k_space, self.k)
-        if self.transforms:
-            data = self.transforms(data)
         return data
 
     @staticmethod

@@ -1,4 +1,4 @@
-from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.Brats_dataset import SimulatedBrats
 import numpy as np
 import nibabel as nib
 import h5py
@@ -29,37 +29,38 @@ def process_file(file, out_path):
             continue
         if i >= images.shape[-1]-20:
             break
-        cur_images = dataset_test.resample(images[..., i])
-        k_space[..., i-70] = dataset_test.simulate_k_space(cur_images)
+        cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
+        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, 0)
 
-    k_space = np.transpose(k_space, (4, 0, 1, 2, 3))
+    k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
     try:
         os.mkdir(os.path.join(out_path, patient_name))
     except FileExistsError as e:
         print(e)
 
-    with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
-        dset = fr.create_dataset("k_space", k_space.shape, dtype=np.csingle)
-        dset[...] = k_space
-        dset = fr.create_dataset("contrasts", data=modality_name)
+    try:
+        with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
+            dset = fr.create_dataset("k_space", k_space.shape, chunks=(1, 1, 8, 256, 256), dtype=np.complex64)
+            dset[...] = k_space
+
+    except Exception as e:
+        print(e)
+
 
     #np.save(file=os.path.join(out_path, patient_name, patient_name), arr=k_space)
-
     with open(os.path.join(out_path, patient_name, 'labels'), 'w') as f:
         f.write(','.join(modality_name))
 
-    print(f'Done file {file}')
+    print(f'Done file {os.path.join(out_path, patient_name, patient_name + ".h5")}')
 
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/unchunked/'
+    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/chunked/'
     dataset_splits = ['train', 'test', 'val']
 
-    dataset_test = BratsDataset(os.path.join(dir, 'test'), nx=256, ny=256)
-
     # Create a pool of worker processes
-    num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    num_processes = 12#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
