@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import json
-from typing import Union, Callable 
+from typing import Optional, Callable, Union
 import torchvision.transforms.functional as F
 import torch
 import h5py
@@ -25,13 +25,15 @@ class FastMRIDataset(KSpaceDataset):
             nx:int = 256,
             ny:int = 256,
             build_new_header: bool = False,
-            transforms: Union[Callable, None] = None,
+            transforms: Optional[Callable] = None,
+            undersample: Optional[Callable] = None
             ):
 
         # call super constructor
         super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
+        self.undersample = undersample
 
         header_file = os.path.join(data_dir, 'header.json')
         if not os.path.isfile(header_file) or build_new_header:
@@ -60,6 +62,9 @@ class FastMRIDataset(KSpaceDataset):
 
         # add contrast dimension
         k_space = k_space.unsqueeze(0)
+
+        if self.undersample:
+            k_space = self.undersample(k_space)
 
         if self.transforms:
             k_space = self.transforms(k_space)
@@ -104,11 +109,3 @@ class FastMRIDataset(KSpaceDataset):
                 )
 
         return parser
-
-
-
-if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
-    dataset = SliceDataset(dir)
-    l = dataset[0]
-    t = dataset[100]

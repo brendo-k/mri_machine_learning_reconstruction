@@ -33,9 +33,10 @@ from train_utils import (
 
 
 # Globals
-PROFILE = True
+PROFILE = False
 
 def main():
+    print("Starting code")
     args = parser.parse_args()
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
@@ -49,19 +50,23 @@ def main():
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
-    if os.path.exists(writer_dir):
-        while os.path.exists(writer_dir):
-            if writer_dir[-1].isnumeric():
-                writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
-            else:
-                writer_dir += str(0)
 
-    os.makedirs(os.path.join(writer_dir, 'weight_dir'))
-    save_config(args, writer_dir)
-    if current_device == 0: 
-        writer = SummaryWriter(writer_dir)
-    else: 
+    if current_device == 0:
+        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+        if os.path.exists(writer_dir):
+            while os.path.exists(writer_dir):
+                if writer_dir[-1].isnumeric():
+                    writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
+                else:
+                    writer_dir += str(0)
+
+        os.makedirs(os.path.join(writer_dir, 'weight_dir'))
+        save_config(args, writer_dir)
+        if current_device == 0: 
+            writer = SummaryWriter(writer_dir)
+        else: 
+            writer = None
+    else:
         writer = None
 
     scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
@@ -76,57 +81,69 @@ def main():
         model.eval()
 
         end = time.time()
-        print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
+        print(f'Epoch: {epoch}, train loss: {train_loss}, time: {(end - start)/60} minutes')
 
-        if not PROFILE:
-            with torch.no_grad():
-                plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
-                val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
-                plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
-            
-            
-            if current_device == 0:
-                if writer:
-                    writer.add_scalar('train/loss', train_loss, epoch)
-                    writer.add_scalar('val/loss', val_loss, epoch)
-                    if scheduler:
-                        writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+        with torch.no_grad():
+            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
+            start = time.time()
+            val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type, PROFILE)
+            end = time.time()
+            print(f'Epoch: {epoch}, val loss: {train_loss}, time: {(end - start)/60} minutes')
+            plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
 
-    save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
+        if current_device == 0:
+            if epoch % 25 == 24:
+                save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, epoch, current_device)
+        
+        if current_device == 0:
+            if writer:
+                writer.add_scalar('train/loss', train_loss, epoch)
+                writer.add_scalar('val/loss', val_loss, epoch)
+                if scheduler:
+                    writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+
+    if current_device == 0:
+        save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
 
     if distributed:
         destroy_process_group()
 
-    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
-    
-    metrics = {}
-    dataset = test_loader.dataset.dataset
-
-    contrast_order = dataset.contrast_order
-    all_contrasts = ['t1', 't1ce', 'flair', 't2']
-    remaining_contrasts = [contrast for contrast in all_contrasts if contrast not in contrast_order]
-    for i in range(len(nmse)):
-        metrics['mse-' + contrast_order[i]] = nmse[i]
-        metrics['ssim-' + contrast_order[i]] = ssim[i]
-        metrics['psnr-' + contrast_order[i]] = psnr[i]
-
-    for contrast in remaining_contrasts:
-        metrics['mse-' + contrast] = 0
-        metrics['ssim-' + contrast] = 0
-        metrics['psnr-' + contrast] = 0
+    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
+     
+    if current_device == 0:
+        metrics = {}
+        dataset = test_loader.dataset
+        print(test_loader)
+        if isinstance(dataset, torch.utils.data.Subset):
+            dataset = dataset.dataset
+        dataset = dataset.dataset
         
 
-    if writer:
-        writer.add_hparams(
-                {
-                    'lr': args.lr, 
-                    'batch_size': args.batch_size, 
-                    'loss_type': args.loss_type, 
-                    'scheduler': args.scheduler,
-                    'max_epochs': args.max_epochs
-                },
-                metrics
-                )
+        contrast_order = dataset.contrast_order
+        all_contrasts = ['t1', 't1ce', 'flair', 't2']
+        remaining_contrasts = [contrast for contrast in all_contrasts if contrast not in contrast_order]
+        for i in range(len(nmse)):
+            metrics['mse-' + contrast_order[i]] = nmse[i]
+            metrics['ssim-' + contrast_order[i]] = ssim[i]
+            metrics['psnr-' + contrast_order[i]] = psnr[i]
+
+        for contrast in remaining_contrasts:
+            metrics['mse-' + contrast] = 0
+            metrics['ssim-' + contrast] = 0
+            metrics['psnr-' + contrast] = 0
+            
+
+        if writer:
+            writer.add_hparams(
+                    {
+                        'lr': args.lr, 
+                        'batch_size': args.batch_size, 
+                        'loss_type': args.loss_type, 
+                        'scheduler': args.scheduler,
+                        'max_epochs': args.max_epochs
+                    },
+                    metrics
+                    )
 
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
@@ -156,9 +173,11 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
     if distributed:
         print('Setting up distributed sampler')
         train_sampler = DistributedSampler(train_dataset)
+        val_sampler = DistributedSampler(val_dataset, shuffle=False)
         shuffle = False
     else:
         train_sampler = None 
+        val_sampler=None
         shuffle = True
 
     train_loader = DataLoader(train_dataset, 
@@ -171,6 +190,7 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
 
     val_loader = DataLoader(val_dataset, 
                             batch_size=arg.batch_size, 
+                            sampler=val_sampler,
                             num_workers=arg.num_workers, 
                             pin_memory=True,
                             )
@@ -190,35 +210,35 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
     and error magnified by 4
 
     Args:
-        model (nn.Module): model to reconstruct
-        val_loader (nn.utils.DataLoader): dataloader to take slice
-        device (str | int): device number/type
+        model (nn.Module): model used for reconstruction
+        val_loader (nn.utils.DataLoader): dataloader used to get slice
+        device (str | int): device number/type ('cpu' or 'gpu')
         writer (torch.utils.SummaryWriter): tensorboard summary writer
         epoch (int): epoch
+        loss_type (str): supervised, ssdu, noiser2noise
     """
     if device == 0:
-        # difference magnitude
-        difference_scaling = 4
 
-        # forward pass
+        # get data 
         if training_type == 'val':
             sample = tuple(data.unsqueeze(0) for data in data_loader.dataset[10])
-
         elif training_type == 'train':
             sample = next(iter(data_loader))
         else:
             raise ValueError(f'type should be either val or test but got {training_type}')
 
+        # forward pass
         mask, input_slice, target_slice, loss_mask, zf_mask = to_device(sample, device, 'supervised')
-        
         output = model(input_slice, mask)
         output *= zf_mask
         output = output * (input_slice == 0) + input_slice
         output = output.cpu()
         
+        # plot sensetivity maps
         sensetivity_maps = model.sens_model(input_slice, mask)
         for i in range(sensetivity_maps.shape[1]):
             writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
+
         # coil combination
         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=2)
         ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=2)
@@ -239,6 +259,8 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         # get scaling factor (skull is high intensity)
         image_scaling_factor = ground_truth.max()
 
+        # difference magnitude
+        difference_scaling = 4
         # scale images and difference
         image_scaled = output.abs()/image_scaling_factor
         diff_scaled = diff/(image_scaling_factor/difference_scaling)

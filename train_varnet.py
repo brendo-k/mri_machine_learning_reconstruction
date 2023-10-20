@@ -94,34 +94,34 @@ def main():
                     if scheduler:
                         writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
-    #save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
+    save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
 
-    #if distributed:
-    #    destroy_process_group()
+    if distributed:
+        destroy_process_group()
 
-    #nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
-    #
-    #metrics = {}
-    #dataset = test_loader.dataset.dataset
+    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
+    
+    metrics = {}
+    dataset = test_loader.dataset.dataset
 
-    #assert isinstance(dataset, BratsDataset)
-    #for i in range(len(nmse)):
-    #    metrics['mse-' + dataset.contrast_order[i]] = nmse[i]
-    #    metrics['ssim-' + dataset.contrast_order[i]] = ssim[i]
-    #    metrics['psnr-' + dataset.contrast_order[i]] = psnr[i]
-    #    
+    assert isinstance(dataset, BratsDataset)
+    for i in range(len(nmse)):
+        metrics['mse-' + dataset.contrast_order[i]] = nmse[i]
+        metrics['ssim-' + dataset.contrast_order[i]] = ssim[i]
+        metrics['psnr-' + dataset.contrast_order[i]] = psnr[i]
+        
 
-    #if writer:
-    #    writer.add_hparams(
-    #            {
-    #                'lr': args.lr, 
-    #                'batch_size': args.batch_size, 
-    #                'loss_type': args.loss_type, 
-    #                'scheduler': args.scheduler,
-    #                'max_epochs': args.max_epochs
-    #            },
-    #            metrics
-    #            )
+    if writer:
+        writer.add_hparams(
+                {
+                    'lr': args.lr, 
+                    'batch_size': args.batch_size, 
+                    'loss_type': args.loss_type, 
+                    'scheduler': args.scheduler,
+                    'max_epochs': args.max_epochs
+                },
+                metrics
+                )
 
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):

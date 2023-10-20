@@ -14,7 +14,7 @@ from ml_recon.utils import ifft_2d_img
 from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.Loss.ssim_loss import SSIMLoss
-from train_utils import to_device
+from train_utils import to_device, setup_profile_context_manager
 
 from torchvision.transforms import Compose
 
@@ -26,7 +26,7 @@ def main():
     model = setup_model(path, device)
     dataloader = setup_dataloader(data_dir)
 
-    test(model, dataloader, num_contrasts=4)
+    test(model, dataloader, num_contrasts=4, profile=False)
 
 def setup_model(weight_path, device):
     checkpoint = torch.load(weight_path, map_location=device)
@@ -52,7 +52,7 @@ def setup_dataloader(data_dir):
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
     return test_loader
 
-def test(model, test_loader, num_contrasts):
+def test(model, test_loader, num_contrasts, profile):
     torch.manual_seed(0)
     np.random.seed(0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -62,29 +62,35 @@ def test(model, test_loader, num_contrasts):
     ssim_values = torch.zeros((num_contrasts, len(test_loader)))
     psnr_values = torch.zeros((num_contrasts, len(test_loader)))
     ssim = SSIMLoss().to(device)
+    cm = setup_profile_context_manager(profile, 'test')
 
     model.eval()
-    for i, data in enumerate(test_loader):
-        with torch.no_grad():
-            mask, input, target, loss_mask, zero_filled = to_device(data, device, 'supervised')
-            
-            predicted_sampled = model(input, mask)
-            predicted_sampled = predicted_sampled * (input == 0) + input
-            
-            predicted_sampled = ifft_2d_img(predicted_sampled)
-            target = ifft_2d_img(target)
+    with cm as prof:
+        for i, data in enumerate(test_loader):
+            if prof:
+                prof.step()
+                if i >= (1 + 1 + 10) * 2:
+                    break
+            with torch.no_grad():
+                mask, input, target, loss_mask, zero_filled = to_device(data, device, 'supervised')
+                
+                predicted_sampled = model(input, mask)
+                predicted_sampled = predicted_sampled * (input == 0) + input
+                
+                predicted_sampled = ifft_2d_img(predicted_sampled)
+                target = ifft_2d_img(target)
 
-            target = root_sum_of_squares(target, coil_dim=2)
-            predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
+                target = root_sum_of_squares(target, coil_dim=2)
+                predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
 
-            assert isinstance(predicted_sampled, torch.Tensor)
-            assert isinstance(target, torch.Tensor)
+                assert isinstance(predicted_sampled, torch.Tensor)
+                assert isinstance(target, torch.Tensor)
 
-            for contrast in range(input.shape[1]):
-                nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
-                ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :], target[:, [contrast], :, :], target[:, contrast, :, :].max() - target[:, contrast, :, :].min())
-                psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
-    
+                for contrast in range(input.shape[1]):
+                    nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach()).detach()
+                    ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :].detach(), target[:, [contrast], :, :].detach(), target[:, contrast, :, :].max().detach() - target[:, contrast, :, :].min().detach()).detach()
+                    psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach())
+        
     ave_nmse = nmse_values.sum(1)/len(test_loader)
     ave_ssim = 1 - ssim_values.sum(1)/len(test_loader)
     ave_psnr = psnr_values.sum(1)/len(test_loader)

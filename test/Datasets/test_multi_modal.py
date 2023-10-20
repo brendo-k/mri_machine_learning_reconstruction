@@ -7,35 +7,29 @@ from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 
 @pytest.fixture
-def brats_dataset() -> BratsDataset:
+def brats_dataset(request) -> BratsDataset:
     torch.manual_seed(0)
-    dataset = BratsDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train/')
+    test_case_params = request.param
+    data_dir = test_case_params.get("directory")
+    dataset = BratsDataset(data_dir)
     return dataset
 
+test_cases = [
+    {"name": "Image Dataset", "directory": "/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train/"},
+    {"name": "Kspace Dataset", "directory": "/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/unchunked/train/"}
+]
+
+
+@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
 def test_init(brats_dataset):
-    data_list = brats_dataset.data_list[0]
-    keys = data_list.keys()
-    assert 'flair' in keys
-    assert 't1' in keys
-    assert 't1ce' in keys
-    assert 't2' in keys
+    contrast_order = brats_dataset.contrast_order
+    assert 'flair' in contrast_order
+    assert 't1' in contrast_order
+    assert 't1ce' in contrast_order
+    assert 't2' in contrast_order
 
-    dir_names = [os.path.dirname(file) for file in  data_list.values()]
-    # should all be the same values
-    assert len(set(dir_names)) == 1
 
-def test_apply_sensetivites(brats_dataset):
-    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
-    x_sense = brats_dataset.apply_sensetivities(x) 
-
-    assert x_sense.dtype == np.complex_
-    assert x_sense.ndim == 4
-    assert x_sense.shape == (5, 8, brats_dataset.nx, brats_dataset.ny)
-
-def test_generate_phase(brats_dataset):
-    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny) + 1j * np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
-    x_phase = brats_dataset.generate_and_apply_phase(x)
-
+@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
 def test_samples(brats_dataset):
     dataset = UndersampleDecorator(brats_dataset)
     doub_under, under, k_space, k = dataset[0]
@@ -58,6 +52,7 @@ def test_samples(brats_dataset):
         i_mask = under[i, ...] != 0
         assert not (first_contrast_mask == i_mask).all()
 
+@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
 def test_undersampling_all_same(brats_dataset):
     dataset = UndersampleDecorator(brats_dataset)
     doub_under, under, k_space, k = dataset[0]
