@@ -93,7 +93,7 @@ def main():
 
         if current_device == 0:
             if epoch % 25 == 24:
-                save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, epoch, current_device)
+                save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch, current_device)
         
         if current_device == 0:
             if writer:
@@ -103,14 +103,11 @@ def main():
                     writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
 
     if current_device == 0:
-        save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
+        save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
-    if distributed:
-        destroy_process_group()
 
-    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
-     
     if current_device == 0:
+        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
         metrics = {}
         dataset = test_loader.dataset
         print(test_loader)
@@ -144,6 +141,9 @@ def main():
                     },
                     metrics
                     )
+
+    if distributed:
+        destroy_process_group()
 
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
