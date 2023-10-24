@@ -59,7 +59,7 @@ class BratsDataset(KSpaceDataset):
         parser.add_argument(
                 '--data_dir', 
                 type=str, 
-                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/', 
+                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/with_labels/', 
                 help=''
                 )
 
