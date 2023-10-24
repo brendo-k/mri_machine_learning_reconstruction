@@ -97,7 +97,7 @@ class normalize(object):
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
 
-        image = root_sum_of_squares(ifft_2d_img(under.detach()), coil_dim=1)
+        image = root_sum_of_squares(ifft_2d_img(under), coil_dim=1)
 
         undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
 

@@ -45,9 +45,6 @@ class UndersampleDecorator(Dataset):
         under = apply_undersampling(index, self.omega_prob, k_space, deterministic=True)
         doub_under = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-        ones = torch.ones_like(under, dtype=torch.bool, requires_grad=False)
-        under = under * ones.detach()
-
         data = (doub_under, under, k_space, self.k)
         if self.transforms:
             data = self.transforms(data)

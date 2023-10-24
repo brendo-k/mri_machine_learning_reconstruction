@@ -129,7 +129,7 @@ def main():
             metrics['psnr-' + contrast] = 0
             
 
-        writer = SummaryWriter('/scratch/runs/metrics/')
+        writer = SummaryWriter('/home/kadotab/scratch/runs/metrics/')
         writer.add_hparams(
                 {
                     'lr': args.lr, 
