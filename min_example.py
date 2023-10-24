@@ -15,10 +15,5 @@ if __name__ == '__main__':
             }
     dataset = UndersampleDecorator(dataset, **undersampling_args)
 
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4)
-
-    for i in dataloader:
-        x = i[0]
-        y = i[0] * 2
-        del i
+    x = dataset[0]
 
