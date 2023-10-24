@@ -51,8 +51,9 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 
+    cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
     if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+        writer_dir = '/home/kadotab/scratch/runs/' + cur_time + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
         if os.path.exists(writer_dir):
             while os.path.exists(writer_dir):
                 if writer_dir[-1].isnumeric():
@@ -95,7 +96,6 @@ def main():
             if epoch % 25 == 24:
                 save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch, current_device)
         
-        if current_device == 0:
             if writer:
                 writer.add_scalar('train/loss', train_loss, epoch)
                 writer.add_scalar('val/loss', val_loss, epoch)
@@ -106,7 +106,6 @@ def main():
         save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
 
-    if current_device == 0:
         nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
         metrics = {}
         dataset = test_loader.dataset
@@ -130,17 +129,19 @@ def main():
             metrics['psnr-' + contrast] = 0
             
 
-        if writer:
-            writer.add_hparams(
-                    {
-                        'lr': args.lr, 
-                        'batch_size': args.batch_size, 
-                        'loss_type': args.loss_type, 
-                        'scheduler': args.scheduler,
-                        'max_epochs': args.max_epochs
-                    },
-                    metrics
-                    )
+        writer = SummaryWriter('/scratch/runs/metrics/')
+        writer.add_hparams(
+                {
+                    'lr': args.lr, 
+                    'batch_size': args.batch_size, 
+                    'loss_type': args.loss_type, 
+                    'scheduler': args.scheduler,
+                    'contrats': args.contrasts,
+                    'max_epochs': args.max_epochs
+                },
+                metrics,
+                run_name=cur_time + '-' + args.loss_type + '-' + args.contrasts
+                )
 
     if distributed:
         destroy_process_group()

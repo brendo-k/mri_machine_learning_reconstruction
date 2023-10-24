@@ -28,6 +28,7 @@ class SensetivityModel_mc(nn.Module):
     def forward(self, images, mask):
         if self.mask_center:
             images = self.mask(images, mask) 
+        images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
 
