@@ -7,7 +7,7 @@ from ml_recon.models import Unet
 from torch.utils.data import DataLoader
 import torch
 
-from ml_recon.transforms import to_tensor, normalize
+from ml_recon.transforms import normalize
 from ml_recon.dataset.Brats_dataset import BratsDataset 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator 
 from ml_recon.utils import ifft_2d_img

@@ -15,5 +15,5 @@ if __name__ == '__main__':
             }
     dataset = UndersampleDecorator(dataset, **undersampling_args)
 
-    x = dataset[0]
-
+    for i in dataset:
+        del i
