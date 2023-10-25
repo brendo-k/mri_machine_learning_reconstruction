@@ -138,7 +138,7 @@ def main():
                     'scheduler': args.scheduler,
                     'contrats': ','.join(args.contrasts),
                     'max_epochs': args.max_epochs
-                },
+                }
         print(hparams)
         writer.add_hparams(
                 hparams,
