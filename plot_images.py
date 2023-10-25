@@ -12,8 +12,8 @@ def plot(data, slice, type):
     ax[2].imshow(data[2, :, :], cmap='gray')
     ax[3].imshow(data[3, :, :], cmap='gray')
 
-    if not os.path.exists(os.path.join('images', 'train', file)):
-        os.makedirs(os.path.join('images', 'train', file))
+    if not os.path.exists(os.path.join('images', type, file)):
+        os.makedirs(os.path.join('images', type, file))
 
     plt.savefig(os.path.join('images', type, file, str(slice)))
     plt.close()
@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
 
     for file in os.listdir(val_dir):
-        file_names = os.path.join(val_dir, file)
+        file_names = os.path.join(val_dir, file, file + '.h5')
 
         with h5py.File(file_names, 'r') as fr:
             data = fr['k_space'][:]
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         plot_images(data, 'val')
 
     for file in os.listdir(test_dir):
-        file_names = os.path.join(test_dir, file)
+        file_names = os.path.join(test_dir, file, file + '.h5')
 
         with h5py.File(file_names, 'r') as fr:
             data = fr['k_space'][:]

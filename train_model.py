@@ -74,28 +74,28 @@ def main():
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
+
         if distributed:
             train_loader.sampler.set_epoch(epoch) #pyright: ignore
 
         model.train()
         train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, PROFILE)
-        model.eval()
-
         end = time.time()
         print(f'Epoch: {epoch}, train loss: {train_loss}, time: {(end - start)/60} minutes')
 
+        model.eval()
         with torch.no_grad():
             plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
             start = time.time()
             val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type, PROFILE)
             end = time.time()
-            print(f'Epoch: {epoch}, val loss: {train_loss}, time: {(end - start)/60} minutes')
+            print(f'Epoch: {epoch}, val loss: {val_loss}, time: {(end - start)/60} minutes')
             plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
+
 
         if current_device == 0:
             if epoch % 25 == 24:
                 save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch, current_device)
-        
             if writer:
                 writer.add_scalar('train/loss', train_loss, epoch)
                 writer.add_scalar('val/loss', val_loss, epoch)
@@ -130,17 +130,20 @@ def main():
             
 
         writer = SummaryWriter('/home/kadotab/scratch/runs/metrics/')
-        writer.add_hparams(
-                {
+        print(metrics)
+        hparams = {
                     'lr': args.lr, 
                     'batch_size': args.batch_size, 
                     'loss_type': args.loss_type, 
                     'scheduler': args.scheduler,
-                    'contrats': args.contrasts,
+                    'contrats': ','.join(args.contrasts),
                     'max_epochs': args.max_epochs
                 },
+        print(hparams)
+        writer.add_hparams(
+                hparams,
                 metrics,
-                run_name=cur_time + '-' + args.loss_type + '-' + args.contrasts
+                run_name=cur_time + '-' + args.loss_type + '-' + ','.join(args.contrasts)
                 )
 
     if distributed:
@@ -150,9 +153,9 @@ def main():
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
     
-    train_dataset = KSpaceBrats(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    val_dataset = KSpaceBrats(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    test_dataset = KSpaceBrats(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
 
     undersampling_args = {
                 'R': arg.R, 

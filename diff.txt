@@ -1,0 +1,2142 @@
+diff --git a/.vimspector.json b/.vimspector.json
+index 0a32f43..59b36ad 100644
+--- a/.vimspector.json
++++ b/.vimspector.json
+@@ -101,8 +101,7 @@
+                     "userUnhandled": ""
+                 }
+             }
+-        },
+-        "kSpace Brats": {
++        },"kSpace Brats": {
+             "adapter": "debugpy",
+             "configuration": {
+                 "name": "Run Supervised",
+@@ -122,5 +121,6 @@
+                 }
+             }
+         }
++
+     }
+ }
+diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..df503e4
+Binary files /dev/null and b/image.png differ
+diff --git a/min_example.py b/min_example.py
+deleted file mode 100644
+index 192ffd4..0000000
+--- a/min_example.py
++++ /dev/null
+@@ -1,19 +0,0 @@
+-from ml_recon.dataset.kspace_brats import KSpaceBrats
+-from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+-from torch.utils.data import DataLoader
+-from ml_recon.transforms import normalize
+-
+-if __name__ == '__main__':
+-    dataset = KSpaceBrats('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/with_labels/train', contrasts=['t1', 't1ce', 't2', 'flair'])
+-
+-    undersampling_args = {
+-                'R': 4, 
+-                'R_hat': 2, 
+-                'acs_lines': 10, 
+-                'poly_order': 8,
+-                'transforms': normalize()
+-            }
+-    dataset = UndersampleDecorator(dataset, **undersampling_args)
+-
+-    x = dataset[0]
+-
+diff --git a/ml_recon/dataset/Brats_dataset.py b/ml_recon/dataset/Brats_dataset.py
+index a9d4c68..abedc66 100644
+--- a/ml_recon/dataset/Brats_dataset.py
++++ b/ml_recon/dataset/Brats_dataset.py
+@@ -1,12 +1,17 @@
+ import os
++import csv
++import time
+ from typing import Callable, Optional, Union, Collection
+ from argparse import ArgumentParser
+ 
+-from torch.utils.data import Dataset
++from scipy.interpolate import interpn
++import torch
++import numpy as np
++
++import nibabel as nib
+ 
+-from ml_recon.dataset.simulated_brats_dataset import SimulatedBrats
+-from ml_recon.dataset.kspace_brats import KSpaceBrats
+ from ml_recon.dataset.k_space_dataset import KSpaceDataset
++from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
+ 
+ class BratsDataset(KSpaceDataset):
+     """
+@@ -21,35 +26,219 @@ class BratsDataset(KSpaceDataset):
+             ny:int = 256,
+             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
+             transforms: Optional[Callable] = None,
++            extension: str = "npy"
+             ):
+         assert contrasts, 'Contrast list should not be empty!'
+ 
+         super().__init__(nx=nx, ny=ny)
+ 
++        self.transforms = transforms
++        self.contrasts = np.array([contrast.lower() for contrast in contrasts])
++        self.extension = extension
++
+         sample_dir = os.listdir(data_dir)
+         sample_dir.sort()
+-        sample_files = os.listdir(os.path.join(data_dir, sample_dir[0]))
+-        file_path = os.path.join(data_dir, sample_dir[0], sample_files[0])
+-        _, extension = os.path.splitext(file_path)
+-
+-        if extension == '.h5':
+-            self.data = KSpaceBrats(data_dir, nx=nx, ny=ny, contrasts=contrasts, transforms=transforms)
+-        elif extension == '.gz' or extension == '.npy':
+-            self.data = SimulatedBrats(data_dir, nx=nx, ny=ny, contrasts=contrasts, transforms=transforms)
+-        else:
+-            raise ValueError(f"Can't load extension for {extension}")
+-
+-        self.contrasts = self.data.contrasts
+-        self.contrast_order = self.data.contrast_order
+ 
++        slices = []
++        self.data_list = []
+         
++        start = time.time()
++        for sample in sample_dir:
++            sample_path = os.path.join(data_dir, sample)
++            modalities = os.listdir(sample_path)
++            numpy_files = [file for file in modalities if file.endswith('.npy')]
++            num_npy = len(numpy_files)
++
++            patient_dict = {} 
++
++            if num_npy == 1:
++                self.simulated = True
++                patient_dict['all'] = os.path.join(sample_path, numpy_files[0])
++                num_slices = np.load(patient_dict['all']).shape[-1]
++            else:
++                self.simulated = False
++                self.seed = np.random.randint(0, 100_000)
++                patient_dict, num_slices = self.get_contrast_files(modalities, sample_path)
++
++            slices.append(num_slices)
++            self.data_list.append(patient_dict)
++
++        _, self.contrast_order = self.get_data_from_indecies(0, 0)
++        print(self.contrast_order)
++        self.slices = np.array(slices)
++        end = time.time()
++
++        print(f'Elapsed time {(end-start)/60}')
++
++        print(f'Found {sum(self.slices)} slices')
+ 
+     # length of dataset is the sum of the slices
+     def __len__(self):
+-        return len(self.data)
++        return sum(self.slices)
+ 
+     def __getitem__(self, index):
+-        return self.data[index]
++        volume_index, slice_index = self.get_vol_slice_index(index)
++        data, _ = self.get_data_from_indecies(volume_index, slice_index)
++        if not self.simulated:
++            images = self.resample(data)
++            images = np.transpose(images, (0, 2, 1))
++            data = self.simulate_k_space(images)
++        data = torch.from_numpy(data)
++
++        if self.transforms:
++            data = self.transforms(data)
++        return data
++
++    def get_contrast_files(self, modalities, sample_path):
++        patient_dict = {}
++        first_file = True
++        slices = -1
++        for modality in modalities:
++            # skip segmentation maps
++            if 'seg' in modality:
++                continue
++            if self.extension in modality:
++                modality_path = os.path.join(sample_path, modality)
++                modality_name = modality.split('_')[-1].split('.')[0]
++                patient_dict[modality_name] = modality_path
++
++                # get number of slices
++                if first_file: 
++                    first_file = False
++
++                    if self.extension == 'npy':
++                        slices = np.load(modality_path).shape[2]
++                    elif self.extension == 'nii.gz':
++                        slices = nib.nifti1.load(modality_path).get_fdata().shape[2]
++                    else:
++                        raise ValueError(f'no file reader for extension {self.extension}, only nii.gz and npy')
++        assert slices > 0
++
++        slices = slices - 90 # the first 70 slices and last 20 aren't useful
++        return patient_dict, slices
++
++    # get the volume index and slice index. This is done using the cumulative sum
++    # of the number of slices.
++    def get_vol_slice_index(self, index):
++        cumulative_slice_sum = np.cumsum(self.slices)
++        volume_index = np.sum(cumulative_slice_sum <= index)
++        # if volume index is zero, slice is just index
++        if volume_index == 0:
++            slice_index = index
++        # if volume index is larger than 1, its the cumulative sum of slices of volumes before subtracted
++        # from the index
++        else:
++            slice_index = index - cumulative_slice_sum[volume_index - 1] 
++        
++        if not self.simulated: 
++            slice_index += 70
++        return volume_index, slice_index 
++    
++    def get_data_from_indecies(self, volume_index, slice_index):
++        files = self.data_list[volume_index]
++        data = []
++        modality_label = []
++        if 'all' in files.keys():
++            data = np.load(files['all'])
++            data = data[..., slice_index]
++
++            labels_path = os.path.join(os.path.split(files['all'])[0], 'labels')
++            with open(labels_path, 'r') as fr:
++                reader = csv.reader(fr)
++                all_labels = np.array(list(reader))
++                all_labels = np.squeeze(all_labels)
++
++            use_modality_index = np.isin(all_labels, self.contrasts)
++            data = data[use_modality_index, ...]
++            modality_label = all_labels[use_modality_index]
++            
++        else:
++            for modality in sorted(files):
++                if modality.lower() in self.contrasts: 
++                    file_name = files[modality]
++                    ext = os.path.splitext(file_name)[1]
++                    if 'gz' in ext:
++                        file_object = nib.nifti1.load(file_name) 
++                        image = file_object.get_fdata()
++                    elif 'npy' in ext:
++                        image = np.load(file_name)
++                    else:
++                        raise ValueError(f'Can not load file with extention {ext}')
++
++                    slice = image[:, :, slice_index]
++                    data.append(slice)
++                    modality_label.append(modality)
++        
++            data = np.stack(data, axis=0)
++        return data, modality_label
++
++    def simulate_k_space(self, image):
++        image_w_sense = self.apply_sensetivities(image)
++        image_w_phase = self.generate_and_apply_phase(image_w_sense)
++        k_space = fft_2d_img(image_w_phase)
++        k_space = self.apply_noise(k_space)
++        return k_space
++
++    def apply_sensetivities(self, image):
++        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/sens.npy')
++        sense_map = sense_map.transpose((2, 0, 1))
++        sense_map = self.resample(sense_map)
++
++        sense_map = np.expand_dims(sense_map, 0)
++        image_sense = sense_map * np.expand_dims(image, 1)
++        return image_sense      
++
++    def generate_and_apply_phase(self, data):
++        center_region = 6
++        phase = self.build_phase(center_region)
++        data = self.apply_phase_map(data, phase)
++
++        return data
++    def build_phase(self, center_region):
++        nx = self.nx
++        ny = self.ny
++        phase_frequency = np.zeros((nx, ny), dtype=np.complex64)
++        center = (nx//2, ny//2)
++        center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
++        center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
++        rng = np.random.default_rng(self.seed)
++        coeff = rng.normal(size=(center_region, center_region)) + 1j * rng.normal(size=(center_region, center_region))
++        phase_frequency[center_box_x, center_box_y] = coeff
++
++        phase = fft_2d_img(phase_frequency)
++        phase = np.angle(phase)
++        
++        return phase
++
++    def apply_phase_map(self, data, phase):
++        data *= np.exp(1j * phase)
++        return data
++
++
++    def apply_noise(self, k_space):
++        rng = np.random.default_rng(self.seed)
++        noise_scale = 10
++        noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
++        k_space += noise
++        return k_space
++
++
++    def resample(self, data):
++        resample_height = self.ny
++        resample_width = self.nx 
++        contrasts, height, width = data.shape
++        y = np.arange(0, height)
++        x = np.arange(0, width)
++        c = np.arange(0, contrasts)
++
++        yi = np.linspace(0, height - 1, resample_height)
++        xi = np.linspace(0, width - 1, resample_width)
++        (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
++
++        new_data = interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten()))
++        
++        assert isinstance(new_data, np.ndarray)
++        return np.reshape(new_data, (contrasts, resample_height, resample_width))
+ 
+     @staticmethod
+     def add_model_specific_args(parent_parser):  # pragma: no-cover
+@@ -59,7 +248,7 @@ class BratsDataset(KSpaceDataset):
+         parser.add_argument(
+                 '--data_dir', 
+                 type=str, 
+-                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/with_labels/', 
++                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/', 
+                 help=''
+                 )
+ 
+diff --git a/ml_recon/dataset/fastMRI_dataset.py b/ml_recon/dataset/fastMRI_dataset.py
+index e55d08c..4118846 100644
+--- a/ml_recon/dataset/fastMRI_dataset.py
++++ b/ml_recon/dataset/fastMRI_dataset.py
+@@ -1,7 +1,7 @@
+ import numpy as np
+ import os
+ import json
+-from typing import Optional, Callable, Union
++from typing import Union, Callable 
+ import torchvision.transforms.functional as F
+ import torch
+ import h5py
+@@ -25,15 +25,13 @@ class FastMRIDataset(KSpaceDataset):
+             nx:int = 256,
+             ny:int = 256,
+             build_new_header: bool = False,
+-            transforms: Optional[Callable] = None,
+-            undersample: Optional[Callable] = None
++            transforms: Union[Callable, None] = None,
+             ):
+ 
+         # call super constructor
+         super().__init__(nx=nx, ny=ny)
+ 
+         self.transforms = transforms
+-        self.undersample = undersample
+ 
+         header_file = os.path.join(data_dir, 'header.json')
+         if not os.path.isfile(header_file) or build_new_header:
+@@ -63,9 +61,6 @@ class FastMRIDataset(KSpaceDataset):
+         # add contrast dimension
+         k_space = k_space.unsqueeze(0)
+ 
+-        if self.undersample:
+-            k_space = self.undersample(k_space)
+-
+         if self.transforms:
+             k_space = self.transforms(k_space)
+         return k_space
+@@ -109,3 +104,11 @@ class FastMRIDataset(KSpaceDataset):
+                 )
+ 
+         return parser
++
++
++
++if __name__ == '__main__':
++    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
++    dataset = SliceDataset(dir)
++    l = dataset[0]
++    t = dataset[100]
+diff --git a/ml_recon/dataset/kspace_brats.py b/ml_recon/dataset/kspace_brats.py
+index d33b386..ea557e9 100644
+--- a/ml_recon/dataset/kspace_brats.py
++++ b/ml_recon/dataset/kspace_brats.py
+@@ -27,7 +27,6 @@ class KSpaceBrats(KSpaceDataset):
+             ny:int = 256,
+             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
+             transforms: Optional[Callable] = None,
+-            undersampling: Optional[Callable] = None,
+             extension: str = "npy"
+             ):
+         assert contrasts, 'Contrast list should not be empty!'
+@@ -35,7 +34,6 @@ class KSpaceBrats(KSpaceDataset):
+         super().__init__(nx=nx, ny=ny)
+ 
+         self.transforms = transforms
+-        self.undersampling = undersampling
+         self.contrasts = np.array([contrast.lower() for contrast in contrasts])
+         self.extension = extension
+ 
+@@ -44,72 +42,101 @@ class KSpaceBrats(KSpaceDataset):
+ 
+         slices = []
+         data_list = []
+-        contrast_order = []
+         
+         start = time.time()
+-        first = True
+         for sample in sample_dir:
+             sample_path = os.path.join(data_dir, sample)
+             sample_file = [file for file in os.listdir(sample_path) if 'h5' in file]
+             sample_file_path = os.path.join(sample_path, sample_file[0])
+             with h5py.File(sample_file_path, 'r') as fr:
+-                k_space = fr['k_space']
+-                num_slices = k_space.shape[0]
+-                slices.append(num_slices)
+-                if first:
+-                    contrast_order = fr['contrasts'][:].astype('U')
+-                    first = False
++                slices.append(fr['k_space'].shape[0])
+ 
+             data_list.append(sample_file_path)
+ 
+-        end = time.time()
+-        print(f'Elapsed time {(end-start)/60}')
+-
+-
+-        self.contrast_order_indexes = np.isin(contrast_order, contrasts)
+-        self.contrast_order = contrast_order[self.contrast_order_indexes]
+-        
+         self.file_list = np.array(data_list)
++        _, self.contrast_order = self.get_data_from_indecies(0, 0)
+         print(self.contrast_order)
+         self.slices = np.array(slices)
+-        self.cumulative_slice_sum = np.cumsum(self.slices)
+-        self.length = self.cumulative_slice_sum[-1]
++        end = time.time()
++
++        print(f'Elapsed time {(end-start)/60}')
+ 
+         print(f'Found {sum(self.slices)} slices')
+ 
+     # length of dataset is the sum of the slices
+     def __len__(self):
+-        return self.length
++        return sum(self.slices)
+ 
+     def __getitem__(self, index):
+         volume_index, slice_index = self.get_vol_slice_index(index)
+-        data = self.get_data_from_indecies(volume_index, slice_index)
+-
+-        if self.undersampling: 
+-            data = self.undersampling(data, index)
++        data, _ = self.get_data_from_indecies(volume_index, slice_index)
+ 
+         if self.transforms:
+             data = self.transforms(data)
+-
+         return data
+ 
+     # get the volume index and slice index. This is done using the cumulative sum
+     # of the number of slices.
+     def get_vol_slice_index(self, index):
+-        volume_index = np.sum(self.cumulative_slice_sum <= index)
++        cumulative_slice_sum = np.cumsum(self.slices)
++        volume_index = np.sum(cumulative_slice_sum <= index)
+         # if volume index is zero, slice is just index
+         if volume_index == 0:
+             slice_index = index
+         # if volume index is larger than 1, its the cumulative sum of slices of volumes before subtracted
+         # from the index
+         else:
+-            slice_index = index - self.cumulative_slice_sum[volume_index - 1] 
++            slice_index = index - cumulative_slice_sum[volume_index - 1] 
+         
+         return volume_index, slice_index 
+     
+     def get_data_from_indecies(self, volume_index, slice_index):
+         file = self.file_list[volume_index]
+         with h5py.File(file, 'r') as fr:
+-            data = torch.as_tensor(fr['k_space'][slice_index, self.contrast_order_indexes])
+-
+-        return data.permute((0, 1, 3, 2))
++            contrasts = fr['contrasts'][:].astype('U')
++
++            use_modality_index = np.isin(contrasts, self.contrasts)
++            modality_label = contrasts[use_modality_index]
++
++            data = fr['k_space'][slice_index, use_modality_index, :, :, :]
++            
++        return torch.as_tensor(data), modality_label
++
++    @staticmethod
++    def add_model_specific_args(parent_parser):  # pragma: no-cover
++        parser = KSpaceDataset.add_model_specific_args(parent_parser)
++        parser = ArgumentParser(parents=[parser], add_help=False)
++
++        parser.add_argument(
++                '--data_dir', 
++                type=str, 
++                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/', 
++                help=''
++                )
++
++        parser.add_argument(
++                '--contrasts', 
++                type=str, 
++                nargs='+',
++                default=['t1', 't2', 'flair', 't1ce'], 
++                help=''
++                )
++
++        return parser
++
++from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
++from ml_recon.transforms import normalize
++if __name__ == '__main__':
++    
++    parser = ArgumentParser()
++    parser = KSpaceBrats.add_model_specific_args(parser)
++    args = parser.parse_args()
++    dataset = KSpaceBrats(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
++    dataset = UndersampleDecorator(dataset, transforms=normalize())
++
++    counter = 0
++    for i in dataset:
++        x = i[0]
++        counter += 1
++        if counter > 1000: 
++            break
+diff --git a/ml_recon/dataset/self_supervised_decorator.py b/ml_recon/dataset/self_supervised_decorator.py
+index 4ad48a3..77004c1 100644
+--- a/ml_recon/dataset/self_supervised_decorator.py
++++ b/ml_recon/dataset/self_supervised_decorator.py
+@@ -18,8 +18,6 @@ class UndersampleDecorator(Dataset):
+         acs_lines: int = 10,
+         transforms: Union[Callable, None] = None
+     ):
+-        super().__init__()
+-
+         self.dataset = dataset
+         contrasts = dataset[0].shape[0]
+ 
+diff --git a/ml_recon/dataset/simulated_brats_dataset.py b/ml_recon/dataset/simulated_brats_dataset.py
+deleted file mode 100644
+index 11fdaaf..0000000
+--- a/ml_recon/dataset/simulated_brats_dataset.py
++++ /dev/null
+@@ -1,255 +0,0 @@
+-import os
+-import csv
+-import time
+-from typing import Callable, Optional, Union, Collection
+-from argparse import ArgumentParser
+-
+-from scipy.interpolate import interpn
+-import torch
+-import numpy as np
+-
+-import nibabel as nib
+-
+-from ml_recon.dataset.k_space_dataset import KSpaceDataset
+-from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
+-
+-class SimulatedBrats(KSpaceDataset):
+-    """
+-    Takes data directory and creates a dataset. Before using you need to specify the file reader 
+-    to use in the filereader variable. 
+-    """
+-
+-    def __init__(
+-            self,
+-            data_dir: Union[str, os.PathLike], 
+-            nx:int = 256,
+-            ny:int = 256,
+-            contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
+-            transforms: Optional[Callable] = None,
+-            extension: str = "npy"
+-            ):
+-        assert contrasts, 'Contrast list should not be empty!'
+-
+-        super().__init__(nx=nx, ny=ny)
+-
+-        self.transforms = transforms
+-        self.contrasts = np.array([contrast.lower() for contrast in contrasts])
+-        self.extension = extension
+-
+-        sample_dir = os.listdir(data_dir)
+-        sample_dir.sort()
+-
+-        slices = []
+-        self.data_list = []
+-        
+-        start = time.time()
+-        for sample in sample_dir:
+-            sample_path = os.path.join(data_dir, sample)
+-            modalities = os.listdir(sample_path)
+-
+-            patient_dict = {} 
+-
+-            self.seed = np.random.randint(0, 100_000)
+-            patient_dict = self.get_contrast_files(modalities, sample_path)
+-            slices.append(self.get_num_slices(patient_dict))
+-
+-            self.data_list.append(patient_dict)
+-
+-        _, self.contrast_order = self.get_data_from_indecies(0, 0)
+-        print(self.contrast_order)
+-        self.slices = np.array(slices)
+-        end = time.time()
+-
+-        print(f'Elapsed time {(end-start)/60}')
+-
+-        print(f'Found {sum(self.slices)} slices')
+-
+-    # length of dataset is the sum of the slices
+-    def __len__(self):
+-        return sum(self.slices)
+-
+-    def __getitem__(self, index):
+-        volume_index, slice_index = self.get_vol_slice_index(index)
+-        data, _ = self.get_data_from_indecies(volume_index, slice_index)
+-        images = self.resample(data, self.nx, self.ny)
+-        images = np.transpose(images, (0, 2, 1))
+-        data = SimulatedBrats.simulate_k_space(images, self.seed)
+-        data = torch.from_numpy(data)
+-
+-        if self.transforms:
+-            data = self.transforms(data)
+-        return data
+-
+-    def get_contrast_files(self, modalities, sample_path):
+-        patient_dict = {}
+-        for modality in modalities:
+-            # skip segmentation maps
+-            if 'seg' in modality:
+-                continue
+-            if self.extension in modality:
+-                modality_path = os.path.join(sample_path, modality)
+-                modality_name = modality.split('_')[-1].split('.')[0]
+-                patient_dict[modality_name] = modality_path
+-
+-        return patient_dict
+-
+-    
+-    def get_num_slices(self, patient_dict):
+-        modality_path = patient_dict['t1']
+-        if self.extension == 'npy':
+-            slices = np.load(modality_path).shape[2]
+-        elif self.extension == 'nii.gz':
+-            slices = nib.nifti1.load(modality_path).get_fdata().shape[2]
+-        else:
+-            raise ValueError(f'no file reader for extension {self.extension}, only nii.gz and npy')
+-        assert slices > 0
+-        slices = slices - 90 # the first 70 slices and last 20 aren't useful
+-        
+-        return slices
+-        
+-
+-    # get the volume index and slice index. This is done using the cumulative sum
+-    # of the number of slices.
+-    def get_vol_slice_index(self, index):
+-        cumulative_slice_sum = np.cumsum(self.slices)
+-        volume_index = np.sum(cumulative_slice_sum <= index)
+-        # if volume index is zero, slice is just index
+-        if volume_index == 0:
+-            slice_index = index
+-        # if volume index is larger than 1, its the cumulative sum of slices of volumes before subtracted
+-        # from the index
+-        else:
+-            slice_index = index - cumulative_slice_sum[volume_index - 1] 
+-        
+-        slice_index += 70
+-        return volume_index, slice_index 
+-
+-    
+-    def get_data_from_indecies(self, volume_index, slice_index):
+-        files = self.data_list[volume_index]
+-        data = []
+-        modality_label = []
+-        if 'all' in files.keys():
+-            data = np.load(files['all'])
+-            data = data[..., slice_index]
+-
+-            labels_path = os.path.join(os.path.split(files['all'])[0], 'labels')
+-            with open(labels_path, 'r') as fr:
+-                reader = csv.reader(fr)
+-                all_labels = np.array(list(reader))
+-                all_labels = np.squeeze(all_labels)
+-
+-            use_modality_index = np.isin(all_labels, self.contrasts)
+-            data = data[use_modality_index, ...]
+-            modality_label = all_labels[use_modality_index]
+-            
+-        else:
+-            for modality in sorted(files):
+-                if modality.lower() in self.contrasts: 
+-                    file_name = files[modality]
+-                    ext = os.path.splitext(file_name)[1]
+-                    if 'gz' in ext:
+-                        file_object = nib.nifti1.load(file_name) 
+-                        image = file_object.get_fdata()
+-                    elif 'npy' in ext:
+-                        image = np.load(file_name)
+-                    else:
+-                        raise ValueError(f'Can not load file with extention {ext}')
+-
+-                    slice = image[:, :, slice_index]
+-                    data.append(slice)
+-                    modality_label.append(modality)
+-        
+-            data = np.stack(data, axis=0)
+-        return data, modality_label
+-
+-    @staticmethod
+-    def simulate_k_space(image, seed):
+-        image_w_sense = SimulatedBrats.apply_sensetivities(image)
+-        image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed)
+-        k_space = fft_2d_img(image_w_phase)
+-        k_space = SimulatedBrats.apply_noise(k_space, seed)
+-        return k_space
+-
+-    @staticmethod
+-    def apply_sensetivities(image):
+-        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/sens.npy')
+-        sense_map = sense_map.transpose((2, 0, 1))
+-        sense_map = SimulatedBrats.resample(sense_map, image.shape[1], image.shape[2])
+-
+-        sense_map = np.expand_dims(sense_map, 0)
+-        image_sense = sense_map * np.expand_dims(image, 1)
+-        return image_sense      
+-
+-    @staticmethod
+-    def generate_and_apply_phase(data, seed, center_region=6):
+-        phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
+-        data = SimulatedBrats.apply_phase_map(data, phase)
+-        return data
+-
+-
+-    @staticmethod
+-    def build_phase(center_region, nx, ny, seed):
+-        phase_frequency = np.zeros((nx, ny), dtype=np.complex64)
+-        center = (nx//2, ny//2)
+-        center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
+-        center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
+-        rng = np.random.default_rng(seed)
+-        coeff = rng.normal(size=(center_region, center_region)) + 1j * rng.normal(size=(center_region, center_region))
+-        phase_frequency[center_box_x, center_box_y] = coeff
+-
+-        phase = fft_2d_img(phase_frequency)
+-        phase = np.angle(phase)
+-        phase = phase.astype(float)
+-        
+-        return phase
+-
+-
+-    @staticmethod
+-    def apply_phase_map(data, phase):
+-        return data * np.exp(1j * phase)
+-
+-
+-    @staticmethod
+-    def apply_noise(k_space, seed):
+-        rng = np.random.default_rng(seed)
+-        noise_scale = 10
+-        noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
+-        k_space += noise
+-        return k_space
+-
+-
+-    @staticmethod
+-    def resample(data, nx, ny):
+-        resample_height = ny
+-        resample_width = nx 
+-        contrasts, height, width = data.shape
+-        y = np.arange(0, height)
+-        x = np.arange(0, width)
+-        c = np.arange(0, contrasts)
+-
+-        yi = np.linspace(0, height - 1, resample_height)
+-        xi = np.linspace(0, width - 1, resample_width)
+-        (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
+-
+-        new_data = interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten()))
+-        
+-        assert isinstance(new_data, np.ndarray)
+-        return np.reshape(new_data, (contrasts, resample_height, resample_width))
+-
+-
+-#from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+-#if __name__ == '__main__':
+-#    
+-#    parser = ArgumentParser()
+-#    parser = BratsDataset.add_model_specific_args(parser)
+-#    args = parser.parse_args()
+-#    dataset = SimulatedBrats(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
+-#    dataset = UndersampleDecorator(dataset)
+-#
+-#    i = dataset[0]
+-#    image = ifft_2d_img(i[2])
+-#    image = root_sum_of_squares(image[0], coil_dim=0)
+-#    import matplotlib.pyplot as plt
+-#    plt.imshow(image)
+-#    plt.savefig('image')
+diff --git a/ml_recon/dataset/undersample.py b/ml_recon/dataset/undersample.py
+index e308024..bf951cf 100644
+--- a/ml_recon/dataset/undersample.py
++++ b/ml_recon/dataset/undersample.py
+@@ -6,8 +6,9 @@ def calc_k(lambda_probability, omega_probability):
+     return K
+     
+ def apply_undersampling(index, prob_map, k_space, deterministic):
++    contrasts = k_space.shape[0]
+     rng = get_random_generator(index, deterministic)
+-    mask = get_mask_from_distribution(prob_map, rng)
++    mask = get_mask_from_distribution(prob_map, rng, contrasts)
+     undersampled = k_space * np.expand_dims(mask, 1)
+     return undersampled
+     
+@@ -55,9 +56,9 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
+ 
+     return prob_map
+ 
+-def get_mask_from_distribution(prob_map, rng):
++def get_mask_from_distribution(prob_map, rng, contrasts):
+     prob_map[prob_map > 0.99] = 1
+-    (_, nx, _) = np.shape(prob_map)
++    (contrast, nx, _) = np.shape(prob_map)
+     mask1d = rng.binomial(1, prob_map[:, 0, :]).astype(bool)
+     mask = np.repeat(mask1d[:, np.newaxis, :], nx, axis=1)
+     return mask
+diff --git a/ml_recon/models/SensetivityModel_mc.py b/ml_recon/models/SensetivityModel_mc.py
+index 51a085a..a35bf12 100644
+--- a/ml_recon/models/SensetivityModel_mc.py
++++ b/ml_recon/models/SensetivityModel_mc.py
+@@ -28,7 +28,6 @@ class SensetivityModel_mc(nn.Module):
+     def forward(self, images, mask):
+         if self.mask_center:
+             images = self.mask(images, mask) 
+-        images = images[:, [0], :, :, :]
+ 
+         images = ifft_2d_img(images, axes=[-1, -2])
+ 
+diff --git a/ml_recon/transforms/transforms.py b/ml_recon/transforms/transforms.py
+index 3d7a5c1..9fd698c 100644
+--- a/ml_recon/transforms/transforms.py
++++ b/ml_recon/transforms/transforms.py
+@@ -98,11 +98,15 @@ class normalize(object):
+         doub_under, under, sampled, k = sample
+ 
+         image = root_sum_of_squares(ifft_2d_img(under), coil_dim=1)
++        assert isinstance(image, torch.Tensor)
+ 
+-        undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
++        undersample_max = image.amax((1, 2), keepdim=True)
+ 
++        under = under / undersample_max.unsqueeze(1)
++        sampled = sampled / undersample_max.unsqueeze(1)
++        doub_under = doub_under / undersample_max.unsqueeze(1)
+ 
+-        return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k)
++        return (doub_under, under, sampled, k)
+ 
+ 
+ # Normalize to [0, 1] range
+diff --git a/ml_recon/transforms/undersample.py b/ml_recon/transforms/undersample.py
+deleted file mode 100644
+index 7b941ac..0000000
+--- a/ml_recon/transforms/undersample.py
++++ /dev/null
+@@ -1,86 +0,0 @@
+-import torch
+-import numpy as np
+-import random
+-from torch.utils.data import Dataset
+-from argparse import ArgumentParser
+-
+-from typing import Union, Callable 
+-from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
+-from ml_recon.dataset.k_space_dataset import KSpaceDataset
+-
+-class Undersampling:
+-    def __init__(
+-        self, 
+-        nx: int = 256, 
+-        ny: int = 256, 
+-        contrasts: int = 4, 
+-        R: int = 4, 
+-        R_hat: int = 2,
+-        poly_order: int = 8,
+-        acs_lines: int = 10,
+-        transforms: Union[Callable, None] = None
+-    ):
+-        super().__init__()
+-
+-        self.omega_prob = gen_pdf_columns(nx, ny, 1/R, poly_order, acs_lines)
+-        self.lambda_prob = gen_pdf_columns(nx, ny, 1/R_hat, poly_order, acs_lines)
+-
+-        self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (contrasts, 1, 1))
+-        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (contrasts, 1, 1))
+-
+-        one_minus_eps = 1 - 1e-3
+-        self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
+-        self.random_index = random.randint(0, 10000)
+-
+-        self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
+-        self.transforms = transforms
+-
+-    def __call__(self, k_space, index):
+-        
+-        under = apply_undersampling(index, self.omega_prob, k_space, deterministic=True)
+-        doub_under = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
+-
+-        ones = np.ones_like(under, dtype=bool)
+-        under = under * ones
+-
+-        data = (doub_under, under, k_space, self.k)
+-        return data
+-
+-    @staticmethod
+-    def add_model_specific_args(parent_parser):  
+-        if parent_parser:
+-            parser = ArgumentParser(parents=[parent_parser], add_help=False)
+-        else:
+-            parser = ArgumentParser()
+-
+-        parser.add_argument(
+-                "--R", 
+-                default=4,
+-                type=int,
+-                help="Omega undersampling factor"
+-                )
+-
+-        parser.add_argument(
+-                "--R_hat", 
+-                default=2,
+-                type=int,
+-                help="Lambda undersampling factor"
+-                )
+-
+-        parser.add_argument(
+-                "--poly_order", 
+-                default=8,
+-                type=int,
+-                help="Polynomial order for undersampling"
+-                )
+-
+-        parser.add_argument(
+-                "--acs_lines", 
+-                default=10,
+-                type=int,
+-                help="Number of lines to keep in auto calibration region"
+-                )
+-
+-        return parser
+-
+-
+diff --git a/plot_images.py b/plot_images.py
+index e9d037c..af87d47 100644
+--- a/plot_images.py
++++ b/plot_images.py
+@@ -1,60 +1,48 @@
++import matplotlib.pyplot as plt 
++import nibabel as nib
+ import os
+-import h5py
+-import matplotlib.pyplot as plt
+-from ml_recon.utils import ifft_2d_img, root_sum_of_squares
+-
+-def plot(data, slice, type):
+-    data = root_sum_of_squares(ifft_2d_img(data), coil_dim=1)
+-
+-    _, ax = plt.subplots(nrows=1, ncols=4)
+-    ax[0].imshow(data[0, :, :], cmap='gray')
+-    ax[1].imshow(data[1, :, :], cmap='gray')
+-    ax[2].imshow(data[2, :, :], cmap='gray')
+-    ax[3].imshow(data[3, :, :], cmap='gray')
+-
+-    if not os.path.exists(os.path.join('images', 'train', file)):
+-        os.makedirs(os.path.join('images', 'train', file))
+-
+-    plt.savefig(os.path.join('images', type, file, str(slice)))
+-    plt.close()
+-
+-def plot_images(data, type):
+-    slices = [0, 10, 30, 50, -1]
+-    for slice in slices:
+-        data_slice = data[slice, :, :, :, :]
+-        plot(data_slice, slice, type)
++from ml_recon.transforms import normalize
++from ml_recon.dataset.Brats_dataset import BratsDataset
++from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
++from ml_recon.utils import image_slices, ifft_2d_img, root_sum_of_squares
+ 
+ if __name__ == '__main__':
+-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/with_labels/'
+-    train_dir = os.path.join(data_dir, 'train')
+-    val_dir = os.path.join(data_dir, 'val')
+-    test_dir = os.path.join(data_dir, 'test')
+-
+-
+-    for file in os.listdir(train_dir):
+-        file_names = os.path.join(train_dir, file, file + '.h5')
+-
+-        with h5py.File(file_names, 'r') as fr:
+-            data = fr['k_space'][:]
+-
+-        plot_images(data, 'train')
+-
+-
+-    for file in os.listdir(val_dir):
+-        file_names = os.path.join(val_dir, file)
+-
+-        with h5py.File(file_names, 'r') as fr:
+-            data = fr['k_space'][:]
+-
+-        plot_images(data, 'val')
+-
+-    for file in os.listdir(test_dir):
+-        file_names = os.path.join(test_dir, file)
+-
+-        with h5py.File(file_names, 'r') as fr:
+-            data = fr['k_space'][:]
+-        
+-        plot_images(data, 'test')
+-
++    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
++    train_dataset = BratsDataset(os.path.join(data_dir, 'train'))
++    val_dataset = BratsDataset(os.path.join(data_dir, 'val'))
++    test_dataset = BratsDataset(os.path.join(data_dir, 'test'))
++
++    undersampling_args = {
++                'transforms': normalize()
++            }
++    
++    train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
++    val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
++    test_dataset = UndersampleDecorator(test_dataset, **undersampling_args)
++
++
++    #for i, value in enumerate(train_dataset):
++    #    double, under, k_space, k = value
++    #    images = ifft_2d_img(k_space)
++    #    images = root_sum_of_squares(images, coil_dim=1)
++    #    image_slices(images)
++    #    plt.savefig('images/train/' + str(i))
++    #    plt.close()
++
++    for i, value in enumerate(val_dataset):
++        double, under, k_space, k = value
++        images = ifft_2d_img(k_space)
++        images = root_sum_of_squares(images, coil_dim=1)
++        image_slices(images)
++        plt.savefig('images/val/' + str(i))
++        plt.close()
++
++    #for i, value in enumerate(test_dataset):
++    #    double, under, k_space, k = value
++    #    images = ifft_2d_img(k_space)
++    #    images = root_sum_of_squares(images, coil_dim=1)
++    #    image_slices(images)
++    #    plt.savefig('images/test/' + str(i))
++    #    plt.close()
+ 
+ 
+diff --git a/setup.py b/setup.py
+deleted file mode 100644
+index 3a0c86e..0000000
+--- a/setup.py
++++ /dev/null
+@@ -1,11 +0,0 @@
+-from setuptools import setup
+-
+-setup(
+-    name="ml_recon",
+-    version="0.1",
+-    packages=["ml_recon"],
+-    install_requires=[
+-        # List your package dependencies here
+-    ],
+-)
+-
+diff --git a/simulate_k_space.py b/simulate_k_space.py
+index 4af4a79..fb288d8 100644
+--- a/simulate_k_space.py
++++ b/simulate_k_space.py
+@@ -1,4 +1,4 @@
+-from ml_recon.dataset.Brats_dataset import SimulatedBrats
++from ml_recon.dataset.Brats_dataset import BratsDataset
+ import numpy as np
+ import nibabel as nib
+ import h5py
+@@ -29,38 +29,37 @@ def process_file(file, out_path):
+             continue
+         if i >= images.shape[-1]-20:
+             break
+-        cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
+-        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, 0)
++        cur_images = dataset_test.resample(images[..., i])
++        k_space[..., i-70] = dataset_test.simulate_k_space(cur_images)
+ 
+-    k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
++    k_space = np.transpose(k_space, (4, 0, 1, 2, 3))
+     try:
+         os.mkdir(os.path.join(out_path, patient_name))
+     except FileExistsError as e:
+         print(e)
+ 
+-    try:
+-        with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
+-            dset = fr.create_dataset("k_space", k_space.shape, chunks=(1, 1, 8, 256, 256), dtype=np.complex64)
+-            dset[...] = k_space
+-
+-    except Exception as e:
+-        print(e)
+-
++    with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
++        dset = fr.create_dataset("k_space", k_space.shape, dtype=np.csingle)
++        dset[...] = k_space
++        dset = fr.create_dataset("contrasts", data=modality_name)
+ 
+     #np.save(file=os.path.join(out_path, patient_name, patient_name), arr=k_space)
++
+     with open(os.path.join(out_path, patient_name, 'labels'), 'w') as f:
+         f.write(','.join(modality_name))
+ 
+-    print(f'Done file {os.path.join(out_path, patient_name, patient_name + ".h5")}')
++    print(f'Done file {file}')
+ 
+ 
+ if __name__ == '__main__':
+     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
+-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/chunked/'
++    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/unchunked/'
+     dataset_splits = ['train', 'test', 'val']
+ 
++    dataset_test = BratsDataset(os.path.join(dir, 'test'), nx=256, ny=256)
++
+     # Create a pool of worker processes
+-    num_processes = 12#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
++    num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+     print(num_processes)
+     pool = multiprocessing.Pool(processes=num_processes)
+ 
+diff --git a/test/Datasets/test_multi_modal.py b/test/Datasets/test_multi_modal.py
+index 2f9e612..63d33d6 100644
+--- a/test/Datasets/test_multi_modal.py
++++ b/test/Datasets/test_multi_modal.py
+@@ -7,29 +7,35 @@ from ml_recon.dataset.Brats_dataset import BratsDataset
+ from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+ 
+ @pytest.fixture
+-def brats_dataset(request) -> BratsDataset:
++def brats_dataset() -> BratsDataset:
+     torch.manual_seed(0)
+-    test_case_params = request.param
+-    data_dir = test_case_params.get("directory")
+-    dataset = BratsDataset(data_dir)
++    dataset = BratsDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train/')
+     return dataset
+ 
+-test_cases = [
+-    {"name": "Image Dataset", "directory": "/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train/"},
+-    {"name": "Kspace Dataset", "directory": "/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/unchunked/train/"}
+-]
++def test_init(brats_dataset):
++    data_list = brats_dataset.data_list[0]
++    keys = data_list.keys()
++    assert 'flair' in keys
++    assert 't1' in keys
++    assert 't1ce' in keys
++    assert 't2' in keys
+ 
++    dir_names = [os.path.dirname(file) for file in  data_list.values()]
++    # should all be the same values
++    assert len(set(dir_names)) == 1
+ 
+-@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
+-def test_init(brats_dataset):
+-    contrast_order = brats_dataset.contrast_order
+-    assert 'flair' in contrast_order
+-    assert 't1' in contrast_order
+-    assert 't1ce' in contrast_order
+-    assert 't2' in contrast_order
++def test_apply_sensetivites(brats_dataset):
++    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
++    x_sense = brats_dataset.apply_sensetivities(x) 
++
++    assert x_sense.dtype == np.complex_
++    assert x_sense.ndim == 4
++    assert x_sense.shape == (5, 8, brats_dataset.nx, brats_dataset.ny)
+ 
++def test_generate_phase(brats_dataset):
++    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny) + 1j * np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
++    x_phase = brats_dataset.generate_and_apply_phase(x)
+ 
+-@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
+ def test_samples(brats_dataset):
+     dataset = UndersampleDecorator(brats_dataset)
+     doub_under, under, k_space, k = dataset[0]
+@@ -52,7 +58,6 @@ def test_samples(brats_dataset):
+         i_mask = under[i, ...] != 0
+         assert not (first_contrast_mask == i_mask).all()
+ 
+-@pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
+ def test_undersampling_all_same(brats_dataset):
+     dataset = UndersampleDecorator(brats_dataset)
+     doub_under, under, k_space, k = dataset[0]
+diff --git a/test/Datasets/test_simulated_brats.py b/test/Datasets/test_simulated_brats.py
+deleted file mode 100644
+index 7254a4f..0000000
+--- a/test/Datasets/test_simulated_brats.py
++++ /dev/null
+@@ -1,25 +0,0 @@
+-import numpy as np
+-import matplotlib.pyplot as plt
+-
+-from ml_recon.dataset.Brats_dataset import SimulatedBrats
+-from ml_recon.utils import image_slices, ifft_2d_img
+-
+-def test_apply_sensetivites():
+-    nx, ny = 256, 256
+-    x = np.random.rand(5, nx, ny)
+-    x_sense = SimulatedBrats.apply_sensetivities(x) 
+-
+-    assert np.iscomplex(x_sense).any()
+-    assert x_sense.ndim == 4
+-    assert x_sense.shape == (5, 8, nx, ny)
+-
+-def test_generate_phase():
+-    nx, ny = 256, 256
+-    x = np.random.rand(5, 8, nx, ny)
+-    x_phase = SimulatedBrats.generate_and_apply_phase(x, None)
+-
+-    assert np.iscomplex(x_phase).all()
+-    assert (np.angle(x_phase) > 0.5).any() # ensure we have phase
+-    assert x_phase.shape == (5, 8, nx, ny)
+-
+-
+diff --git a/test/test_simulation.py b/test/test_simulation.py
+deleted file mode 100644
+index f5ded23..0000000
+--- a/test/test_simulation.py
++++ /dev/null
+@@ -1,13 +0,0 @@
+-import numpy as np
+-
+-def test_apply_sensetivites(brats_dataset):
+-    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
+-    x_sense = brats_dataset.apply_sensetivities(x) 
+-
+-    assert x_sense.dtype == np.complex_
+-    assert x_sense.ndim == 4
+-    assert x_sense.shape == (5, 8, brats_dataset.nx, brats_dataset.ny)
+-
+-def test_generate_phase(brats_dataset):
+-    x = np.random.rand(5, brats_dataset.nx, brats_dataset.ny) + 1j * np.random.rand(5, brats_dataset.nx, brats_dataset.ny)
+-    x_phase = brats_dataset.generate_and_apply_phase(x)
+diff --git a/test_varnet.py b/test_varnet.py
+index f046520..b653dce 100644
+--- a/test_varnet.py
++++ b/test_varnet.py
+@@ -14,7 +14,7 @@ from ml_recon.utils import ifft_2d_img
+ from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
+ from ml_recon.utils.evaluate import nmse, psnr
+ from ml_recon.Loss.ssim_loss import SSIMLoss
+-from train_utils import to_device, setup_profile_context_manager
++from train_utils import to_device
+ 
+ from torchvision.transforms import Compose
+ 
+@@ -26,7 +26,7 @@ def main():
+     model = setup_model(path, device)
+     dataloader = setup_dataloader(data_dir)
+ 
+-    test(model, dataloader, num_contrasts=4, profile=False)
++    test(model, dataloader, num_contrasts=4)
+ 
+ def setup_model(weight_path, device):
+     checkpoint = torch.load(weight_path, map_location=device)
+@@ -52,7 +52,7 @@ def setup_dataloader(data_dir):
+     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
+     return test_loader
+ 
+-def test(model, test_loader, num_contrasts, profile):
++def test(model, test_loader, num_contrasts):
+     torch.manual_seed(0)
+     np.random.seed(0)
+     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+@@ -62,35 +62,29 @@ def test(model, test_loader, num_contrasts, profile):
+     ssim_values = torch.zeros((num_contrasts, len(test_loader)))
+     psnr_values = torch.zeros((num_contrasts, len(test_loader)))
+     ssim = SSIMLoss().to(device)
+-    cm = setup_profile_context_manager(profile, 'test')
+ 
+     model.eval()
+-    with cm as prof:
+-        for i, data in enumerate(test_loader):
+-            if prof:
+-                prof.step()
+-                if i >= (1 + 1 + 10) * 2:
+-                    break
+-            with torch.no_grad():
+-                mask, input, target, loss_mask, zero_filled = to_device(data, device, 'supervised')
+-                
+-                predicted_sampled = model(input, mask)
+-                predicted_sampled = predicted_sampled * (input == 0) + input
+-                
+-                predicted_sampled = ifft_2d_img(predicted_sampled)
+-                target = ifft_2d_img(target)
+-
+-                target = root_sum_of_squares(target, coil_dim=2)
+-                predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
+-
+-                assert isinstance(predicted_sampled, torch.Tensor)
+-                assert isinstance(target, torch.Tensor)
+-
+-                for contrast in range(input.shape[1]):
+-                    nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach()).detach()
+-                    ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :].detach(), target[:, [contrast], :, :].detach(), target[:, contrast, :, :].max().detach() - target[:, contrast, :, :].min().detach()).detach()
+-                    psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach())
+-        
++    for i, data in enumerate(test_loader):
++        with torch.no_grad():
++            mask, input, target, loss_mask, zero_filled = to_device(data, device, 'supervised')
++            
++            predicted_sampled = model(input, mask)
++            predicted_sampled = predicted_sampled * (input == 0) + input
++            
++            predicted_sampled = ifft_2d_img(predicted_sampled)
++            target = ifft_2d_img(target)
++
++            target = root_sum_of_squares(target, coil_dim=2)
++            predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
++
++            assert isinstance(predicted_sampled, torch.Tensor)
++            assert isinstance(target, torch.Tensor)
++
++            for contrast in range(input.shape[1]):
++                nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
++                ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :], target[:, [contrast], :, :], target[:, contrast, :, :].max() - target[:, contrast, :, :].min())
++                psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :], target[:, contrast, :, :])
++    
+     ave_nmse = nmse_values.sum(1)/len(test_loader)
+     ave_ssim = 1 - ssim_values.sum(1)/len(test_loader)
+     ave_psnr = psnr_values.sum(1)/len(test_loader)
+diff --git a/train_model.py b/train_model.py
+index 2639387..f5b6fd3 100644
+--- a/train_model.py
++++ b/train_model.py
+@@ -33,10 +33,9 @@ from train_utils import (
+ 
+ 
+ # Globals
+-PROFILE = False
++PROFILE = True
+ 
+ def main():
+-    print("Starting code")
+     args = parser.parse_args()
+ 
+     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
+@@ -50,24 +49,19 @@ def main():
+     loss_fn = torch.nn.MSELoss()
+     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+ 
+-
+-    cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
+-    if current_device == 0:
+-        writer_dir = '/home/kadotab/scratch/runs/' + cur_time + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+-        if os.path.exists(writer_dir):
+-            while os.path.exists(writer_dir):
+-                if writer_dir[-1].isnumeric():
+-                    writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
+-                else:
+-                    writer_dir += str(0)
+-
+-        os.makedirs(os.path.join(writer_dir, 'weight_dir'))
+-        save_config(args, writer_dir)
+-        if current_device == 0: 
+-            writer = SummaryWriter(writer_dir)
+-        else: 
+-            writer = None
+-    else:
++    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
++    if os.path.exists(writer_dir):
++        while os.path.exists(writer_dir):
++            if writer_dir[-1].isnumeric():
++                writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
++            else:
++                writer_dir += str(0)
++
++    os.makedirs(os.path.join(writer_dir, 'weight_dir'))
++    save_config(args, writer_dir)
++    if current_device == 0: 
++        writer = SummaryWriter(writer_dir)
++    else: 
+         writer = None
+ 
+     scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
+@@ -82,70 +76,58 @@ def main():
+         model.eval()
+ 
+         end = time.time()
+-        print(f'Epoch: {epoch}, train loss: {train_loss}, time: {(end - start)/60} minutes')
+-
+-        with torch.no_grad():
+-            plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
+-            start = time.time()
+-            val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type, PROFILE)
+-            end = time.time()
+-            print(f'Epoch: {epoch}, val loss: {train_loss}, time: {(end - start)/60} minutes')
+-            plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
+-
+-        if current_device == 0:
+-            if epoch % 25 == 24:
+-                save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch, current_device)
+-        
+-            if writer:
+-                writer.add_scalar('train/loss', train_loss, epoch)
+-                writer.add_scalar('val/loss', val_loss, epoch)
+-                if scheduler:
+-                    writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
+-
+-    if current_device == 0:
+-        save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
+-
+-
+-        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
+-        metrics = {}
+-        dataset = test_loader.dataset
+-        print(test_loader)
+-        if isinstance(dataset, torch.utils.data.Subset):
+-            dataset = dataset.dataset
+-        dataset = dataset.dataset
+-        
++        print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
+ 
+-        contrast_order = dataset.contrast_order
+-        all_contrasts = ['t1', 't1ce', 'flair', 't2']
+-        remaining_contrasts = [contrast for contrast in all_contrasts if contrast not in contrast_order]
+-        for i in range(len(nmse)):
+-            metrics['mse-' + contrast_order[i]] = nmse[i]
+-            metrics['ssim-' + contrast_order[i]] = ssim[i]
+-            metrics['psnr-' + contrast_order[i]] = psnr[i]
+-
+-        for contrast in remaining_contrasts:
+-            metrics['mse-' + contrast] = 0
+-            metrics['ssim-' + contrast] = 0
+-            metrics['psnr-' + contrast] = 0
++        if not PROFILE:
++            with torch.no_grad():
++                plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
++                val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
++                plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
++            
+             
++            if current_device == 0:
++                if writer:
++                    writer.add_scalar('train/loss', train_loss, epoch)
++                    writer.add_scalar('val/loss', val_loss, epoch)
++                    if scheduler:
++                        writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
++
++    save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
++
++    if distributed:
++        destroy_process_group()
++
++    nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
++    
++    metrics = {}
++    dataset = test_loader.dataset.dataset
++
++    contrast_order = dataset.contrast_order
++    all_contrasts = ['t1', 't1ce', 'flair', 't2']
++    remaining_contrasts = [contrast for contrast in all_contrasts if contrast not in contrast_order]
++    for i in range(len(nmse)):
++        metrics['mse-' + contrast_order[i]] = nmse[i]
++        metrics['ssim-' + contrast_order[i]] = ssim[i]
++        metrics['psnr-' + contrast_order[i]] = psnr[i]
++
++    for contrast in remaining_contrasts:
++        metrics['mse-' + contrast] = 0
++        metrics['ssim-' + contrast] = 0
++        metrics['psnr-' + contrast] = 0
++        
+ 
+-        writer = SummaryWriter('/home/kadotab/scratch/runs/metrics/')
++    if writer:
+         writer.add_hparams(
+                 {
+                     'lr': args.lr, 
+                     'batch_size': args.batch_size, 
+                     'loss_type': args.loss_type, 
+                     'scheduler': args.scheduler,
+-                    'contrats': args.contrasts,
+                     'max_epochs': args.max_epochs
+                 },
+-                metrics,
+-                run_name=cur_time + '-' + args.loss_type + '-' + args.contrasts
++                metrics
+                 )
+ 
+-    if distributed:
+-        destroy_process_group()
+-
+ 
+ def prepare_data(arg: argparse.Namespace, distributed: bool):
+     data_dir = arg.data_dir
+@@ -174,11 +156,9 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
+     if distributed:
+         print('Setting up distributed sampler')
+         train_sampler = DistributedSampler(train_dataset)
+-        val_sampler = DistributedSampler(val_dataset, shuffle=False)
+         shuffle = False
+     else:
+         train_sampler = None 
+-        val_sampler=None
+         shuffle = True
+ 
+     train_loader = DataLoader(train_dataset, 
+@@ -191,7 +171,6 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
+ 
+     val_loader = DataLoader(val_dataset, 
+                             batch_size=arg.batch_size, 
+-                            sampler=val_sampler,
+                             num_workers=arg.num_workers, 
+                             pin_memory=True,
+                             )
+@@ -211,38 +190,35 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
+     and error magnified by 4
+ 
+     Args:
+-        model (nn.Module): model used for reconstruction
+-        val_loader (nn.utils.DataLoader): dataloader used to get slice
+-        device (str | int): device number/type ('cpu' or 'gpu')
++        model (nn.Module): model to reconstruct
++        val_loader (nn.utils.DataLoader): dataloader to take slice
++        device (str | int): device number/type
+         writer (torch.utils.SummaryWriter): tensorboard summary writer
+         epoch (int): epoch
+-        loss_type (str): supervised, ssdu, noiser2noise
+     """
+     if device == 0:
++        # difference magnitude
++        difference_scaling = 4
+ 
+-        # get data 
++        # forward pass
+         if training_type == 'val':
+             sample = tuple(data.unsqueeze(0) for data in data_loader.dataset[10])
++
+         elif training_type == 'train':
+             sample = next(iter(data_loader))
+         else:
+             raise ValueError(f'type should be either val or test but got {training_type}')
+ 
+-        # forward pass
+         mask, input_slice, target_slice, loss_mask, zf_mask = to_device(sample, device, 'supervised')
++        
+         output = model(input_slice, mask)
+         output *= zf_mask
+         output = output * (input_slice == 0) + input_slice
+         output = output.cpu()
+         
+-        # plot sensetivity maps
+-        cur_model = model
+-        if isinstance(cur_model, torch.nn.parallel.DistributedDataParallel):
+-            cur_model = cur_model.module
+-        sensetivity_maps = cur_model.sens_model(input_slice, mask)
++        sensetivity_maps = model.sens_model(input_slice, mask)
+         for i in range(sensetivity_maps.shape[1]):
+             writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
+-
+         # coil combination
+         output = root_sum_of_squares(ifft_2d_img(output), coil_dim=2)
+         ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=2)
+@@ -263,8 +239,6 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
+         # get scaling factor (skull is high intensity)
+         image_scaling_factor = ground_truth.max()
+ 
+-        # difference magnitude
+-        difference_scaling = 4
+         # scale images and difference
+         image_scaled = output.abs()/image_scaling_factor
+         diff_scaled = diff/(image_scaling_factor/difference_scaling)
+diff --git a/train_utils.py b/train_utils.py
+index 5fab282..158b760 100644
+--- a/train_utils.py
++++ b/train_utils.py
+@@ -80,7 +80,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
+         print('PROFILING')
+ 
+     running_loss = torch.Tensor([0]).to(device)
+-    cm = setup_profile_context_manager(profile, 'train')
++    cm = setup_profile_context_manager(profile)
+  
+     with cm as prof:
+         for step, data in enumerate(dataloader):
+@@ -88,7 +88,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
+ 
+             if prof:
+                 prof.step()
+-                if step >= (1 + 1 + 10) * 2:
++                if step >= (1 + 1 + 3) * 2:
+                     break
+ 
+             if scheduler:
+@@ -97,7 +97,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
+ 
+     return running_loss.item()/len(dataloader)
+ 
+-def setup_profile_context_manager(profile, train_type):
++def setup_profile_context_manager(profile):
+     """ create a context manager if global PROFILE flag is set to true else retruns
+     null context manager
+ 
+@@ -114,7 +114,7 @@ def setup_profile_context_manager(profile, train_type):
+     if profile:
+         context_manager = torch.profiler.profile(
+             schedule=torch.profiler.schedule(wait=1, warmup=1, active=10, repeat=2),
+-            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile_' + train_type + '-' + str(max_files_number + 1)),
++            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/kadotab/scratch/runs/profile-' + str(max_files_number + 1)),
+             record_shapes=True,
+             profile_memory=True,
+             with_stack=True
+@@ -146,7 +146,7 @@ def train_step(model, loss_function, optimizer, data, device, loss_type) -> torc
+     return loss_step
+ 
+ 
+-def validate(model, loss_function, dataloader, device, supervised, profile=False):
++def validate(model, loss_function, dataloader, device, supervised):
+     """ Validation loop. Loops through the entire validation dataset
+ 
+     Args:
+@@ -159,16 +159,9 @@ def validate(model, loss_function, dataloader, device, supervised, profile=False
+     Returns:
+         int: average validation loss per sample
+     """
+-
+-    cm = setup_profile_context_manager(profile, 'val')
+     val_running_loss = torch.Tensor([0]).to(device)
+-    with cm as prof:
+-        for step, data in enumerate(dataloader):
+-            if prof:
+-                prof.step()
+-                if step >= (1 + 1 + 10) * 2:
+-                    break
+-            val_running_loss += val_step(model, loss_function, device, data, supervised)
++    for data in dataloader:
++        val_running_loss += val_step(model, loss_function, device, data, supervised)
+     return val_running_loss.item()/len(dataloader)
+ 
+ 
+@@ -215,7 +208,7 @@ def to_device(data: tuple, device: str, loss_type: str):
+     if loss_type == 'supervised':
+         input_slice = undersample.to(device)
+         target_slice = k_space.to(device)
+-        loss_mask = torch.ones_like(target_slice, dtype=torch.bool)
++        loss_mask = torch.ones_like(target_slice)
+     else:
+         input_slice = double_undersaple.to(device)
+         target_slice = undersample.to(device)
+diff --git a/train_varnet.py b/train_varnet.py
+new file mode 100644
+index 0000000..e74c476
+--- /dev/null
++++ b/train_varnet.py
+@@ -0,0 +1,319 @@
++from datetime import datetime
++import os
++import argparse
++import time
++import yaml
++import torch
++from functools import partial
++from ml_recon.utils import image_slices
++import matplotlib.pyplot as plt
++
++import torch
++from torch.distributed import destroy_process_group
++from torch.utils.data import DataLoader, random_split
++from torch.utils.tensorboard.writer import SummaryWriter
++from torch.utils.data.distributed import DistributedSampler
++
++from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
++#from ml_recon.models.varnet_mc import VarNet_mc
++from fastmri.models.varnet import VarNet
++from ml_recon.dataset.Brats_dataset import BratsDataset 
++from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
++from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
++from ml_recon.transforms import normalize
++from test_varnet import test
++
++from train_utils import (
++        to_device, 
++        save_config,
++        setup_devices,
++        setup_scheduler,
++        setup_ddp,
++        train,
++        validate, 
++        )
++
++
++# Globals
++PROFILE = False
++
++def main():
++    args = parser.parse_args()
++
++    current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
++
++
++    model = VarNet(num_cascades=6)
++    model.to(current_device)
++
++    train_loader, val_loader, test_loader = prepare_data(args, distributed)
++
++    loss_fn = torch.nn.MSELoss()
++    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
++
++    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H:%M:%S") + model.__class__.__name__ + '-' + 'fastmri' + '-' + args.loss_type
++    if os.path.exists(writer_dir):
++        while os.path.exists(writer_dir):
++            if writer_dir[-1].isnumeric():
++                writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
++            else:
++                writer_dir += str(0)
++
++    os.makedirs(os.path.join(writer_dir, 'weight_dir'))
++    save_config(args, writer_dir)
++    if current_device == 0: 
++        writer = SummaryWriter(writer_dir)
++    else: 
++        writer = None
++
++    scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
++    for epoch in range(args.max_epochs):
++        print(f'starting epoch: {epoch}')
++        start = time.time()
++        if distributed:
++            train_loader.sampler.set_epoch(epoch) #pyright: ignore
++
++        model.train()
++        train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, PROFILE)
++        model.eval()
++
++        end = time.time()
++        print(f'Epoch: {epoch}, loss: {train_loss}, time: {(end - start)/60} minutes')
++
++        if not PROFILE:
++            with torch.no_grad():
++                plot_recon(model, train_loader, current_device, writer, epoch, args.loss_type, training_type='train')
++                val_loss = validate(model, loss_fn, val_loader, current_device, args.loss_type)
++                plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
++            
++            
++            if current_device == 0:
++                if writer:
++                    writer.add_scalar('train/loss', train_loss, epoch)
++                    writer.add_scalar('val/loss', val_loss, epoch)
++                    if scheduler:
++                        writer.add_scalar('lr', scheduler.get_last_lr()[0], epoch)
++
++    #save_model(os.path.join(writer_dir, 'weight_dir'), model, optimizer, args.max_epochs, current_device)
++
++    #if distributed:
++    #    destroy_process_group()
++
++    #nmse, ssim, psnr = test(model, test_loader, len(args.contrasts))
++    #
++    #metrics = {}
++    #dataset = test_loader.dataset.dataset
++
++    #assert isinstance(dataset, BratsDataset)
++    #for i in range(len(nmse)):
++    #    metrics['mse-' + dataset.contrast_order[i]] = nmse[i]
++    #    metrics['ssim-' + dataset.contrast_order[i]] = ssim[i]
++    #    metrics['psnr-' + dataset.contrast_order[i]] = psnr[i]
++    #    
++
++    #if writer:
++    #    writer.add_hparams(
++    #            {
++    #                'lr': args.lr, 
++    #                'batch_size': args.batch_size, 
++    #                'loss_type': args.loss_type, 
++    #                'scheduler': args.scheduler,
++    #                'max_epochs': args.max_epochs
++    #            },
++    #            metrics
++    #            )
++
++
++def prepare_data(arg: argparse.Namespace, distributed: bool):
++    data_dir = arg.data_dir
++    
++    train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
++    val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
++    test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=['t1'])
++
++    undersampling_args = {
++                'R': arg.R, 
++                'R_hat': arg.R_hat, 
++                'acs_lines': arg.acs_lines, 
++                'poly_order': arg.poly_order,
++                'transforms': normalize()
++            }
++    
++    train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
++    val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
++    test_dataset = UndersampleDecorator(test_dataset, **undersampling_args)
++    
++    if arg.use_subset:
++        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
++        val_dataset, _ = random_split(val_dataset, [0.1, 0.9])
++        test_dataset, _ = random_split(test_dataset, [0.1, 0.9])
++
++    if distributed:
++        print('Setting up distributed sampler')
++        train_sampler = DistributedSampler(train_dataset)
++        shuffle = False
++    else:
++        train_sampler = None 
++        shuffle = True
++
++    train_loader = DataLoader(train_dataset, 
++                              batch_size=arg.batch_size,
++                              num_workers=arg.num_workers,
++                              shuffle=False, 
++                              sampler=train_sampler,
++                              pin_memory=True,
++                              )
++
++    val_loader = DataLoader(val_dataset, 
++                            batch_size=arg.batch_size, 
++                            num_workers=arg.num_workers, 
++                            pin_memory=True,
++                            )
++
++    test_loader = DataLoader(test_dataset, 
++                            batch_size=arg.batch_size, 
++                            num_workers=arg.num_workers,
++                            pin_memory=True,
++                            )
++
++    return train_loader, val_loader, test_loader
++
++
++
++def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_type='val'):
++    """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
++    and error magnified by 4
++
++    Args:
++        model (nn.Module): model to reconstruct
++        val_loader (nn.utils.DataLoader): dataloader to take slice
++        device (str | int): device number/type
++        writer (torch.utils.SummaryWriter): tensorboard summary writer
++        epoch (int): epoch
++    """
++    if device == 0:
++        # difference magnitude
++        difference_scaling = 4
++
++        # forward pass
++        if training_type == 'val':
++            sample = tuple(data.unsqueeze(0) for data in data_loader.dataset[10])
++
++        elif training_type == 'train':
++            sample = next(iter(data_loader))
++        else:
++            raise ValueError(f'type should be either val or test but got {training_type}')
++
++        mask, input_slice, target_slice, loss_mask, zf_mask = to_device(sample, device, 'supervised')
++        
++        output = model(input_slice, mask)
++        output *= zf_mask
++        output = output * (input_slice == 0) + input_slice
++        output = output.cpu()
++        
++        fast_mri_input = torch.view_as_real(input_slice).squeeze(1)
++        fast_mri_mask = fast_mri_input != 0
++        sensetivity_maps = model.sens_net(fast_mri_input, fast_mri_mask)
++        sensetivity_maps = torch.view_as_complex(sensetivity_maps).unsqueeze(1)
++        for i in range(sensetivity_maps.shape[1]):
++            writer.add_images(training_type + '-sense_map/image_' + str(i), sensetivity_maps[0, i, :, :, :].cpu().abs().unsqueeze(1), epoch)
++        # coil combination
++        output = root_sum_of_squares(ifft_2d_img(output), coil_dim=2)
++        ground_truth = root_sum_of_squares(ifft_2d_img(target_slice), coil_dim=2)
++        x_input = root_sum_of_squares(ifft_2d_img(input_slice), coil_dim=2)
++        assert isinstance(output, torch.Tensor)
++        assert isinstance(ground_truth, torch.Tensor)
++        assert isinstance(x_input, torch.Tensor)
++        x_input = x_input.cpu()
++        ground_truth = ground_truth.cpu()
++        output = output.cpu()
++
++        output = output[0]
++        ground_truth = ground_truth[0]
++        x_input = x_input[0]
++
++        diff = (output - ground_truth).abs()
++
++        # get scaling factor (skull is high intensity)
++        image_scaling_factor = ground_truth.max()
++
++        # scale images and difference
++        image_scaled = output.abs()/image_scaling_factor
++        diff_scaled = diff/(image_scaling_factor/difference_scaling)
++        input_scaled = x_input.abs()/(image_scaling_factor)
++
++        # clamp to 0-1 range
++        image_scaled = image_scaled.clamp(0, 1)
++        diff_scaled = diff_scaled.clamp(0, 1)
++        input_scaled = input_scaled.clamp(0, 1)
++
++        writer.add_images('images/' + training_type + '/recon', image_scaled.unsqueeze(1), epoch)
++        writer.add_images('images/' + training_type + '/diff', diff_scaled.unsqueeze(1), epoch)
++        writer.add_images('images/' + training_type + '/input', input_scaled.unsqueeze(1), epoch)
++
++        if loss_type != 'supervised':
++            mask_lambda_omega, _, _, loss_mask, zf_mask = to_device(sample, device, loss_type)
++            writer.add_images('mask/' + training_type + '/omega_lambda_mask', mask_lambda_omega[0, :, [0], :, :], epoch)
++            writer.add_images('mask/' + training_type + '/omega_mask', mask[0, :, [0], :, :], epoch)
++            writer.add_images('mask/' + training_type + '/omega_not_lambda', loss_mask[0, :, [0], :, :].float(), epoch)
++        else:
++            writer.add_images('mask/' + training_type + '/inital_mask', mask[0, :, [0], :, :], epoch)
++            writer.add_images('mask/' + training_type + '/loss_mask', loss_mask[0, :, [0], :, :], epoch)
++
++            
++        # plot target if it's the first epcoh
++        recon_scaled = ground_truth/image_scaling_factor
++        recon_scaled = recon_scaled.clamp(0, 1)
++        writer.add_images('images/' + training_type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
++
++
++def setup_model_backbone(model_name, current_device, chans=8):
++    if model_name == 'unet':
++        backbone = partial(Unet, in_chan=chans, out_chan=chans, depth=4, chans=18)
++    elif model_name == 'resnet':
++        backbone = partial(ResNet, in_chan=chans, out_chan=chans, itterations=15, chans=32)
++    elif model_name == 'dncnn':
++        backbone = partial(DnCNN, in_chan=chans, out_chan=chans, feature_size=32, num_of_layers=15)
++    elif model_name == 'transformer':
++        backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
++        print('loaded swinunet!')
++    else:
++        raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
++
++    model = VarNet_mc(backbone, num_cascades=6)
++    params = sum([x.numel()  for x in model.parameters()])
++    print(f'Model has {params:,}')
++    model.to(current_device)
++
++    return model
++
++
++def load_config(args):
++    """ loads yaml file """
++    with open(args.config_file, 'r') as f:
++        configs_dict = yaml.load(f)
++        
++    for k, v in configs_dict.items():
++        setattr(args, k, v)
++
++    return args
++
++if __name__ == '__main__':
++
++    # Argparse
++    parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
++    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
++    parser.add_argument('--batch_size', type=int, default=4, help='')
++    parser.add_argument('--max_epochs', type=int, default=50, help='')
++    parser.add_argument('--num_workers', type=int, default=0, help='')
++    parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
++    parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
++    
++    parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
++    parser.add_argument('--dist_backend', default='nccl', type=str, help='')
++    parser.add_argument('--world_size', default=2, type=int, help='')
++    parser.add_argument('--distributed', action='store_true', help='')
++    parser.add_argument('--use_subset', action='store_true', help='')
++    parser = BratsDataset.add_model_specific_args(parser)
++    parser = UndersampleDecorator.add_model_specific_args(parser)
++    main()
+diff --git a/train_varnet_lr.py b/train_varnet_lr.py
+index 1689e25..72a079a 100644
+--- a/train_varnet_lr.py
++++ b/train_varnet_lr.py
+@@ -1,43 +1,79 @@
++from datetime import datetime
++from typing import Dict
+ import os
+ import argparse
++import time
++import yaml
++import contextlib
+ import matplotlib.pyplot as plt
+ 
++from ml_recon.models.varnet import VarNet
++from torch.utils.data import DataLoader, random_split
+ import torch
+-from train_model import prepare_data, setup_model_backbone, to_device
+-from train_utils import setup_devices
+-from ml_recon.dataset.Brats_dataset import BratsDataset
+-from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
++from torch.utils.tensorboard import SummaryWriter
+ 
++from ml_recon.transforms import to_tensor, normalize, pad_recon, pad, normalize_mean
++from ml_recon.dataset.sliceloader import SliceDataset
++from ml_recon.dataset.undersample import Undersampling
++from ml_recon.utils import save_model, ifft_2d_img
++from ml_recon.utils.collate_function import collate_fn
++from train_multi_contrast import prepare_data, setup_model_backbone, to_device
+ 
++from torchvision.transforms import Compose
+ from torch.distributed import init_process_group, destroy_process_group
++from torch.utils.data.distributed import DistributedSampler
++from torch.nn.parallel import DistributedDataParallel as DDP
++
++# Globals
++PROFILE = False
++
++# Argparse
++parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
++parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
++parser.add_argument('--batch_size', type=int, default=5, help='')
++parser.add_argument('--max_epochs', type=int, default=50, help='')
++parser.add_argument('--num_workers', type=int, default=0, help='')
++parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', help='')
++parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
++parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='supervised')
++parser.add_argument('--R_hat', type=float, default=2)
++
++parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
++parser.add_argument('--dist_backend', default='nccl', type=str, help='')
++parser.add_argument('--world_size', default=2, type=int, help='')
++parser.add_argument('--distributed', action='store_true', help='')
++parser.add_argument('--use_subset', action='store_true', help='')
+ 
+ def main():
+     args = parser.parse_args()
+     
+-    current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+-    train_loader, val_loader, test_loader = prepare_data(args, False)
+-    model = setup_model_backbone('unet', current_device, chans=len(args.contrasts)*2)
++    current_device, distributed = setup_devices(args)
++    train_loader, val_loader = prepare_data(args, distributed)
++    model = setup_model_backbone('unet', current_device)
++
++    if distributed:
++        print(f'Setting up DDP in device {current_device}')
++        model = DDP(model, device_ids=[current_device])
++        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
++
+ 
+     loss_fn = torch.nn.MSELoss()
+-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=150, step_size_down=0, cycle_momentum=False)
++    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+ 
+-    losses = []
+-    lr = []
+ 
+-    for i in range(100):
+-        print(scheduler.get_last_lr())
+-        optimizer.zero_grad()
++    lr = torch.linspace(1e-5, 0.01, 500)
++    losses = []
++    sample = next(iter(train_loader))
++    for lrs in lr:
+         data = next(iter(train_loader))
+         mask, input_slice, target_slice, loss_mask, zf_mask = to_device(data, current_device, args.loss_type)
+         
++        optimizer = torch.optim.Adam(model.parameters(), lr=lrs)
+         output = model(input_slice, mask)
+         loss = loss_fn(torch.view_as_real(output * loss_mask), torch.view_as_real(target_slice * loss_mask))
+         loss.backward()
+         optimizer.step()
+         losses.append(loss.item())
+-        lr.append(scheduler.get_last_lr())
+-        scheduler.step()
+ 
+     plt.plot(lr, losses)
+     plt.xscale('log')
+@@ -46,24 +82,43 @@ def main():
+ 
+    
+ 
++    if distributed:
++        destroy_process_group()
+ 
+-if __name__ == '__main__':
++def setup_devices(args):
++    """set up 
+ 
+-    # Argparse
+-    parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
+-    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate to use')
+-    parser.add_argument('--batch_size', type=int, default=6, help='')
+-    parser.add_argument('--max_epochs', type=int, default=50, help='')
+-    parser.add_argument('--num_workers', type=int, default=0, help='')
+-    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
+-    parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
+-    parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
+-    
+-    parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
+-    parser.add_argument('--dist_backend', default='nccl', type=str, help='')
+-    parser.add_argument('--world_size', default=2, type=int, help='')
+-    parser.add_argument('--distributed', action='store_true', help='')
+-    parser.add_argument('--use_subset', action='store_true', help='')
+-    parser = BratsDataset.add_model_specific_args(parser)
+-    parser = UndersampleDecorator.add_model_specific_args(parser)
++    Args:
++        args (_type_): _description_
++    """    
++
++    ngpus_per_node = torch.cuda.device_count()
++    current_device = None
++    distributed = False
++    if ngpus_per_node > 1:
++        print("Starting DPP...")
++
++        """ This next line is the key to getting DistributedDataParallel working on SLURM:
++		SL  URM_NODEID is 0 or 1 in this example, SLURM_LOCALID is the id of the 
++ 		c   urrent process inside a node and is also 0 or 1 in this example."""
++
++        current_device = int(os.environ.get("SLURM_LOCALID")) 
++
++        """ this block initializes a process group and initiate communications
++		be  tween all processes running on all nodes """
++
++        print(f'From Rank: {current_device}, ==> Initializing Process Group...')
++        #init the process group
++        init_process_group(backend=args.dist_backend, init_method=args.init_method, world_size=args.world_size, rank=current_device)
++        print("process group ready!")
++        distributed = True
++    elif ngpus_per_node == 1:
++        current_device = 0
++        distributed = False
++    else:
++        current_device = 'cpu'
++        distributed = False
++    return current_device, distributed
++
++if __name__ == '__main__':
+     main()

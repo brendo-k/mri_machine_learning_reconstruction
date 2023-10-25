@@ -54,7 +54,7 @@ class KSpaceBrats(KSpaceDataset):
             sample_file_path = os.path.join(sample_path, sample_file[0])
             with h5py.File(sample_file_path, 'r') as fr:
                 k_space = fr['k_space']
-                num_slices = k_space.shape[0]
+                num_slices = k_space.shape[0] - 15
                 slices.append(num_slices)
                 if first:
                     contrast_order = fr['contrasts'][:].astype('U')

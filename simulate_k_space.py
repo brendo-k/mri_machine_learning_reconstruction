@@ -30,7 +30,7 @@ def process_file(file, out_path):
         if i >= images.shape[-1]-20:
             break
         cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
-        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, 0)
+        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, None)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
     try:

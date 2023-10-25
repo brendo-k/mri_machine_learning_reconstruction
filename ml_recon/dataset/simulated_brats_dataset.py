@@ -73,7 +73,7 @@ class SimulatedBrats(KSpaceDataset):
         data, _ = self.get_data_from_indecies(volume_index, slice_index)
         images = self.resample(data, self.nx, self.ny)
         images = np.transpose(images, (0, 2, 1))
-        data = SimulatedBrats.simulate_k_space(images, self.seed)
+        data = SimulatedBrats.simulate_k_space(images, index + self.seed)
         data = torch.from_numpy(data)
 
         if self.transforms:
@@ -103,7 +103,7 @@ class SimulatedBrats(KSpaceDataset):
         else:
             raise ValueError(f'no file reader for extension {self.extension}, only nii.gz and npy')
         assert slices > 0
-        slices = slices - 90 # the first 70 slices and last 20 aren't useful
+        slices = slices - 105 # the first 70 slices and last 35 aren't useful
         
         return slices
         

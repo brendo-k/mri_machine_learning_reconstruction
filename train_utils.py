@@ -87,6 +87,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
 
             if prof:
+                print('PROF STEP')
                 prof.step()
                 if step >= (1 + 1 + 10) * 2:
                     break
@@ -165,6 +166,7 @@ def validate(model, loss_function, dataloader, device, supervised, profile=False
     with cm as prof:
         for step, data in enumerate(dataloader):
             if prof:
+                print('PROF STEP')
                 prof.step()
                 if step >= (1 + 1 + 10) * 2:
                     break
