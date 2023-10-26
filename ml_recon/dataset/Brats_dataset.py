@@ -29,6 +29,7 @@ class BratsDataset(KSpaceDataset):
         sample_dir = os.listdir(data_dir)
         sample_dir.sort()
         sample_files = os.listdir(os.path.join(data_dir, sample_dir[0]))
+        sample_files = [file for file in sample_files if 'label' not in file]
         file_path = os.path.join(data_dir, sample_dir[0], sample_files[0])
         _, extension = os.path.splitext(file_path)
 
@@ -37,6 +38,7 @@ class BratsDataset(KSpaceDataset):
         elif extension == '.gz' or extension == '.npy':
             self.data = SimulatedBrats(data_dir, nx=nx, ny=ny, contrasts=contrasts, transforms=transforms)
         else:
+            print(extension)
             raise ValueError(f"Can't load extension for {extension}")
 
         self.contrasts = self.data.contrasts
