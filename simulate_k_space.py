@@ -42,6 +42,7 @@ def process_file(file, out_path):
         with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
             dset = fr.create_dataset("k_space", k_space.shape, chunks=(1, 1, 8, 256, 256), dtype=np.complex64)
             dset[...] = k_space
+            dset = fr.create_dataset("contrasts", data=modality_name)
 
     except Exception as e:
         print(e)

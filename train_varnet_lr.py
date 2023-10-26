@@ -13,6 +13,8 @@ from torch.distributed import init_process_group, destroy_process_group
 
 def main():
     args = parser.parse_args()
+    args.data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
+    args.contrasts = ['t1']
     
     current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     train_loader, val_loader, test_loader = prepare_data(args, False)
@@ -25,7 +27,7 @@ def main():
     losses = []
     lr = []
 
-    for i in range(100):
+    for i in range(150):
         print(scheduler.get_last_lr())
         optimizer.zero_grad()
         data = next(iter(train_loader))
