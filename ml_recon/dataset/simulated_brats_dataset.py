@@ -213,7 +213,8 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
-        noise_scale = 10
+        mean = np.mean(np.abs(k_space))
+        noise_scale = mean * 0.05
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
@@ -238,18 +239,18 @@ class SimulatedBrats(KSpaceDataset):
         return np.reshape(new_data, (contrasts, resample_height, resample_width))
 
 
-#from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
-#if __name__ == '__main__':
-#    
-#    parser = ArgumentParser()
-#    parser = BratsDataset.add_model_specific_args(parser)
-#    args = parser.parse_args()
-#    dataset = SimulatedBrats(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
-#    dataset = UndersampleDecorator(dataset)
-#
-#    i = dataset[0]
-#    image = ifft_2d_img(i[2])
-#    image = root_sum_of_squares(image[0], coil_dim=0)
-#    import matplotlib.pyplot as plt
-#    plt.imshow(image)
-#    plt.savefig('image')
+from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+if __name__ == '__main__':
+    
+    parser = ArgumentParser()
+    parser = BratsDataset.add_model_specific_args(parser)
+    args = parser.parse_args()
+    dataset = SimulatedBrats(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
+    dataset = UndersampleDecorator(dataset)
+
+    i = dataset[0]
+    image = ifft_2d_img(i[2])
+    image = root_sum_of_squares(image[0], coil_dim=0)
+    import matplotlib.pyplot as plt
+    plt.imshow(image)
+    plt.savefig('image')

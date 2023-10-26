@@ -76,17 +76,16 @@ class BratsDataset(KSpaceDataset):
         return parser
 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 if __name__ == '__main__':
     
-    parser = ArgumentParser()
-    parser = BratsDataset.add_model_specific_args(parser)
-    args = parser.parse_args()
-    dataset = BratsDataset(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
+    dataset = SimulatedBrats(data_dir)
     dataset = UndersampleDecorator(dataset)
 
     i = dataset[0]
     image = ifft_2d_img(i[2])
     image = root_sum_of_squares(image[0], coil_dim=0)
     import matplotlib.pyplot as plt
-    plt.imshow(image)
+    plt.imshow(image, cmap='gray')
     plt.savefig('image')
