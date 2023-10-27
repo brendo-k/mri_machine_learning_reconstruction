@@ -47,6 +47,7 @@ def main():
 
     train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
+    
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -137,7 +138,9 @@ def main():
                     'loss_type': args.loss_type, 
                     'scheduler': args.scheduler,
                     'contrats': ','.join(args.contrasts),
-                    'max_epochs': args.max_epochs
+                    'max_epochs': args.max_epochs,
+                    'R': args.R,
+                    'R_hat': args.R_hat
                 }
         print(hparams)
         writer.add_hparams(
@@ -176,7 +179,7 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
 
     if distributed:
         print('Setting up distributed sampler')
-        train_sampler = DistributedSampler(train_dataset)
+        train_sampler = DistributedSampler(train_dataset, seed=torch.seed())
         val_sampler = DistributedSampler(val_dataset, shuffle=False)
         shuffle = False
     else:
