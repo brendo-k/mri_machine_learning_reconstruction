@@ -19,6 +19,7 @@ from ml_recon.dataset.kspace_brats import KSpaceBrats
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from ml_recon.transforms import normalize
+from ml_recon.losses import L1L2Loss
 from test_varnet import test
 
 from train_utils import (
@@ -48,7 +49,9 @@ def main():
     train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
     
-    loss_fn = torch.nn.MSELoss()
+    #loss_fn = torch.nn.MSELoss()
+    loss_fn = L1L2Loss
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 
@@ -130,7 +133,7 @@ def main():
             metrics['psnr-' + contrast] = 0
             
 
-        writer = SummaryWriter('/home/kadotab/scratch/runs/metrics/')
+        hparams_writer = SummaryWriter('/home/kadotab/scratch/runs/metrics')
         print(metrics)
         hparams = {
                     'lr': args.lr, 
@@ -143,7 +146,7 @@ def main():
                     'R_hat': args.R_hat
                 }
         print(hparams)
-        writer.add_hparams(
+        hparams_writer.add_hparams(
                 hparams,
                 metrics,
                 run_name=cur_time + '-' + args.loss_type + '-' + ','.join(args.contrasts)

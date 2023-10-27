@@ -13,7 +13,8 @@ class normalize(object):
         image = root_sum_of_squares(ifft_2d_img(under, axes=[-1, -2]), coil_dim=1)
         assert isinstance(image, torch.Tensor)
 
-        undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
+        #undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
+        undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
         #undersample_max = 1000
 
         return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k)
