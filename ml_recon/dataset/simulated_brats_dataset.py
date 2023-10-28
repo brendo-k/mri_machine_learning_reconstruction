@@ -4,7 +4,8 @@ import time
 from typing import Callable, Optional, Union, Collection
 from argparse import ArgumentParser
 
-from scipy.interpolate import interpn
+from scipy.interpolate import RegularGridInterpolator
+from sklearn.decomposition import PCA
 import torch
 import numpy as np
 
@@ -174,15 +175,23 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_sensetivities(image):
         sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/sens.npy')
-        sense_map = sense_map.transpose((2, 0, 1))
-        sense_map = SimulatedBrats.resample(sense_map, image.shape[1], image.shape[2])
+        sense_map = np.squeeze(sense_map)
+        sense_map = np.transpose(sense_map, (2, 1, 0))
 
-        sense_map = np.expand_dims(sense_map, 0)
+        mag_sense_map = np.abs(sense_map)
+        phase_sense_map = np.angle(sense_map)
+
+        resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
+        resampled_sense_phase = SimulatedBrats.resample(phase_sense_map, image.shape[1], image.shape[2])
+
+        resampled_sense_map = resampled_sense_mag * np.exp(1j * resampled_sense_phase)
+
+        sense_map = np.expand_dims(resampled_sense_map, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=6):
+    def generate_and_apply_phase(data, seed, center_region=2):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -221,9 +230,7 @@ class SimulatedBrats(KSpaceDataset):
 
 
     @staticmethod
-    def resample(data, nx, ny):
-        resample_height = ny
-        resample_width = nx 
+    def resample(data, resample_height, resample_width):
         contrasts, height, width = data.shape
         y = np.arange(0, height)
         x = np.arange(0, width)
@@ -232,25 +239,48 @@ class SimulatedBrats(KSpaceDataset):
         yi = np.linspace(0, height - 1, resample_height)
         xi = np.linspace(0, width - 1, resample_width)
         (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
-
-        new_data = interpn((c, y, x), data, (ci.flatten(), yi.flatten(), xi.flatten()))
+        interpolator = RegularGridInterpolator((c, y, x), data, method='linear')
+        data = interpolator((ci.flatten(), yi.flatten(), xi.flatten()))
+        interp_data = np.reshape(data, (contrasts, resample_height, resample_width))
         
-        assert isinstance(new_data, np.ndarray)
-        return np.reshape(new_data, (contrasts, resample_height, resample_width))
+        return interp_data
 
 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+import matplotlib.pyplot as plt
+from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
 if __name__ == '__main__':
     
-    parser = ArgumentParser()
-    parser = BratsDataset.add_model_specific_args(parser)
-    args = parser.parse_args()
-    dataset = SimulatedBrats(os.path.join(args.data_dir, 'train'), contrasts=args.contrasts, extension='nii.gz')
-    dataset = UndersampleDecorator(dataset)
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
+    dataset = SimulatedBrats(data_dir)
 
-    i = dataset[0]
-    image = ifft_2d_img(i[2])
-    image = root_sum_of_squares(image[0], coil_dim=0)
-    import matplotlib.pyplot as plt
-    plt.imshow(image)
-    plt.savefig('image')
+
+    k_space = dataset[0]
+    volume_index, slice_index = dataset.get_vol_slice_index(0)
+    data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
+    images = dataset.resample(data, 256, 256)
+    images = np.transpose(images, (0, 2, 1))
+    images = torch.from_numpy(images)
+
+
+    fig, ax = plt.subplots(1, 3)
+
+    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
+    ax[0].imshow(images[0], cmap='gray')
+    ax[1].imshow(k_space_image, cmap='gray')
+    ax[2].imshow(images[0] - k_space_image)
+
+    fig, ax = plt.subplots(1, 3)
+    
+    mask = np.zeros((256, 256), dtype=bool) 
+    mask[128 - 10: 128 + 10, 128 -10: 128 + 10] = 1
+    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
+    ax[0].imshow(images[0], cmap='gray')
+    ax[1].imshow(k_space_image, cmap='gray')
+    plt.show()
+
+    image_slices(np.abs(ifft_2d_img(k_space[0] * mask)))
+    plt.show()
+
+
+
