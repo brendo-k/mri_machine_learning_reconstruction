@@ -5,7 +5,6 @@ from typing import Callable, Optional, Union, Collection
 from argparse import ArgumentParser
 
 from scipy.interpolate import RegularGridInterpolator
-from sklearn.decomposition import PCA
 import torch
 import numpy as np
 
