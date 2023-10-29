@@ -26,7 +26,7 @@ class SimulatedBrats(KSpaceDataset):
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
-            extension: str = "npy"
+            extension: str = "nii.gz"
             ):
         assert contrasts, 'Contrast list should not be empty!'
 
@@ -190,7 +190,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=2):
+    def generate_and_apply_phase(data, seed, center_region=8):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -262,24 +262,36 @@ if __name__ == '__main__':
     images = torch.from_numpy(images)
 
 
-    fig, ax = plt.subplots(1, 3)
+    # fig, ax = plt.subplots(1, 3)
 
-    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
-    ax[0].imshow(images[0], cmap='gray')
-    ax[1].imshow(k_space_image, cmap='gray')
-    ax[2].imshow(images[0] - k_space_image)
+    # k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
+    # ax[0].imshow(images[0], cmap='gray')
+    # ax[1].imshow(k_space_image, cmap='gray')
+    # ax[2].imshow(images[0] - k_space_image)
 
-    fig, ax = plt.subplots(1, 3)
+    # fig, ax = plt.subplots(1, 3)
     
     mask = np.zeros((256, 256), dtype=bool) 
-    mask[128 - 10: 128 + 10, 128 -10: 128 + 10] = 1
-    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
-    ax[0].imshow(images[0], cmap='gray')
-    ax[1].imshow(k_space_image, cmap='gray')
-    plt.show()
+    mask[:, 128 - 5: 128 + 5] = 1
+    # k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
+    # ax[0].imshow(images[0], cmap='gray')
+    # ax[1].imshow(k_space_image, cmap='gray')
+    # plt.show()
 
     image_slices(np.abs(ifft_2d_img(k_space[0] * mask)))
+    #plt.show()
+
+    image_slices(np.abs(ifft_2d_img(k_space[0])))
+
+
+    dataset = UndersampleDecorator(dataset)
+
+    doub_under, under, dataset_k, k = dataset[0]
+
+    image_slices(np.abs(ifft_2d_img(under[0])))
+
+    image_slices(np.abs(ifft_2d_img(under[0]*mask)))
+
+    image_slices(np.abs(ifft_2d_img(dataset_k[0])))
+
     plt.show()
-
-
-
