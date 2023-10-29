@@ -46,7 +46,7 @@ def process_file(file, out_path):
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
         print(save_file)
         with h5py.File(save_file, 'w') as fr:
-            dset = fr.create_dataset("k_space", data=k_space, dtype=np.complex64)
+            dset = fr.create_dataset("k_space", data=k_space)
             dset = fr.create_dataset("contrasts", data=modality_name)
         print(f'saved to file: {save_file}')
 
@@ -67,9 +67,9 @@ if __name__ == '__main__':
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
-    #num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
-    #print(num_processes)
-    #pool = multiprocessing.Pool(processes=num_processes)
+    num_processes = 15#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    print(num_processes)
+    pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         files = [os.path.join(dir, split, file) for file in files]
         print(files)
 
-        for file in files:
-            process_file(file, os.path.join(save_dir, split))
+        #for file in files:
+        #    process_file(file, os.path.join(save_dir, split))
 
-        #pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split))))
+        pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split))))
