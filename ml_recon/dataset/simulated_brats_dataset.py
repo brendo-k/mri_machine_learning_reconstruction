@@ -9,6 +9,7 @@ import torch
 import numpy as np
 
 import nibabel as nib
+from skimage.restoration import unwrap_phase
 
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
@@ -173,17 +174,19 @@ class SimulatedBrats(KSpaceDataset):
 
     @staticmethod
     def apply_sensetivities(image):
-        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/sens.npy')
-        sense_map = np.squeeze(sense_map)
-        sense_map = np.transpose(sense_map, (2, 1, 0))
+        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed.npy')
+        #sense_map = np.squeeze(sense_map)
+        sense_map = np.transpose(sense_map, (0, 2, 1))
+        sense_map = sense_map[:, 20:-20, 20:-20]
 
-        mag_sense_map = np.abs(sense_map)
-        phase_sense_map = np.angle(sense_map)
+        #mag_sense_map = np.abs(sense_map)
+        #phase_sense_map = np.angle(sense_map)
 
-        resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
-        resampled_sense_phase = SimulatedBrats.resample(phase_sense_map, image.shape[1], image.shape[2])
+        resampled_sense_map = SimulatedBrats.resample(sense_map, image.shape[1], image.shape[2])
+        #resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
+        #resampled_sense_phase = SimulatedBrats.resample(phase_sense_map, image.shape[1], image.shape[2])
 
-        resampled_sense_map = resampled_sense_mag * np.exp(1j * resampled_sense_phase)
+        #resampled_sense_map = resampled_sense_mag * np.exp(1j * resampled_sense_phase)
 
         sense_map = np.expand_dims(resampled_sense_map, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
@@ -222,7 +225,7 @@ class SimulatedBrats(KSpaceDataset):
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
         mean = np.mean(np.abs(k_space))
-        noise_scale = mean * 0.05
+        noise_scale = mean * 0.01
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
@@ -238,7 +241,7 @@ class SimulatedBrats(KSpaceDataset):
         yi = np.linspace(0, height - 1, resample_height)
         xi = np.linspace(0, width - 1, resample_width)
         (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
-        interpolator = RegularGridInterpolator((c, y, x), data, method='linear')
+        interpolator = RegularGridInterpolator((c, y, x), data, method='nearest')
         data = interpolator((ci.flatten(), yi.flatten(), xi.flatten()))
         interp_data = np.reshape(data, (contrasts, resample_height, resample_width))
         
@@ -262,36 +265,36 @@ if __name__ == '__main__':
     images = torch.from_numpy(images)
 
 
-    # fig, ax = plt.subplots(1, 3)
+    fig, ax = plt.subplots(1, 3)
 
-    # k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
-    # ax[0].imshow(images[0], cmap='gray')
-    # ax[1].imshow(k_space_image, cmap='gray')
-    # ax[2].imshow(images[0] - k_space_image)
+    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
+    ax[0].imshow(images[0], cmap='gray')
+    ax[1].imshow(k_space_image, cmap='gray')
+    ax[2].imshow(images[0] - k_space_image)
 
-    # fig, ax = plt.subplots(1, 3)
+    fig, ax = plt.subplots(1, 3)
     
     mask = np.zeros((256, 256), dtype=bool) 
     mask[:, 128 - 5: 128 + 5] = 1
-    # k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
-    # ax[0].imshow(images[0], cmap='gray')
-    # ax[1].imshow(k_space_image, cmap='gray')
-    # plt.show()
-
-    image_slices(np.abs(ifft_2d_img(k_space[0] * mask)))
-    #plt.show()
-
-    image_slices(np.abs(ifft_2d_img(k_space[0])))
-
-
-    dataset = UndersampleDecorator(dataset)
-
-    doub_under, under, dataset_k, k = dataset[0]
-
-    image_slices(np.abs(ifft_2d_img(under[0])))
-
-    image_slices(np.abs(ifft_2d_img(under[0]*mask)))
-
-    image_slices(np.abs(ifft_2d_img(dataset_k[0])))
-
+    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
+    ax[0].imshow(images[0], cmap='gray')
+    ax[1].imshow(k_space_image, cmap='gray')
     plt.show()
+
+    #image_slices(np.abs(ifft_2d_img(k_space[0] * mask)))
+    ##plt.show()
+
+    #image_slices(np.abs(ifft_2d_img(k_space[0])))
+
+
+    #dataset = UndersampleDecorator(dataset)
+
+    #doub_under, under, dataset_k, k = dataset[0]
+
+    #image_slices(np.abs(ifft_2d_img(under[0])))
+
+    #image_slices(np.abs(ifft_2d_img(under[0]*mask)))
+
+    #image_slices(np.abs(ifft_2d_img(dataset_k[0])))
+
+    #plt.show()
