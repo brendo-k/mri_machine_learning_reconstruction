@@ -24,25 +24,31 @@ def process_file(file, out_path):
         
     images = np.stack(images, axis=0)
     k_space = np.zeros((4, 8, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
+    seed = np.random.randint(0, 1_000_000)
+    print(seed)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
         if i >= images.shape[-1]-20:
             break
         cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
-        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, None)
+        cur_images = np.transpose(cur_images, (0, 2, 1))
+        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, seed + i)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
+
     try:
         os.mkdir(os.path.join(out_path, patient_name))
     except FileExistsError as e:
         print(e)
 
     try:
-        with h5py.File(os.path.join(out_path, patient_name, patient_name + '.h5'), 'w') as fr:
-            dset = fr.create_dataset("k_space", k_space.shape, chunks=(1, 1, 8, 256, 256), dtype=np.complex64)
-            dset[...] = k_space
+        save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
+        print(save_file)
+        with h5py.File(save_file, 'w') as fr:
+            dset = fr.create_dataset("k_space", data=k_space, dtype=np.complex64)
             dset = fr.create_dataset("contrasts", data=modality_name)
+        print(f'saved to file: {save_file}')
 
     except Exception as e:
         print(e)
@@ -57,13 +63,13 @@ def process_file(file, out_path):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/chunked/'
+    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
-    num_processes = 12#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
-    print(num_processes)
-    pool = multiprocessing.Pool(processes=num_processes)
+    #num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    #print(num_processes)
+    #pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
@@ -72,5 +78,8 @@ if __name__ == '__main__':
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
         print(files)
-        
-        pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split))))
+
+        for file in files:
+            process_file(file, os.path.join(save_dir, split))
+
+        #pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split))))
