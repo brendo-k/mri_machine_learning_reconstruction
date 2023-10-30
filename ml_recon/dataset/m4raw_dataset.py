@@ -9,10 +9,11 @@ import h5py
 import random
 from argparse import ArgumentParser
 
+from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils.read_headers import make_header
 from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
 
-class M4Raw(Dataset):
+class M4Raw(KSpaceDataset):
     """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
     dataset. It does not do any subsampling
 
@@ -24,45 +25,37 @@ class M4Raw(Dataset):
             nx:int = 256,
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
-            build_new_header: bool = False
             ):
 
         # call super constructor
-        super().__init__()
+        super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
-        self.nx = nx
-        self.ny = ny
-        self.random_index = random.randint(0, 10000)
 
-        data_list = []
-
-        header_file = os.path.join(data_dir, 'header.json')
-
-        if not os.path.isfile(header_file) or build_new_header:
-            print(f'Making header in {data_dir}')
-            data_list = make_header(data_dir, output=header_file)
-        else:    
-            with open(header_file, 'r') as f:
-                print('Header file found!')
-                index_info = json.load(f)
-                for value in index_info:
-                    data_list.append(value)
+        files = os.listdir(data_dir)
+        patient_id = list(set([file.split('-')[0] for file in files]))
+        patient_id.sort()
         
-        slices = np.array([volume['slices'] for volume in data_list])
-        self.file_names = np.array([volume['file_name'] for volume in data_list])
-        self.slice_cumulative_sum = np.cumsum(slices)
+        slices = []
+        self.file_names = []
+
+        first = True
+        for patient in patient_id:
+            patient_files = [os.path.join(data_dir, file) for file in files if patient in file]
+            patient_files.sort()
+            if first: 
+                self.contrast_order = [file.split('-')[1] for file in patient_files]
+                first = False
+
+            
+            self.file_names.append(patient_files)
+
+            with h5py.File(patient_files[0], 'r') as fr:
+                slices.append(fr['kspace'].shape[0])
+
+        self.slice_cumulative_sum = np.cumsum(slices) 
         self.length = self.slice_cumulative_sum[-1]
-
-        self.omega_prob = gen_pdf_columns(nx, ny, 1/R, poly_order, acs_lines)
-        self.lambda_prob = gen_pdf_columns(nx, ny, 1/R_hat, poly_order, acs_lines)
-
-        one_minus_eps = 1 - 1e-3
-        self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
-
-        self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
-        
-        print(f'Found {self.slice_cumulative_sum[-1]} slices')
+        print(f'Found {self.length} slices!')
 
 
     def __len__(self):
@@ -70,27 +63,27 @@ class M4Raw(Dataset):
 
     def __getitem__(self, index):
         k_space = self.get_data_from_file(index)
-        k_space = k_space.flip(1)
         k_space = self.resample_or_pad(k_space)
 
-        under = apply_undersampling(index + self.random_index, self.omega_prob, k_space, True)
-        doub_under = apply_undersampling(index, self.lambda_prob, under, False)
-        
-        data = (doub_under, under, k_space, self.k)
-
         if self.transforms:
-            data = self.transforms(data)
-        return data
+            k_space = self.transforms(k_space)
+        return k_space
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
-        file_name = self.file_names[volume_index]
-        with h5py.File(file_name) as fr:
-            k_space = torch.as_tensor(fr['kspace'][slice_index])
+        cur_files = self.file_names[volume_index]
+        
+        k_space = []
+        
+        for file in cur_files:
+            with h5py.File(file) as fr:
+                k_space.append(torch.as_tensor(fr['kspace'][slice_index]))
+
+        k_space = torch.stack(k_space, axis=0)
         return k_space 
 
-    def resample_or_pad(self, k_space, reduce_fov=True):
+    def resample_or_pad(self, k_space):
         """Takes k-space data and resamples data to desired height and width. If 
         the image is larger, we crop. If the image is smaller, we pad with zeros
 
@@ -103,56 +96,12 @@ class M4Raw(Dataset):
         """
         resample_height = self.ny
         resample_width = self.nx
-        if reduce_fov:
-            k_space = k_space[:, ::2, :]
 
         return F.center_crop(k_space, (resample_height, resample_width))
 
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-
-        parser.add_argument(
-                "--R", 
-                default=4,
-                type=int,
-                help="Omega undersampling factor"
-                )
-
-        parser.add_argument(
-                "--R_hat", 
-                default=2,
-                type=int,
-                help="Lambda undersampling factor"
-                )
-
-        parser.add_argument(
-                "--poly_order", 
-                default=8,
-                type=int,
-                help="Polynomial order for undersampling"
-                )
-
-        parser.add_argument(
-                "--nx", 
-                default=256,
-                type=int,
-                help="Number of points in the x direction"
-                )
-
-        parser.add_argument(
-                "--ny", 
-                default=256,
-                type=int,
-                help="Number of points in the y direction"
-                )
-
-        parser.add_argument(
-                "--acs_lines", 
-                default=10,
-                type=int,
-                help="Number of lines to keep in auto calibration region"
-                )
 
         parser.add_argument(
                 '--data_dir', 
@@ -164,8 +113,16 @@ class M4Raw(Dataset):
         return parser
 
 
+import matplotlib.pyplot as plt 
+from ml_recon.utils import image_slices, root_sum_of_squares, ifft_2d_img
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/multicoil_train/'
-    dataset = SliceDataset(dir)
+    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw/multicoil_train_averaged/'
+    dataset = M4Raw(dir)
     l = dataset[0]
-    t = dataset[100]
+
+    image_slices(l[0].abs(), cmap='gray')
+    image_slices(ifft_2d_img(l[0]).abs(), cmap='gray')
+    image_slices(root_sum_of_squares(ifft_2d_img(l), coil_dim=1), cmap='gray')
+    plt.show()
+
+
