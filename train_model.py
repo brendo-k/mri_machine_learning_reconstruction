@@ -57,7 +57,7 @@ def main():
 
     cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
     if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + str(args.R) + '-' +  args.loss_type + '-' + ','.join(args.contrasts)
+        writer_dir = '/home/kadotab/scratch/runs/' + str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
         if os.path.exists(writer_dir):
             while os.path.exists(writer_dir):
                 if writer_dir[-1].isnumeric():
