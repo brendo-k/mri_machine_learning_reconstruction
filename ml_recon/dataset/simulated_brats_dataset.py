@@ -192,7 +192,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=4):
+    def generate_and_apply_phase(data, seed, center_region=2):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -205,12 +205,11 @@ class SimulatedBrats(KSpaceDataset):
         center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
         center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
         rng = np.random.default_rng(seed)
-        coeff = rng.normal(size=(center_region, center_region)) + 1j * rng.normal(size=(center_region, center_region))
+        coeff = rng.random(size=(center_region, center_region)) + 1j * rng.random(size=(center_region, center_region))
         phase_frequency[center_box_x, center_box_y] = coeff
 
         phase = fft_2d_img(phase_frequency)
         phase = np.angle(phase)
-        phase = phase.astype(float)
         
         return phase
 
@@ -252,12 +251,12 @@ import matplotlib.pyplot as plt
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
 if __name__ == '__main__':
     
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/val'
     dataset = SimulatedBrats(data_dir)
 
 
-    k_space = dataset[0]
-    volume_index, slice_index = dataset.get_vol_slice_index(0)
+    k_space = dataset[10]
+    volume_index, slice_index = dataset.get_vol_slice_index(10)
     data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
     images = dataset.resample(data, 256, 256)
     images = np.transpose(images, (0, 2, 1))

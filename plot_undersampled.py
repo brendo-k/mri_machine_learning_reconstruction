@@ -5,13 +5,13 @@ from ml_recon.utils import image_slices, ifft_2d_img, root_sum_of_squares
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/train/'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/val/'
 
     sim_brats = KSpaceBrats(data_dir)
 
     dataset = UndersampleDecorator(sim_brats)
 
-    doub_under, under, k_space, k = dataset[0]
+    doub_under, under, k_space, k = dataset[10]
 
     plt.figure(1)
     image_slices(root_sum_of_squares(ifft_2d_img(k_space), coil_dim=1).abs(), cmap='gray')
