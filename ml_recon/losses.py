@@ -61,7 +61,7 @@ class SSIMLoss(nn.Module):
             return 1 - S
 
 def L1L2Loss(target: torch.Tensor, predicted: torch.Tensor):
-    l2_component = (target - predicted).norm(2, dim=(0, 2, 3, 4))/target.norm(2, dim=(0, 2, 3, 4)) 
-    l1_component = (target - predicted).norm(1, dim=(0, 2, 3, 4))/target.norm(1, dim=(0, 2, 3, 4))
+    l2_component = (target - predicted).norm(2, dim=(2, 3, 4))/target.norm(2, dim=(2, 3, 4)) 
+    l1_component = (target - predicted).norm(1, dim=(2, 3, 4))/target.norm(1, dim=(2, 3, 4))
     loss  = torch.sum(l2_component + l1_component)
     return loss
