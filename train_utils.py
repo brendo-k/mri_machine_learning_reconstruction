@@ -134,8 +134,8 @@ def train_step(model, loss_function, optimizer, data, device, loss_type) -> torc
     predicted_sampled *= zf_mask
 
     loss = loss_function(
-            torch.view_as_real(predicted_sampled * loss_mask),
-            torch.view_as_real(target_slice * loss_mask)
+            torch.view_as_real(target_slice * loss_mask),
+            torch.view_as_real(predicted_sampled * loss_mask)
             )
     
     # normalize to number of ssdu indecies not number of voxels
