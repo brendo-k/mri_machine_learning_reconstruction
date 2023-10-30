@@ -8,7 +8,7 @@ from functools import partial
 from itertools import repeat
 
 # Define a function to process a single file
-def process_file(file, out_path):
+def process_file(file, out_path, seed):
     print(f'Starting file {file}')
     patient_name = file.split('/')[-1]
 
@@ -23,9 +23,7 @@ def process_file(file, out_path):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 8, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
-    seed = np.random.randint(0, 1_000_000)
-    print(seed)
+    k_space = np.zeros((4, 12, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -33,7 +31,7 @@ def process_file(file, out_path):
             break
         cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
         cur_images = np.transpose(cur_images, (0, 2, 1))
-        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, seed + i)
+        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, seed)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
 
@@ -79,8 +77,9 @@ if __name__ == '__main__':
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
         print(files)
+        seeds = [np.random.randint(0, 1_000_000_00) for _ in range(len(files))]
 
         #for file in files:
         #    process_file(file, os.path.join(save_dir, split))
 
-        pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split))))
+        pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split)), seeds))
