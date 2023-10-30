@@ -57,7 +57,7 @@ def main():
 
     cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
     if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + cur_time + model.__class__.__name__ + '-' + args.model + '-' + args.loss_type
+        writer_dir = '/home/kadotab/scratch/runs/' + str(args.R) + '-' +  args.loss_type + '-' + ','.join(args.contrasts)
         if os.path.exists(writer_dir):
             while os.path.exists(writer_dir):
                 if writer_dir[-1].isnumeric():
@@ -149,7 +149,7 @@ def main():
         hparams_writer.add_hparams(
                 hparams,
                 metrics,
-                run_name=cur_time + '-' + args.loss_type + '-' + ','.join(args.contrasts)
+                run_name=cur_time + '-' + args.loss_type + '-' + ','.join(args.contrasts) + '-' + str(args.R)
                 )
 
     if distributed:
