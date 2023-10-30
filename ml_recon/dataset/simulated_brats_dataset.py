@@ -9,7 +9,6 @@ import torch
 import numpy as np
 
 import nibabel as nib
-from skimage.restoration import unwrap_phase
 
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
