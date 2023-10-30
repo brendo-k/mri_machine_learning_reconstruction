@@ -16,6 +16,7 @@ from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.m4raw_dataset import M4Raw 
 from ml_recon.dataset.kspace_brats import KSpaceBrats
+from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
 from ml_recon.transforms import normalize
