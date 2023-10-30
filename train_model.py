@@ -359,6 +359,7 @@ if __name__ == '__main__':
     parser.add_argument('--world_size', default=2, type=int, help='')
     parser.add_argument('--distributed', action='store_true', help='')
     parser.add_argument('--use_subset', action='store_true', help='')
+    parser.add_argument('--dataset', default='brats', type=str, help='')
     parser = BratsDataset.add_model_specific_args(parser)
     parser = UndersampleDecorator.add_model_specific_args(parser)
     main()
