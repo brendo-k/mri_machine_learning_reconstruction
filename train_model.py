@@ -14,7 +14,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
 from ml_recon.models.varnet_mc import VarNet_mc
-from ml_recon.dataset.Brats_dataset import BratsDataset 
+from ml_recon.dataset.m4raw_dataset import M4Raw 
 from ml_recon.dataset.kspace_brats import KSpaceBrats
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
@@ -159,9 +159,15 @@ def main():
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
     
-    train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
-    test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    if arg.dataset == 'brats':
+        train_dataset = BratsDataset(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+        val_dataset = BratsDataset(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+        test_dataset = BratsDataset(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    elif arg.dataset == 'm4raw':
+        train_dataset = M4Raw(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+        val_dataset = M4Raw(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+        test_dataset = M4Raw(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+
 
     undersampling_args = {
                 'R': arg.R, 
