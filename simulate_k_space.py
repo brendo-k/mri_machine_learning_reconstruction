@@ -9,7 +9,7 @@ from itertools import repeat
 
 # Define a function to process a single file
 def process_file(file, out_path, seed):
-    print(f'Starting file {file}')
+    print(f'Starting file {file}, with seed: {seed}')
     patient_name = file.split('/')[-1]
 
     modality_files = os.listdir(file)
