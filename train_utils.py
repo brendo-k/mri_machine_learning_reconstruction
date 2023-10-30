@@ -84,6 +84,7 @@ def train(model, loss_function, dataloader, optimizer, device, loss_type, schedu
  
     with cm as prof:
         for step, data in enumerate(dataloader):
+            
             running_loss += train_step(model, loss_function, optimizer, data, device, loss_type)
 
             if prof:

@@ -31,12 +31,17 @@ class VarNet_mc(nn.Module):
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
         # get sensetivity maps
+        assert not torch.isnan(reference_k).any()
+        assert not torch.isnan(mask).any()
         sense_maps = self.sens_model(reference_k, mask)
+
+        assert not torch.isnan(sense_maps).any()
         # current k_space 
         current_k = reference_k.clone()
         for i, cascade in enumerate(self.cascades):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
+            assert not torch.isnan(reference_k).any()
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step

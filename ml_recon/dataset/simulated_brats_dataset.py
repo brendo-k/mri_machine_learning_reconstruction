@@ -223,7 +223,7 @@ class SimulatedBrats(KSpaceDataset):
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
         mean = np.mean(np.abs(k_space))
-        noise_scale = mean * 0.01
+        noise_scale = mean * 0.1
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
