@@ -23,7 +23,7 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 12, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
+    k_space = np.zeros((4, 8, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -62,11 +62,11 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
+    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_diff_phase/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
-    num_processes = 12#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    num_processes = 8#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
