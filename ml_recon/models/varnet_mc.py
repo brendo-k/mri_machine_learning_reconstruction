@@ -36,6 +36,7 @@ class VarNet_mc(nn.Module):
         sense_maps = self.sens_model(reference_k, mask)
 
         assert not torch.isnan(sense_maps).any()
+
         # current k_space 
         current_k = reference_k.clone()
         for i, cascade in enumerate(self.cascades):

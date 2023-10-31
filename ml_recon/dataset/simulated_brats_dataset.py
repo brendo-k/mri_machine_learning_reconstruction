@@ -129,38 +129,24 @@ class SimulatedBrats(KSpaceDataset):
         files = self.data_list[volume_index]
         data = []
         modality_label = []
-        if 'all' in files.keys():
-            data = np.load(files['all'])
-            data = data[..., slice_index]
+        for modality in sorted(files):
+            if modality.lower() in self.contrasts: 
+                file_name = files[modality]
+                ext = os.path.splitext(file_name)[1]
+                if 'gz' in ext:
+                    file_object = nib.nifti1.load(file_name) 
+                    image = file_object.get_fdata()
+                elif 'npy' in ext:
+                    image = np.load(file_name)
+                else:
+                    raise ValueError(f'Can not load file with extention {ext}')
 
-            labels_path = os.path.join(os.path.split(files['all'])[0], 'labels')
-            with open(labels_path, 'r') as fr:
-                reader = csv.reader(fr)
-                all_labels = np.array(list(reader))
-                all_labels = np.squeeze(all_labels)
-
-            use_modality_index = np.isin(all_labels, self.contrasts)
-            data = data[use_modality_index, ...]
-            modality_label = all_labels[use_modality_index]
-            
-        else:
-            for modality in sorted(files):
-                if modality.lower() in self.contrasts: 
-                    file_name = files[modality]
-                    ext = os.path.splitext(file_name)[1]
-                    if 'gz' in ext:
-                        file_object = nib.nifti1.load(file_name) 
-                        image = file_object.get_fdata()
-                    elif 'npy' in ext:
-                        image = np.load(file_name)
-                    else:
-                        raise ValueError(f'Can not load file with extention {ext}')
-
-                    slice = image[:, :, slice_index]
-                    data.append(slice)
-                    modality_label.append(modality)
-        
-            data = np.stack(data, axis=0)
+                slice = image[:, :, slice_index]
+                slice = (slice - np.min(slice)) / (np.max(slice) - np.min(slice))
+                data.append(slice)
+                modality_label.append(modality)
+    
+        data = np.stack(data, axis=0)
         return data, modality_label
 
     @staticmethod
@@ -176,23 +162,18 @@ class SimulatedBrats(KSpaceDataset):
         sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed.npy')
         #sense_map = np.squeeze(sense_map)
         sense_map = np.transpose(sense_map, (0, 2, 1))
-        sense_map = sense_map[:, 20:-20, 20:-20]
+        sense_map = sense_map[:, 25:-25, 25:-25]
 
         mag_sense_map = np.abs(sense_map)
-        phase_sense_map = np.angle(sense_map)
 
-        #resampled_sense_map = SimulatedBrats.resample(sense_map, image.shape[1], image.shape[2])
         resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
-        resampled_sense_phase = SimulatedBrats.resample(phase_sense_map, image.shape[1], image.shape[2])
 
-        resampled_sense_map = resampled_sense_mag * np.exp(1j * resampled_sense_phase)
-
-        sense_map = np.expand_dims(resampled_sense_map, 0)
+        sense_map = np.expand_dims(resampled_sense_mag, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=2):
+    def generate_and_apply_phase(data, seed, center_region=4):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -222,8 +203,7 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
-        mean = np.mean(np.abs(k_space))
-        noise_scale = mean * 0.1
+        noise_scale = 0.01
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
@@ -251,12 +231,12 @@ import matplotlib.pyplot as plt
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
 if __name__ == '__main__':
     
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/val'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
     dataset = SimulatedBrats(data_dir)
 
 
-    k_space = dataset[10]
-    volume_index, slice_index = dataset.get_vol_slice_index(10)
+    k_space = dataset[2000]
+    volume_index, slice_index = dataset.get_vol_slice_index(2000)
     data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
     images = dataset.resample(data, 256, 256)
     images = np.transpose(images, (0, 2, 1))
@@ -279,8 +259,8 @@ if __name__ == '__main__':
     ax[1].imshow(k_space_image, cmap='gray')
     plt.show()
 
-    #image_slices(np.abs(ifft_2d_img(k_space[0] * mask)))
-    ##plt.show()
+    image_slices(root_sum_of_squares(ifft_2d_img(k_space), coil_dim=1), cmap='gray')
+    plt.show()
 
     #image_slices(np.abs(ifft_2d_img(k_space[0])))
 
