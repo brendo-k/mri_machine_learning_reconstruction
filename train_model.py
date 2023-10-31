@@ -43,7 +43,7 @@ def main():
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args.model, current_device, chans=2*len(args.contrasts))
+    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels)
 
     model = setup_ddp(current_device, distributed, model)
 
@@ -311,13 +311,13 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         writer.add_images('images/' + training_type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
-def setup_model_backbone(model_name, current_device, chans=8):
+def setup_model_backbone(model_name, current_device, input_channels=8, chans=18):
     if model_name == 'unet':
-        backbone = partial(Unet, in_chan=chans, out_chan=chans, depth=4, chans=18)
+        backbone = partial(Unet, in_chan=input_channels, out_chan=input_channels, depth=4, chans=chans)
     elif model_name == 'resnet':
-        backbone = partial(ResNet, in_chan=chans, out_chan=chans, itterations=15, chans=32)
+        backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=15, chans=32)
     elif model_name == 'dncnn':
-        backbone = partial(DnCNN, in_chan=chans, out_chan=chans, feature_size=32, num_of_layers=15)
+        backbone = partial(DnCNN, in_chan=input_channels, out_chan=input_channels, feature_size=32, num_of_layers=15)
     elif model_name == 'transformer':
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
@@ -353,6 +353,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
+    parser.add_argument('--channels', type=int, default=18, help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
     parser.add_argument('--dist_backend', default='nccl', type=str, help='')
