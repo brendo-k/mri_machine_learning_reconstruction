@@ -193,8 +193,8 @@ def val_step(model, loss_function, device, data, supervised):
     predicted_sampled = model(input_slice,  mask)
     predicted_sampled *= zf_mask
     loss = loss_function(
-            torch.view_as_real(predicted_sampled * loss_mask),
-            torch.view_as_real(target_slice * loss_mask)
+            torch.view_as_real(target_slice * loss_mask),
+            torch.view_as_real(predicted_sampled * loss_mask)
             )
 
     #loss = loss * predicted_sampled.numel() / loss_mask.sum()
