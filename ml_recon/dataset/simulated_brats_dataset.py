@@ -151,7 +151,9 @@ class SimulatedBrats(KSpaceDataset):
 
     @staticmethod
     def simulate_k_space(image, seed):
+        #image [Contrast height width]
         image_w_sense = SimulatedBrats.apply_sensetivities(image)
+        #image_w_sense [Contrast coil height width]
         image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed)
         k_space = fft_2d_img(image_w_phase)
         k_space = SimulatedBrats.apply_noise(k_space, seed)

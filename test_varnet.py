@@ -11,17 +11,18 @@ from ml_recon.transforms import normalize
 from ml_recon.dataset.Brats_dataset import BratsDataset 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator 
 from ml_recon.utils import ifft_2d_img
-from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
+from ml_recon.utils.root_sum_of_squares import root_sum_of_squares, image_slices
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.Loss.ssim_loss import SSIMLoss
 from train_utils import to_device, setup_profile_context_manager
+import matplotlib.pyplot as plt
 
 from torchvision.transforms import Compose
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    path = '/home/kadotab/scratch/0910-08:57:44VarNet-unet-ssdu/80.pt'
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/'
+    path = '/home/kadotab/scratch/runs/6-t1,t2,flair-supervised/weight_dir/50.pt'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw/multicoil_train_averaged/'
 
     model = setup_model(path, device)
     dataloader = setup_dataloader(data_dir)
@@ -73,12 +74,16 @@ def test(model, test_loader, num_contrasts, profile):
                 
                 predicted_sampled = model(input, mask)
                 predicted_sampled = predicted_sampled * (input == 0) + input
-                
                 predicted_sampled = ifft_2d_img(predicted_sampled)
                 target = ifft_2d_img(target)
 
                 target = root_sum_of_squares(target, coil_dim=2)
                 predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
+
+                image_slices(target)
+                plt.savefig("images/output/target")
+                image_slices(predicted_sampled)
+                plt.savefig("images/output/")
 
                 assert isinstance(predicted_sampled, torch.Tensor)
                 assert isinstance(target, torch.Tensor)
