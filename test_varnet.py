@@ -11,7 +11,7 @@ from ml_recon.transforms import normalize
 from ml_recon.dataset.Brats_dataset import BratsDataset 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator 
 from ml_recon.utils import ifft_2d_img
-from ml_recon.utils.root_sum_of_squares import root_sum_of_squares, image_slices
+from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.Loss.ssim_loss import SSIMLoss
 from train_utils import to_device, setup_profile_context_manager
@@ -79,11 +79,6 @@ def test(model, test_loader, num_contrasts, profile):
 
                 target = root_sum_of_squares(target, coil_dim=2)
                 predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
-
-                image_slices(target)
-                plt.savefig("images/output/target")
-                image_slices(predicted_sampled)
-                plt.savefig("images/output/")
 
                 assert isinstance(predicted_sampled, torch.Tensor)
                 assert isinstance(target, torch.Tensor)
