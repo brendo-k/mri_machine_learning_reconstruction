@@ -18,7 +18,7 @@ def main():
     
     current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     train_loader, val_loader, test_loader = prepare_data(args, False)
-    model = setup_model_backbone('unet', current_device, chans=len(args.contrasts)*2)
+    model = setup_model_backbone('unet', current_device, input_channels=len(args.contrasts)*2)
 
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
