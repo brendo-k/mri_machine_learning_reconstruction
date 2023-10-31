@@ -59,7 +59,7 @@ class M4Raw(KSpaceDataset):
         self.slice_cumulative_sum = np.cumsum(slices) 
         self.length = self.slice_cumulative_sum[-1]
         print(f'Found {self.length} slices!')
-        print(f'Found {self.contrasts} slices!')
+        print(f'Found {self.contrasts} contrats!!')
 
 
     def __len__(self):
@@ -77,7 +77,6 @@ class M4Raw(KSpaceDataset):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         cur_files = self.file_names[volume_index]
-        print(cur_files)
         cur_files = cur_files[self.contrast_index]
         
         k_space = []

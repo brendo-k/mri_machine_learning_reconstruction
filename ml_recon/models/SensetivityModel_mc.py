@@ -28,6 +28,7 @@ class SensetivityModel_mc(nn.Module):
     def forward(self, images, mask):
         if self.mask_center:
             images = self.mask(images, mask) 
+        assert not torch.isnan(images).any()
         images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
@@ -45,8 +46,10 @@ class SensetivityModel_mc(nn.Module):
         images = complex_to_real(images)
         # norm 
         images, mean, std = self.norm(images)
+        assert not torch.isnan(images).any()
         # pass through model
         images = self.model(images)
+        assert not torch.isnan(images).any()
         # unnorm
         images = self.unnorm(images, mean, std)
         # convert back to complex
@@ -57,7 +60,9 @@ class SensetivityModel_mc(nn.Module):
         else:
             images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
-        images = images / root_sum_of_squares(images, coil_dim=2).unsqueeze(2)
+        rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2)
+        assert not (rss_norm == 0).any()
+        images = images / rss_norm
         return images
 
     def mask(self, coil_images, center_mask):
@@ -88,7 +93,7 @@ class SensetivityModel_mc(nn.Module):
         x = x.view(b, 2, c // 2 * h * w)
 
         mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1)
+        std = x.std(dim=2).view(b, 2, 1, 1) + 1e-6
 
         x = x.view(b, c, h, w)
 
