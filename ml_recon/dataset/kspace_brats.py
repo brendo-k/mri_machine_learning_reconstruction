@@ -112,4 +112,4 @@ class KSpaceBrats(KSpaceDataset):
         with h5py.File(file, 'r') as fr:
             data = torch.as_tensor(fr['k_space'][slice_index, self.contrast_order_indexes])
 
-        return data.permute((0, 1, 2, 3))
+        return data
