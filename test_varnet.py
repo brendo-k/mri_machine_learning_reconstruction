@@ -74,22 +74,29 @@ def test(model, test_loader, num_contrasts, profile):
                 
                 predicted_sampled = model(input, mask)
                 predicted_sampled = predicted_sampled * (input == 0) + input
-                predicted_sampled = ifft_2d_img(predicted_sampled)
-                target = ifft_2d_img(target)
 
-                target = root_sum_of_squares(target, coil_dim=2)
+                predicted_sampled = ifft_2d_img(predicted_sampled)
                 predicted_sampled = root_sum_of_squares(predicted_sampled, coil_dim=2)
+
+                target = ifft_2d_img(target)
+                target = root_sum_of_squares(target, coil_dim=2)
+
+                mask = target > 0.01
+                target *= mask
+                predicted_sampled *= mask
 
                 assert isinstance(predicted_sampled, torch.Tensor)
                 assert isinstance(target, torch.Tensor)
 
                 for contrast in range(input.shape[1]):
-                    nmse_values[contrast, i] = nmse(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach()).detach()
-                    ssim_values[contrast, i] = ssim(predicted_sampled[:, [contrast], :, :].detach(), target[:, [contrast], :, :].detach(), target[:, contrast, :, :].max().detach() - target[:, contrast, :, :].min().detach()).detach()
-                    psnr_values[contrast, i] = psnr(predicted_sampled[:, contrast, :, :].detach(), target[:, contrast, :, :].detach())
+                    predicted_slice = predicted_sampled[:, [contrast], :, :]
+                    target_slice = target[:, [contrast], :, :]
+                    nmse_values[contrast, i] = nmse(target_slice, predicted_slice)
+                    ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.amax(0))
+                    psnr_values[contrast, i] = psnr(target_slice, predicted_slice)
         
     ave_nmse = nmse_values.sum(1)/len(test_loader)
-    ave_ssim = 1 - ssim_values.sum(1)/len(test_loader)
+    ave_ssim = (1 - ssim_values.sum(1))/len(test_loader)
     ave_psnr = psnr_values.sum(1)/len(test_loader)
     print(f'Average normalized mean squared error: {ave_nmse}')
     print(f'Average SSIM: {ave_ssim}')
