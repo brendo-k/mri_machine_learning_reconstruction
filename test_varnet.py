@@ -21,22 +21,28 @@ from torchvision.transforms import Compose
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    path = '/home/kadotab/scratch/runs/6-t1,t2,flair-supervised/weight_dir/50.pt'
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw/multicoil_train_averaged/'
+    path = '/home/kadotab/python/ismrm_figures/6-flair-ssdu/weight_dir/50.pt'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
 
-    model = setup_model(path, device)
-    dataloader = setup_dataloader(data_dir)
+    checkpoint = torch.load(path, map_location=device)
 
-    test(model, dataloader, num_contrasts=4, profile=False)
+    new_dict = {}
+    for key, values in checkpoint['model'].items():
+        new_key = '.'.join(key.split('.')[1:])
+        new_dict[new_key] = values
 
-def setup_model(weight_path, device):
-    checkpoint = torch.load(weight_path, map_location=device)
+    model = setup_model(new_dict)
+    dataloader = setup_dataloader(data_dir, 'flair')
+
+    test(model, dataloader, num_contrasts=1, profile=False)
+
+def setup_model(weights):
     backbone = partial(Unet, 2, 2)
     model = VarNet_mc(backbone)
-    model.load_state_dict(checkpoint['model'])
+    model.load_state_dict(weights)
     return model
 
-def setup_dataloader(data_dir):
+def setup_dataloader(data_dir, contrasts):
     transforms = Compose(
         (
             normalize(),
@@ -44,7 +50,7 @@ def setup_dataloader(data_dir):
     )
  
     test_dataset = UndersampleDecorator(
-        BratsDataset(os.path.join(data_dir, 'test')),
+        BratsDataset(os.path.join(data_dir, 'test'), contrasts=contrasts),
         transforms=transforms,
         R=4,
         R_hat=2, 
@@ -91,12 +97,13 @@ def test(model, test_loader, num_contrasts, profile):
                 for contrast in range(input.shape[1]):
                     predicted_slice = predicted_sampled[:, [contrast], :, :]
                     target_slice = target[:, [contrast], :, :]
+
                     nmse_values[contrast, i] = nmse(target_slice, predicted_slice)
-                    ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.amax(0))
+                    ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.max())
                     psnr_values[contrast, i] = psnr(target_slice, predicted_slice)
         
     ave_nmse = nmse_values.sum(1)/len(test_loader)
-    ave_ssim = (1 - ssim_values.sum(1))/len(test_loader)
+    ave_ssim = 1 - ssim_values.sum(1)/len(test_loader)
     ave_psnr = psnr_values.sum(1)/len(test_loader)
     print(f'Average normalized mean squared error: {ave_nmse}')
     print(f'Average SSIM: {ave_ssim}')
