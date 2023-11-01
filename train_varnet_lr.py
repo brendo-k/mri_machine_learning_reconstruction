@@ -13,21 +13,21 @@ from torch.distributed import init_process_group, destroy_process_group
 
 def main():
     args = parser.parse_args()
-    args.data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    args.contrasts = ['t1']
+    args.data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
+    args.contrasts = ['t1', 't2', 't1ce', 'flair']
     
     current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     train_loader, val_loader, test_loader = prepare_data(args, False)
     model = setup_model_backbone('unet', current_device, input_channels=len(args.contrasts)*2)
 
     loss_fn = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=150, step_size_down=0, cycle_momentum=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-1)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-5, max_lr=1, step_size_up=200, step_size_down=0, cycle_momentum=False)
 
     losses = []
     lr = []
 
-    for i in range(150):
+    for i in range(200):
         print(scheduler.get_last_lr())
         optimizer.zero_grad()
         data = next(iter(train_loader))
@@ -66,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--world_size', default=2, type=int, help='')
     parser.add_argument('--distributed', action='store_true', help='')
     parser.add_argument('--use_subset', action='store_true', help='')
+    parser.add_argument('--dataset', type=str, default='brats', help='')
     parser = BratsDataset.add_model_specific_args(parser)
     parser = UndersampleDecorator.add_model_specific_args(parser)
     main()
