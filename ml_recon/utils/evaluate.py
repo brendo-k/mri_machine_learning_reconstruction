@@ -44,7 +44,7 @@ def ssim(
 
     # subtract by 1 since ssimloss is inverted 
     ssim = SSIMLoss()(
-            gt, pred, data_range=maxval, reduced=False
+            gt, pred, data_range=maxval
         )
 
     return 1 - ssim 
