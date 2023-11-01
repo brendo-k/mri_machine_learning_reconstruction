@@ -20,7 +20,7 @@ def mse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
 def nmse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Normalized Mean Squared Error (NMSE)"""
     nmse = torch.linalg.vector_norm(gt - pred, 2, dim=(-1, -2)) ** 2 / torch.linalg.vector_norm(gt, 2, dim=(-1, -2)) ** 2
-    return nmse
+    return nmse.mean()
 
 
 def psnr(
@@ -28,7 +28,7 @@ def psnr(
     """Compute Peak Signal to Noise Ratio metric (PSNR)"""
     error = mse(gt, pred)
     psnr = 10 * torch.log10(pred.amax(dim=(-1, -2)).pow(2)/error)
-    return psnr
+    return psnr.mean()
 
 
 def ssim(
@@ -47,4 +47,4 @@ def ssim(
             gt, pred, data_range=maxval
         )
 
-    return 1 - ssim 
+    return 1 - ssim
