@@ -59,7 +59,7 @@ def setup_dataloader(data_dir, contrasts):
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
     return test_loader
 
-def test(model, test_loader, num_contrasts, profile):
+def test(model, test_loader, num_contrasts, profile, mask_output=True):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     nmse_values = torch.zeros((num_contrasts, len(test_loader)))
@@ -87,9 +87,10 @@ def test(model, test_loader, num_contrasts, profile):
                 target = ifft_2d_img(target)
                 target = root_sum_of_squares(target, coil_dim=2)
 
-                mask = target > 0.01
-                target *= mask
-                predicted_sampled *= mask
+                if mask_output:
+                    output_mask = (target > 0.01)
+                    target *= output_mask
+                    predicted_sampled *= output_mask
 
                 assert isinstance(predicted_sampled, torch.Tensor)
                 assert isinstance(target, torch.Tensor)
@@ -100,6 +101,7 @@ def test(model, test_loader, num_contrasts, profile):
 
                     nmse_values[contrast, i] = nmse(target_slice, predicted_slice)
                     ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.max())
+                    
                     psnr_values[contrast, i] = psnr(target_slice, predicted_slice)
         
     ave_nmse = nmse_values.sum(1)/len(test_loader)

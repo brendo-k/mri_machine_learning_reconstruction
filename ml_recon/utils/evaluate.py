@@ -35,10 +35,6 @@ def ssim(
     gt: torch.Tensor, pred: torch.Tensor, maxval = None
 ) -> np.ndarray:
     """Compute Structural Similarity Index Metric (SSIM)"""
-    if not gt.ndim == 3:
-        raise ValueError("Unexpected number of dimensions in ground truth.")
-    if not pred.ndim == 3:
-        raise ValueError("Unexpected number of dimensions in pred.")
     if not gt.ndim == pred.ndim:
         raise ValueError("Ground truth dimensions does not match pred.")
 

@@ -167,15 +167,19 @@ class SimulatedBrats(KSpaceDataset):
         sense_map = sense_map[:, 25:-25, 25:-25]
 
         mag_sense_map = np.abs(sense_map)
+        mag_sense_phase = np.angle(sense_map)
 
         resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
+        resampled_sense_phase = SimulatedBrats.resample(mag_sense_phase, image.shape[1], image.shape[2])
 
-        sense_map = np.expand_dims(resampled_sense_mag, 0)
+        resampled_sense = resampled_sense_mag * np.exp(resampled_sense_phase * 1j)
+
+        sense_map = np.expand_dims(resampled_sense, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=4):
+    def generate_and_apply_phase(data, seed, center_region=6):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
