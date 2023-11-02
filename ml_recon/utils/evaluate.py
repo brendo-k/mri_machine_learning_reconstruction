@@ -32,7 +32,7 @@ def psnr(
 
 
 def ssim(
-    gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
+        gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
 ) -> np.ndarray:
     """Compute Structural Similarity Index Metric (SSIM)"""
     if not gt.ndim == 3:
