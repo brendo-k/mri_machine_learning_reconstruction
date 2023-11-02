@@ -43,7 +43,7 @@ def main():
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels, args.cascades)
+    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels, cascades=args.cascades)
 
     model = setup_ddp(current_device, distributed, model)
 

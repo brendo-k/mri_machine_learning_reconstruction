@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.optim.lr_scheduler.LRScheduler, None]:
     if scheduler_type == 'cosine_anneal':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, len(train_loader)*10, T_mult=1, eta_min=1e-4)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, len(train_loader)*10, T_mult=1, eta_min=1e-5)
     elif scheduler_type == 'cyclic':
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
     elif scheduler_type == 'steplr':
