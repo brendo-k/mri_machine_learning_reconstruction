@@ -50,8 +50,8 @@ def main():
     train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
     
-    loss_fn = torch.nn.MSELoss()
-    #loss_fn = L1L2Loss
+    #loss_fn = torch.nn.MSELoss()
+    loss_fn = L1L2Loss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
