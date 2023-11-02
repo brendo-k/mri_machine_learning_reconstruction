@@ -65,8 +65,9 @@ def L1L2Loss(target: torch.Tensor, predicted: torch.Tensor):
     assert not torch.isnan(predicted).any()
     l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=(2, 3, 4, 5))/(torch.linalg.vector_norm(target, 2, dim=(2, 3, 4, 5)) + 1e-6)
     l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=(2, 3, 4, 5))/(torch.linalg.vector_norm(target, 1, dim=(2, 3, 4, 5)) + 1e-6)
+
     if torch.isnan(l2_component).any():
         print(target)
     
-    loss  = torch.sum(l2_component + l1_component)/(target.shape[0] * target.shape[1])
+    loss  = torch.sum(l2_component + l1_component)/target.numel()
     return loss
