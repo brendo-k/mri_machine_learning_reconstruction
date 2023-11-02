@@ -43,7 +43,7 @@ def main():
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels)
+    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels, args.cascades)
 
     model = setup_ddp(current_device, distributed, model)
 
@@ -311,7 +311,7 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         writer.add_images('images/' + training_type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
-def setup_model_backbone(model_name, current_device, input_channels=8, chans=18):
+def setup_model_backbone(model_name, current_device, input_channels=8, chans=18, cascades=6):
     if model_name == 'unet':
         backbone = partial(Unet, in_chan=input_channels, out_chan=input_channels, depth=4, chans=chans)
     elif model_name == 'resnet':
@@ -324,7 +324,7 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18)
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 
-    model = VarNet_mc(backbone, num_cascades=6)
+    model = VarNet_mc(backbone, num_cascades=cascades)
     params = sum([x.numel()  for x in model.parameters()])
     print(f'Model has {params:,}')
     model.to(current_device)
@@ -354,6 +354,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     parser.add_argument('--channels', type=int, default=18, help='')
+    parser.add_argument('--cascades', type=int, default=6, help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
     parser.add_argument('--dist_backend', default='nccl', type=str, help='')
