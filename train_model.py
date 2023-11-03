@@ -111,7 +111,7 @@ def main():
         save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
 
-        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE)
+        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=False)
         metrics = {}
         dataset = test_loader.dataset
         print(test_loader)
