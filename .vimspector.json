@@ -51,7 +51,7 @@
                 "program": "train_model.py",
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
-                "args": ["--use_subset"]
+                "args": ["--use_subset", "--loss_type", "ssdu", "--contrast", "t1", "--max_epoch", "1"]
             },
             "breakpoints": {
                 "exception": {
