@@ -6,6 +6,8 @@ import einops
 
 # Normalize to [0, 1] range per contrast
 class normalize(object):
+    def __init__(self, norm_mean=True):
+        self.norm_mean=norm_mean
 
     def __call__(self, sample):
         doub_under, under, sampled, k = sample
@@ -13,9 +15,10 @@ class normalize(object):
         image = root_sum_of_squares(ifft_2d_img(under, axes=[-1, -2]), coil_dim=1)
         assert isinstance(image, torch.Tensor)
 
-        undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
-        #undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
-        #undersample_max = 1000
+        if self.norm_mean:
+            undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
+        else:
+            undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
 
         return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k)
 
