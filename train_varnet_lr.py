@@ -7,34 +7,35 @@ from train_model import prepare_data, setup_model_backbone, to_device
 from train_utils import setup_devices
 from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+from ml_recon.losses import L1L2Loss
 
 
 from torch.distributed import init_process_group, destroy_process_group
 
 def main():
     args = parser.parse_args()
-    args.data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
+    args.data_dir = args.data_dir
     args.contrasts = ['t1', 't2', 't1ce', 'flair']
     
     current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     train_loader, val_loader, test_loader = prepare_data(args, False)
-    model = setup_model_backbone('unet', current_device, input_channels=len(args.contrasts)*2)
+    model = setup_model_backbone('unet', current_device, input_channels=len(args.contrasts)*2, chans=32)
 
-    loss_fn = torch.nn.MSELoss()
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-1)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-5, max_lr=1, step_size_up=200, step_size_down=0, cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=5e-4, max_lr=1, step_size_up=1000, step_size_down=0, cycle_momentum=False)
 
     losses = []
     lr = []
 
-    for i in range(200):
+    for i in range(1000):
         print(scheduler.get_last_lr())
         optimizer.zero_grad()
         data = next(iter(train_loader))
         mask, input_slice, target_slice, loss_mask, zf_mask = to_device(data, current_device, args.loss_type)
         
         output = model(input_slice, mask)
-        loss = loss_fn(torch.view_as_real(output * loss_mask), torch.view_as_real(target_slice * loss_mask))
+        loss = L1L2Loss(torch.view_as_real(output * loss_mask), torch.view_as_real(target_slice * loss_mask))
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
@@ -69,4 +70,5 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='brats', help='')
     parser = BratsDataset.add_model_specific_args(parser)
     parser = UndersampleDecorator.add_model_specific_args(parser)
+
     main()
