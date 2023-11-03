@@ -99,8 +99,6 @@ def main():
 
 
         if current_device == 0:
-            if epoch % 25 == 24:
-                save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch, current_device)
             if writer:
                 writer.add_scalar('train/loss', train_loss, epoch)
                 writer.add_scalar('val/loss', val_loss, epoch)
