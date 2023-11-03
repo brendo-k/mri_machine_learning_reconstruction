@@ -51,15 +51,13 @@ class M4Raw(KSpaceDataset):
 
 
         contrasts = np.array(contrasts)
-        print(self.contrast_order)
         self.contrast_index = np.isin(self.contrast_order, contrasts)
-        print(self.contrast_index)
-        self.contrasts = self.contrast_order[self.contrast_index]
+        self.contrast_order = self.contrast_order[self.contrast_index]
 
         self.slice_cumulative_sum = np.cumsum(slices) 
         self.length = self.slice_cumulative_sum[-1]
         print(f'Found {self.length} slices!')
-        print(f'Found {self.contrasts} contrats!!')
+        print(f'Found {self.contrast_order} contrats!!')
 
 
     def __len__(self):
