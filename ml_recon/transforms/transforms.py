@@ -6,7 +6,7 @@ import einops
 
 # Normalize to [0, 1] range per contrast
 class normalize(object):
-    def __init__(self, norm_mean=True):
+    def __init__(self, norm_mean=False):
         self.norm_mean=norm_mean
 
     def __call__(self, sample):
@@ -18,7 +18,7 @@ class normalize(object):
         if self.norm_mean:
             undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
         else:
-            undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
+            undersample_max = image.std((1, 2), keepdim=True).unsqueeze(1)
 
         return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k)
 
