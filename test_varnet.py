@@ -60,6 +60,8 @@ def setup_dataloader(data_dir, contrasts):
     return test_loader
 
 def test(model, test_loader, num_contrasts, profile, mask_output=True):
+    np.random.seed(0)
+    torch.set_rng_state(0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     nmse_values = torch.zeros((num_contrasts, len(test_loader)))
@@ -101,7 +103,6 @@ def test(model, test_loader, num_contrasts, profile, mask_output=True):
 
                     nmse_values[contrast, i] = nmse(target_slice, predicted_slice)
                     ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.max())
-                    
                     psnr_values[contrast, i] = psnr(target_slice, predicted_slice)
         
     ave_nmse = nmse_values.sum(1)/len(test_loader)

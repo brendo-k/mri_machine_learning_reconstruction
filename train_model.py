@@ -53,7 +53,7 @@ def main():
     #loss_fn = torch.nn.MSELoss()
     loss_fn = L1L2Loss
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
 
     cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
@@ -353,6 +353,7 @@ if __name__ == '__main__':
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     parser.add_argument('--channels', type=int, default=18, help='')
     parser.add_argument('--cascades', type=int, default=6, help='')
+    parser.add_argument('--weight_decay', type=float, default=0, help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
     parser.add_argument('--dist_backend', default='nccl', type=str, help='')
