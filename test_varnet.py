@@ -61,7 +61,7 @@ def setup_dataloader(data_dir, contrasts):
 
 def test(model, test_loader, num_contrasts, profile, mask_output=True):
     np.random.seed(0)
-    torch.set_rng_state(0)
+    torch.manual_seed(0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     nmse_values = torch.zeros((num_contrasts, len(test_loader)))
