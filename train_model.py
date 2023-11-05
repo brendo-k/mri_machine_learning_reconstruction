@@ -58,7 +58,7 @@ def main():
 
     cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
     if current_device == 0:
-        writer_dir = '/home/kadotab/scratch/runs/' + str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
+        writer_dir = args.log_dir + str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
         if os.path.exists(writer_dir):
             while os.path.exists(writer_dir):
                 if writer_dir[-1].isnumeric():
@@ -355,6 +355,7 @@ if __name__ == '__main__':
     parser.add_argument('--cascades', type=int, default=6, help='')
     parser.add_argument('--weight_decay', type=float, default=0, help='')
     parser.add_argument('--norm_method', type=str, choices=['mean', 'max', 'std', 'mean2'], default='mean', help='')
+    parser.add_argument('--log_dir', type=str, default='/home/kadotab/scratch/runs/', help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
     parser.add_argument('--dist_backend', default='nccl', type=str, help='')
