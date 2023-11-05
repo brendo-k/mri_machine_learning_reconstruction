@@ -354,6 +354,7 @@ if __name__ == '__main__':
     parser.add_argument('--channels', type=int, default=18, help='')
     parser.add_argument('--cascades', type=int, default=6, help='')
     parser.add_argument('--weight_decay', type=float, default=0, help='')
+    parser.add_argument('--norm_method', type=str, choices=['mean', 'max', 'std'], default='mean', help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
     parser.add_argument('--dist_backend', default='nccl', type=str, help='')
