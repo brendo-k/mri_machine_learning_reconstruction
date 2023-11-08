@@ -14,7 +14,7 @@ def setup_scheduler(train_loader, optimizer, scheduler_type) -> Union[torch.opti
     elif scheduler_type == 'cyclic':
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, 5e-5, 1e-3, len(train_loader)*8, mode='triangular2', cycle_momentum=False)
     elif scheduler_type == 'steplr':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, len(train_loader)*200)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, len(train_loader)*50)
     elif scheduler_type == 'none':
         scheduler = None
     else:
