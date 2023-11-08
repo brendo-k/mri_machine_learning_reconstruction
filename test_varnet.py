@@ -102,7 +102,9 @@ def test(model, test_loader, num_contrasts, profile, mask_output=True):
                     target_slice = target[:, [contrast], :, :]
 
                     nmse_values[contrast, i] = nmse(target_slice, predicted_slice)
-                    ssim_values[contrast, i] = ssim(target_slice, predicted_slice, target_slice.max())
+                    masked_ssim = ssim(target_slice, predicted_slice, target_slice.max(), reduced=False)
+                    cur_ssim = masked_ssim[masked_ssim != 1].mean()
+                    ssim_values[contrast, i] = cur_ssim
                     psnr_values[contrast, i] = psnr(target_slice, predicted_slice)
         
     ave_nmse = nmse_values.sum(1)/len(test_loader)
