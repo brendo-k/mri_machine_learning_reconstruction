@@ -99,6 +99,8 @@ def main():
 
 
         if current_device == 0:
+            if epoch % 20 == 19:
+                save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, epoch + 1, current_device)
             if writer:
                 writer.add_scalar('train/loss', train_loss, epoch)
                 writer.add_scalar('val/loss', val_loss, epoch)
@@ -173,7 +175,7 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                 'R_hat': arg.R_hat, 
                 'acs_lines': arg.acs_lines, 
                 'poly_order': arg.poly_order,
-                'transforms': normalize()
+                'transforms': normalize(arg.norm_method)
             }
     
     train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)

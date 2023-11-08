@@ -43,6 +43,7 @@ class VarNet_mc(nn.Module):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
             assert not torch.isnan(reference_k).any()
+            assert not torch.isnan(refined_k).any()
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step
@@ -80,7 +81,7 @@ class VarnetBlock(nn.Module):
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
         mean = x.mean(dim=(2, 3), keepdim=True)
-        std = x.std(dim=(2, 3), keepdim=True)
+        std = x.std(dim=(2, 3), keepdim=True) + 1e-9
 
         x = (x - mean) / std
         return x, mean, std
