@@ -10,7 +10,7 @@ class normalize(object):
         self.norm_method=norm_method
 
     def __call__(self, sample):
-        doub_under, under, sampled, k = sample
+        doub_under, under, sampled, k, omega_mask, lambda_mask = sample
 
         image = root_sum_of_squares(ifft_2d_img(under, axes=[-1, -2]), coil_dim=1)
         assert isinstance(image, torch.Tensor)
@@ -26,7 +26,7 @@ class normalize(object):
         elif self.norm_method == 'max':
             undersample_max = image.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k)
+        return (doub_under/undersample_max, under/undersample_max, sampled/undersample_max, k, omega_mask, lambda_mask)
 
 
 # Normalize to [0, 1] range

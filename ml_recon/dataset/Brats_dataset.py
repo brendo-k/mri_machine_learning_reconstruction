@@ -79,7 +79,7 @@ from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 if __name__ == '__main__':
     
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_diff_phase/'
     dataset = SimulatedBrats(data_dir)
     dataset = UndersampleDecorator(dataset)
 

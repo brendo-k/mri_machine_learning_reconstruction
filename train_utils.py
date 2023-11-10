@@ -213,20 +213,22 @@ def to_device(data: tuple, device: str, loss_type: str):
     Returns:
         torch.Tensor: returns multiple tensors now on the device
     """
-    double_undersaple, undersample, k_space, k = data
+    double_undersaple, undersample, k_space, k, omega_mask, lambda_mask = data
     zero_fill_mask = k_space != 0
     if loss_type == 'supervised':
         input_slice = undersample.to(device)
         target_slice = k_space.to(device)
         loss_mask = torch.ones_like(target_slice, dtype=torch.bool)
+        mask = omega_mask
     else:
         input_slice = double_undersaple.to(device)
         target_slice = undersample.to(device)
+        mask = omega_mask * lambda_mask
 
         if loss_type == 'nosier2noise':
-            loss_mask = target_slice != 0
+            loss_mask = omega_mask
         elif loss_type == 'ssdu' or loss_type == 'k-weighted':
-            loss_mask = (target_slice != 0) & (input_slice == 0)
+            loss_mask = omega_mask & ~lambda_mask
         else:
             raise ValueError(f'loss mask should be ssdu, noiser2noise, k-weighted, or supervised but got {loss_type}')
 
@@ -234,8 +236,9 @@ def to_device(data: tuple, device: str, loss_type: str):
             loss_mask = loss_mask.type(torch.float32)
             loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
             
-    mask = input_slice != 0
     zero_fill_mask = zero_fill_mask.to(device)
+    mask = mask.to(device)
+    loss_mask = loss_mask.to(device)
 
     return mask, input_slice, target_slice, loss_mask, zero_fill_mask 
 

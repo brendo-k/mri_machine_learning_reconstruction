@@ -9,7 +9,7 @@ def apply_undersampling(index, prob_map, k_space, deterministic):
     rng = get_random_generator(index, deterministic)
     mask = get_mask_from_distribution(prob_map, rng)
     undersampled = k_space * np.expand_dims(mask, 1)
-    return undersampled
+    return undersampled, np.expand_dims(mask, 1)
     
    
 def get_random_generator(index, deterministic):
