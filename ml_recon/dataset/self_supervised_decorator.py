@@ -42,10 +42,10 @@ class UndersampleDecorator(Dataset):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
         
-        under = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
-        doub_under = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
+        under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
+        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-        data = (doub_under, under, k_space, self.k)
+        data = (doub_under, under, k_space, self.k, mask_omega, mask_lambda)
         if self.transforms:
             data = self.transforms(data)
         return data
