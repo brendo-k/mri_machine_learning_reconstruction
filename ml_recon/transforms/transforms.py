@@ -19,6 +19,8 @@ class normalize(object):
             undersample_max = image.mean((1, 2), keepdim=True).unsqueeze(1)
         if self.norm_method == 'mean2':
             undersample_max = 2*image.mean((1, 2), keepdim=True).unsqueeze(1)
+        if self.norm_method == 'k':
+            undersample_max = under.abs().max((1, 2), keepdim=True).unsqueeze(1)
         elif self.norm_method == 'std':
             undersample_max = image.std((1, 2), keepdim=True).unsqueeze(1)
         elif self.norm_method == 'max':
