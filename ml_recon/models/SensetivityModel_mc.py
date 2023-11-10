@@ -26,6 +26,7 @@ class SensetivityModel_mc(nn.Module):
 
     # recieve coil maps as [B, contrast, channels, H, W]
     def forward(self, images, mask):
+        assert not torch.isnan(images).any()
         if self.mask_center:
             images = self.mask(images, mask) 
         assert not torch.isnan(images).any()
@@ -85,6 +86,7 @@ class SensetivityModel_mc(nn.Module):
             for j in range(num_low_frequencies_tensor.shape[1]):
                 center_mask[i, j, ..., center-num_low_frequencies_tensor[i, j]:center + num_low_frequencies_tensor[i, j]] = True
 
+        assert not center_mask.isnan().any()
         return masked_k_space * center_mask
     
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
