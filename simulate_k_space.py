@@ -23,15 +23,16 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 8, 256, 256, images.shape[-1] - 90), dtype=np.complex64)
+    k_space = np.zeros((4, 16, 256, 256, (images.shape[-1] - 104)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
-        if i >= images.shape[-1]-20:
+        if i >= images.shape[-1]-34:
             break
-        cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
-        cur_images = np.transpose(cur_images, (0, 2, 1))
-        k_space[..., i-70] = SimulatedBrats.simulate_k_space(cur_images, seed)
+        if i % 3 == 0:
+            cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
+            cur_images = np.transpose(cur_images, (0, 2, 1))
+            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
 
@@ -80,6 +81,6 @@ if __name__ == '__main__':
         seeds = [np.random.randint(0, 1_000_000_00) for _ in range(len(files))]
 
         #for file in files:
-        #    process_file(file, os.path.join(save_dir, split))
+        #    process_file(file, os.path.join(save_dir, split), np.random.randint(0, 1_000_000_000))
 
         pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split)), seeds))
