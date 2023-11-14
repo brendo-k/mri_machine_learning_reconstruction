@@ -103,7 +103,7 @@ class SimulatedBrats(KSpaceDataset):
         else:
             raise ValueError(f'no file reader for extension {self.extension}, only nii.gz and npy')
         assert slices > 0
-        slices = slices - 105 # the first 70 slices and last 35 aren't useful
+        slices = (slices - 106)//3 # the first 70 slices and last 35 aren't useful and we take every third slice
         
         return slices
         
@@ -121,7 +121,8 @@ class SimulatedBrats(KSpaceDataset):
         else:
             slice_index = index - cumulative_slice_sum[volume_index - 1] 
         
-        slice_index += 70
+        slice_index *= 3 # since we are grabbing every third slice
+        slice_index += 70 # since we remove the first 70 slices
         return volume_index, slice_index 
 
     
@@ -142,6 +143,8 @@ class SimulatedBrats(KSpaceDataset):
                     raise ValueError(f'Can not load file with extention {ext}')
 
                 slice = image[:, :, slice_index]
+                print(np.max(slice))
+                print(np.min(slice))
                 slice = (slice - np.min(slice)) / (np.max(slice) - np.min(slice))
                 data.append(slice)
                 modality_label.append(modality)
@@ -171,7 +174,7 @@ class SimulatedBrats(KSpaceDataset):
 
         resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
         resampled_sense_phase = SimulatedBrats.resample(mag_sense_phase, image.shape[1], image.shape[2])
-
+        
         resampled_sense = resampled_sense_mag * np.exp(resampled_sense_phase * 1j)
 
         sense_map = np.expand_dims(resampled_sense, 0)
@@ -179,7 +182,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=6):
+    def generate_and_apply_phase(data, seed, center_region=8):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
