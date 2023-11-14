@@ -162,6 +162,8 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
         train_dataset = M4Raw(os.path.join(data_dir, 'train'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
         val_dataset = M4Raw(os.path.join(data_dir, 'val'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
         test_dataset = M4Raw(os.path.join(data_dir, 'test'), nx=arg.nx, ny=arg.ny, contrasts=arg.contrasts)
+    else:
+        raise ValueError(f'No dataloader for {arg.dataset}')
 
 
     undersampling_args = {
@@ -169,7 +171,8 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                 'R_hat': arg.R_hat, 
                 'acs_lines': arg.acs_lines, 
                 'poly_order': arg.poly_order,
-                'transforms': normalize(arg.norm_method)
+                'transforms': normalize(arg.norm_method),
+                'same_mask': arg.same_mask
             }
     
     train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)

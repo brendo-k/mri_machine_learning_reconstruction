@@ -16,7 +16,8 @@ class UndersampleDecorator(Dataset):
         R_hat: int = 2,
         poly_order: int = 8,
         acs_lines: int = 10,
-        transforms: Union[Callable, None] = None
+        transforms: Union[Callable, None] = None,
+        same_mask: bool = False
     ):
         super().__init__()
 
@@ -25,6 +26,7 @@ class UndersampleDecorator(Dataset):
 
         self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
         self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
+        self.same_mask = same_mask
 
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (contrasts, 1, 1))
         self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (contrasts, 1, 1))
@@ -40,9 +42,14 @@ class UndersampleDecorator(Dataset):
         return self.dataset.__len__()
 
     def __getitem__(self, index):
-        k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
+        k_space = self.dataset[index] 
         
         under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
+        if self.same_mask:
+            doub_under = torch.zeros_like(k_space)
+            for i in range(doub_under.shape[0]):
+                under[i, :, :, :] = under[i, :, :, :] * mask_omega[0]
+
         doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
         data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
@@ -83,6 +90,12 @@ class UndersampleDecorator(Dataset):
                 default=10,
                 type=int,
                 help="Number of lines to keep in auto calibration region"
+                )
+
+        parser.add_argument(
+                "--same_mask", 
+                action="store_true",
+                help="Use the same mask along contrast dimension for lambda set"
                 )
 
         return parser

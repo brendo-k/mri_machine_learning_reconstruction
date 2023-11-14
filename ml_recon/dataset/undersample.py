@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 def calc_k(lambda_probability, omega_probability):
     K = (1 - omega_probability) / (1 - omega_probability * lambda_probability)
@@ -8,8 +9,9 @@ def calc_k(lambda_probability, omega_probability):
 def apply_undersampling(index, prob_map, k_space, deterministic):
     rng = get_random_generator(index, deterministic)
     mask = get_mask_from_distribution(prob_map, rng)
-    undersampled = k_space * np.expand_dims(mask, 1)
-    return undersampled, np.expand_dims(mask, 1)
+    mask = torch.from_numpy(mask)
+    undersampled = k_space * mask.unsqueeze(1)
+    return undersampled, mask.unsqueeze(1)
     
    
 def get_random_generator(index, deterministic):
