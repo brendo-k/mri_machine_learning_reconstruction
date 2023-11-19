@@ -35,7 +35,6 @@ class KSpaceBrats(KSpaceDataset):
         super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
-        self.undersampling = undersampling
         self.contrasts = np.array([contrast.lower() for contrast in contrasts])
         self.extension = extension
 
@@ -54,7 +53,7 @@ class KSpaceBrats(KSpaceDataset):
             sample_file_path = os.path.join(sample_path, sample_file[0])
             with h5py.File(sample_file_path, 'r') as fr:
                 k_space = fr['k_space']
-                num_slices = k_space.shape[0] - 15
+                num_slices = k_space.shape[0]
                 slices.append(num_slices)
                 if first:
                     contrast_order = fr['contrasts'][:].astype('U')
@@ -84,9 +83,6 @@ class KSpaceBrats(KSpaceDataset):
     def __getitem__(self, index):
         volume_index, slice_index = self.get_vol_slice_index(index)
         data = self.get_data_from_indecies(volume_index, slice_index)
-
-        if self.undersampling: 
-            data = self.undersampling(data, index)
 
         if self.transforms:
             data = self.transforms(data)

@@ -58,13 +58,16 @@ def main():
 
     cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
     if current_device == 0:
-        writer_dir = args.log_dir + str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
-        if os.path.exists(writer_dir):
-            while os.path.exists(writer_dir):
-                if writer_dir[-1].isnumeric():
-                    writer_dir = writer_dir[:-1] + str(int(writer_dir[-1]) + 1)
+        run_identifier = str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
+        writer_dir = args.log_dir 
+        if os.path.exists(os.path.join(writer_dir, run_identifier)):
+            while os.path.exists(os.path.join(writer_dir, run_identifier)):
+                if run_identifier[-1].isnumeric():
+                    run_identifier = run_identifier[:-1] + str(int(run_identifier[-1]) + 1)
                 else:
-                    writer_dir += str(0)
+                    run_identifier += str(0)
+
+        writer_dir = os.path.join(writer_dir, run_identifier)
 
         os.makedirs(os.path.join(writer_dir, 'weight_dir'))
         save_config(args, writer_dir)
@@ -135,22 +138,13 @@ def main():
             
 
         hparams_writer = SummaryWriter('/home/kadotab/scratch/runs/metrics')
-        print(metrics)
-        hparams = {
-                    'lr': args.lr, 
-                    'batch_size': args.batch_size, 
-                    'loss_type': args.loss_type, 
-                    'scheduler': args.scheduler,
-                    'contrats': ','.join(args.contrasts),
-                    'max_epochs': args.max_epochs,
-                    'R': args.R,
-                    'R_hat': args.R_hat
-                }
+        args.contrasts = ','.join(args.contrasts)
+        hparams = vars(args)
         print(hparams)
         hparams_writer.add_hparams(
                 hparams,
                 metrics,
-                run_name=cur_time + '-' + args.loss_type + '-' + ','.join(args.contrasts) + '-' + str(args.R)
+                run_name=run_identifier
                 )
 
     if distributed:
@@ -356,7 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--channels', type=int, default=18, help='')
     parser.add_argument('--cascades', type=int, default=6, help='')
     parser.add_argument('--weight_decay', type=float, default=0, help='')
-    parser.add_argument('--norm_method', type=str, choices=['mean', 'max', 'std', 'mean2'], default='mean', help='')
+    parser.add_argument('--norm_method', type=str, choices=['mean', 'max', 'std', 'mean2', 'k'], default='mean', help='')
     parser.add_argument('--log_dir', type=str, default='/home/kadotab/scratch/runs/', help='')
     
     parser.add_argument('--init_method', default='tcp://localhost:18888', type=str, help='')
