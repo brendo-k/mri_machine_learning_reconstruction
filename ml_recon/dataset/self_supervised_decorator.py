@@ -46,13 +46,13 @@ class UndersampleDecorator(Dataset):
         
         under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
         if self.same_mask:
-            doub_under = torch.zeros_like(k_space)
-            for i in range(doub_under.shape[0]):
-                under[i, :, :, :] = under[i, :, :, :] * mask_omega[0]
+            under = torch.zeros_like(k_space)
+            for i in range(under.shape[0]):
+                under[i, :, :, :] = k_space[i, :, :, :] * mask_omega[0]
 
         doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-        data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
+        data = (doub_under, under, k_space, self.k, mask_omega, mask_lambda)
         if self.transforms:
             data = self.transforms(data)
         return data
