@@ -26,7 +26,8 @@ class SimulatedBrats(KSpaceDataset):
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
-            extension: str = "nii.gz"
+            extension: str = "nii.gz",
+            deterministic: bool = False
             ):
         assert contrasts, 'Contrast list should not be empty!'
 
@@ -38,6 +39,10 @@ class SimulatedBrats(KSpaceDataset):
 
         sample_dir = os.listdir(data_dir)
         sample_dir.sort()
+        if deterministic:
+            self.seed = 0
+        else:
+            self.seed = torch.seed()
 
         slices = []
         self.data_list = []
@@ -49,7 +54,6 @@ class SimulatedBrats(KSpaceDataset):
 
             patient_dict = {} 
 
-            self.seed = np.random.randint(0, 100_000)
             patient_dict = self.get_contrast_files(modalities, sample_path)
             slices.append(self.get_num_slices(patient_dict))
 
@@ -143,8 +147,6 @@ class SimulatedBrats(KSpaceDataset):
                     raise ValueError(f'Can not load file with extention {ext}')
 
                 slice = image[:, :, slice_index]
-                print(np.max(slice))
-                print(np.min(slice))
                 slice = (slice - np.min(slice)) / (np.max(slice) - np.min(slice))
                 data.append(slice)
                 modality_label.append(modality)
@@ -167,7 +169,7 @@ class SimulatedBrats(KSpaceDataset):
         sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed.npy')
         #sense_map = np.squeeze(sense_map)
         sense_map = np.transpose(sense_map, (0, 2, 1))
-        sense_map = sense_map[:, 25:-25, 25:-25]
+        sense_map = sense_map[:, 25:-26, 25:-25]
 
         mag_sense_map = np.abs(sense_map)
         mag_sense_phase = np.angle(sense_map)
@@ -182,7 +184,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=8):
+    def generate_and_apply_phase(data, seed, center_region=4):
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -212,7 +214,7 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
-        noise_scale = 0.01
+        noise_scale = 0.008
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
@@ -240,12 +242,12 @@ import matplotlib.pyplot as plt
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
 if __name__ == '__main__':
     
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/train'
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/val'
     dataset = SimulatedBrats(data_dir)
 
 
-    k_space = dataset[2000]
-    volume_index, slice_index = dataset.get_vol_slice_index(2000)
+    k_space = dataset[20]
+    volume_index, slice_index = dataset.get_vol_slice_index(20)
     data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
     images = dataset.resample(data, 256, 256)
     images = np.transpose(images, (0, 2, 1))
@@ -259,16 +261,23 @@ if __name__ == '__main__':
     ax[1].imshow(k_space_image, cmap='gray')
     ax[2].imshow(images[0] - k_space_image)
 
-    fig, ax = plt.subplots(1, 3)
-    
-    mask = np.zeros((256, 256), dtype=bool) 
-    mask[:, 128 - 5: 128 + 5] = 1
-    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
-    ax[0].imshow(images[0], cmap='gray')
-    ax[1].imshow(k_space_image, cmap='gray')
-    plt.show()
+    #fig, ax = plt.subplots(1, 3)
+    #
+    #mask = np.zeros((256, 256), dtype=bool) 
+    #mask[:, 128 - 5: 128 + 5] = 1
+    #k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
+    #ax[0].imshow(images[0], cmap='gray')
+    #ax[1].imshow(k_space_image, cmap='gray')
+    #plt.show()
 
-    image_slices(root_sum_of_squares(ifft_2d_img(k_space), coil_dim=1), cmap='gray')
+    #image_slices(root_sum_of_squares(ifft_2d_img(k_space), coil_dim=1), cmap='gray')
+    #plt.show()
+
+    #image_slices(np.real(ifft_2d_img(k_space[0])), cmap='gray')
+    #plt.figure(2)
+    #image_slices(np.imag(ifft_2d_img(k_space[0])), cmap='gray')
+    #plt.figure(3)
+    #image_slices(np.abs(ifft_2d_img(k_space[0])), cmap='gray')
     plt.show()
 
     #image_slices(np.abs(ifft_2d_img(k_space[0])))
