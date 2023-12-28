@@ -2,7 +2,7 @@ import torch
 import pytest
 from functools import partial
 
-from ml_recon.models.varnet import VarNet, VarnetBlock
+from ml_recon.models.varnet_mc import VarNet_mc, VarnetBlock
 from ml_recon.models.unet import Unet
 
 
