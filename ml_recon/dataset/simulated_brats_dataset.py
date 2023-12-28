@@ -155,11 +155,11 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed):
+    def simulate_k_space(image, seed, same_phase=True):
         #image [Contrast height width]
         image_w_sense = SimulatedBrats.apply_sensetivities(image)
         #image_w_sense [Contrast coil height width]
-        image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed)
+        image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase)
         k_space = fft_2d_img(image_w_phase)
         k_space = SimulatedBrats.apply_noise(k_space, seed)
         return k_space
@@ -184,21 +184,25 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=4):
-        phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], seed)
+    def generate_and_apply_phase(data, seed, center_region=4, same_phase=True):
+        if same_phase: 
+            nc = 1
+        else:
+            nc = data.shape[1]
+        phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], nc, seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
 
 
     @staticmethod
-    def build_phase(center_region, nx, ny, seed):
-        phase_frequency = np.zeros((nx, ny), dtype=np.complex64)
+    def build_phase(center_region, nx, ny, nc, seed):
+        phase_frequency = np.zeros((nc, nx, ny), dtype=np.complex64)
         center = (nx//2, ny//2)
         center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
         center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
         rng = np.random.default_rng(seed)
-        coeff = rng.random(size=(center_region, center_region)) + 1j * rng.random(size=(center_region, center_region))
-        phase_frequency[center_box_x, center_box_y] = coeff
+        coeff = rng.random(size=(nc, center_region, center_region)) + 1j * rng.random(size=(nc, center_region, center_region))
+        phase_frequency[:, center_box_x, center_box_y] = coeff
 
         phase = fft_2d_img(phase_frequency)
         phase = np.angle(phase)
