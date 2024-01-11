@@ -5,3 +5,5 @@ from .swin_unetr import SwinUNETR
 from .SensetivityModel_mc import SensetivityModel_mc
 from .varnet_mc import VarNet_mc
 from .multi_task_unet import MultiTaskUnet
+from .unetr import UnetR
+from .patches import Patches

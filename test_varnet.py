@@ -10,8 +10,7 @@ import torch
 from ml_recon.transforms import normalize
 from ml_recon.dataset.Brats_dataset import BratsDataset 
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator 
-from ml_recon.utils import ifft_2d_img
-from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares, convert_weights_from_distributed
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.Loss.ssim_loss import SSIMLoss
 from train_utils import to_device, setup_profile_context_manager
@@ -26,10 +25,7 @@ def main():
 
     checkpoint = torch.load(path, map_location=device)
 
-    new_dict = {}
-    for key, values in checkpoint['model'].items():
-        new_key = '.'.join(key.split('.')[1:])
-        new_dict[new_key] = values
+    new_dict = convert_weights_from_distributed(checkpoint)
 
     model = setup_model(new_dict)
     dataloader = setup_dataloader(data_dir, 'flair')
@@ -59,10 +55,12 @@ def setup_dataloader(data_dir, contrasts):
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1)
     return test_loader
 
-def test(model, test_loader, num_contrasts, profile, mask_output=True):
+def test(model, test_loader, profile, mask_output=True):
     np.random.seed(0)
     torch.manual_seed(0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    num_contrasts = test_loader.dataset.contrasts
 
     nmse_values = torch.zeros((num_contrasts, len(test_loader)))
     ssim_values = torch.zeros((num_contrasts, len(test_loader)))
