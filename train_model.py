@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR, UnetR
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.m4raw_dataset import M4Raw 
 from ml_recon.dataset.kspace_brats import KSpaceBrats
@@ -315,6 +315,8 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18,
     elif model_name == 'transformer':
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
+    elif model_name == 'unetr':
+        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=(128, 128))
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 

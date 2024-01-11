@@ -21,13 +21,13 @@ class UndersampleDecorator(Dataset):
         super().__init__()
 
         self.dataset = dataset
-        contrasts = dataset[0].shape[0]
+        self.contrasts = dataset[0].shape[0]
 
         self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
         self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
 
-        self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (contrasts, 1, 1))
-        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (contrasts, 1, 1))
+        self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
         one_minus_eps = 1 - 1e-3
         self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
