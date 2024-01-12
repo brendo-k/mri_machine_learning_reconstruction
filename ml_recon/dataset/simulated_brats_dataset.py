@@ -195,8 +195,10 @@ class SimulatedBrats(KSpaceDataset):
 
 
     @staticmethod
-    def build_phase(center_region, nx, ny, nc, seed):
-        phase_frequency = np.zeros((nc, nx, ny), dtype=np.complex64)
+    def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
+        phase_frequency = np.zeros((1, nx, ny), dtype=np.complex64)
+        if same_phase:
+            phase_frequency = np.tile(phase_frequency, (nc, 1, 1))
         center = (nx//2, ny//2)
         center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
         center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))

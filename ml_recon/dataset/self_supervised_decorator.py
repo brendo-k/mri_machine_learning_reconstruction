@@ -16,12 +16,14 @@ class UndersampleDecorator(Dataset):
         R_hat: int = 2,
         poly_order: int = 8,
         acs_lines: int = 10,
-        transforms: Union[Callable, None] = None
+        transforms: Union[Callable, None] = None, 
+        deterministic: bool = False
     ):
         super().__init__()
 
         self.dataset = dataset
         self.contrasts = dataset[0].shape[0]
+        self.deterministic = deterministic
 
         self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
         self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
@@ -43,7 +45,7 @@ class UndersampleDecorator(Dataset):
         k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
         
         under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
-        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
+        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=self.deterministic)
 
         data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
         if self.transforms:

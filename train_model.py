@@ -317,7 +317,7 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18,
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
     elif model_name == 'unetr':
-        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=(256, 256))
+        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=256)
     elif model_name == 'multitask':
         backbone = partial(MultiTaskUnet, in_chan=input_channels, out_chan=input_channels, initial_channel=chans, joint_channel=8)
         print('loaded multi-task!')
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help='')
     parser.add_argument('--max_epochs', type=int, default=50, help='')
     parser.add_argument('--num_workers', type=int, default=0, help='')
-    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer', 'multitask'], default='unet')
+    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer', 'multitask', 'unetr'], default='unet')
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     parser.add_argument('--channels', type=int, default=18, help='')
