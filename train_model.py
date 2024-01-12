@@ -1,4 +1,5 @@
 from datetime import datetime
+import re 
 import os
 import argparse
 import time
@@ -12,7 +13,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR, UnetR
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR, UnetR, MultiTaskUnet
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.m4raw_dataset import M4Raw 
 from ml_recon.dataset.kspace_brats import KSpaceBrats
@@ -37,9 +38,8 @@ from train_utils import (
 # Globals
 PROFILE = False
 
-def main():
+def main(args):
     print("Starting code")
-    args = parser.parse_args()
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
@@ -49,36 +49,14 @@ def main():
 
     train_loader, val_loader, test_loader = prepare_data(args, distributed)
 
-    
     #loss_fn = torch.nn.MSELoss()
     loss_fn = L1L2Loss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-
-
-    cur_time = datetime.now().strftime("%m%d-%H:%M:%S") 
-    if current_device == 0:
-        run_identifier = str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
-        writer_dir = args.log_dir 
-        if os.path.exists(os.path.join(writer_dir, run_identifier)):
-            while os.path.exists(os.path.join(writer_dir, run_identifier)):
-                if run_identifier[-1].isnumeric():
-                    run_identifier = run_identifier[:-1] + str(int(run_identifier[-1]) + 1)
-                else:
-                    run_identifier += str(0)
-
-        writer_dir = os.path.join(writer_dir, run_identifier)
-
-        os.makedirs(os.path.join(writer_dir, 'weight_dir'))
-        save_config(args, writer_dir)
-        if current_device == 0: 
-            writer = SummaryWriter(writer_dir)
-        else: 
-            writer = None
-    else:
-        writer = None
-
     scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
+
+    writer, writer_dir = create_writer(current_device, args)
+
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
         start = time.time()
@@ -86,7 +64,6 @@ def main():
         if distributed:
             train_loader.sampler.set_epoch(epoch) #pyright: ignore
 
-        model.train()
         train_loss = train(model, loss_fn, train_loader, optimizer, current_device, args.loss_type, scheduler, PROFILE)
         end = time.time()
         print(f'Epoch: {epoch}, train loss: {train_loss}, time: {(end - start)/60} minutes')
@@ -99,7 +76,6 @@ def main():
             end = time.time()
             print(f'Epoch: {epoch}, val loss: {val_loss}, time: {(end - start)/60} minutes')
             plot_recon(model, val_loader, current_device, writer, epoch, args.loss_type)
-
 
         if current_device == 0:
             if epoch % 20 == 19:
@@ -114,7 +90,7 @@ def main():
         save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
 
-        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=False)
+        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=True)
         metrics = {}
         dataset = test_loader.dataset
         print(test_loader)
@@ -141,15 +117,40 @@ def main():
         args.contrasts = ','.join(args.contrasts)
         hparams = vars(args)
         print(hparams)
+        run_type = writer_dir.split('/')[-2]
         hparams_writer.add_hparams(
                 hparams,
                 metrics,
-                run_name=run_identifier
+                run_name=run_type + run_identifier
                 )
 
     if distributed:
         destroy_process_group()
 
+def create_writer(current_device, args):
+    if current_device == 0:
+        run_identifier = str(args.R) + '-' + ','.join(args.contrasts) + '-' +  args.loss_type 
+        writer_dir = os.path.join(args.log_dir, '') 
+        if os.path.exists(os.path.join(writer_dir, run_identifier)):
+            while os.path.exists(os.path.join(writer_dir, run_identifier)):
+                run_number = re.search(r'\d+$', run_identifier)
+                if run_number:
+                    parts = re.split(r'\d+$', run_identifier)
+                    run_identifier = parts[0] + str(int(run_number.group()) + 1)
+                else:
+                    run_identifier += str(0)
+
+        writer_dir = os.path.join(writer_dir, run_identifier)
+
+        os.makedirs(os.path.join(writer_dir, 'weight_dir'))
+        save_config(args, writer_dir)
+        if current_device == 0: 
+            writer = SummaryWriter(writer_dir)
+        else: 
+            writer = None
+    else:
+        writer = None
+    return writer, writer_dir
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
@@ -316,7 +317,10 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18,
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
     elif model_name == 'unetr':
-        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=(128, 128))
+        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=(256, 256))
+    elif model_name == 'multitask':
+        backbone = partial(MultiTaskUnet, in_chan=input_channels, out_chan=input_channels, initial_channel=chans, joint_channel=8)
+        print('loaded multi-task!')
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 
@@ -346,7 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help='')
     parser.add_argument('--max_epochs', type=int, default=50, help='')
     parser.add_argument('--num_workers', type=int, default=0, help='')
-    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer'], default='unet')
+    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer', 'multitask'], default='unet')
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     parser.add_argument('--channels', type=int, default=18, help='')
@@ -363,4 +367,6 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='brats', type=str, help='')
     parser = BratsDataset.add_model_specific_args(parser)
     parser = UndersampleDecorator.add_model_specific_args(parser)
-    main()
+
+    args = parser.parse_args()
+    main(args)
