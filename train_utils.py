@@ -76,6 +76,7 @@ def setup_devices(dist_backend, init_method, world_size):
 
 
 def train(model, loss_function, dataloader, optimizer, device, loss_type, scheduler, profile=False):
+    model.train()
     if profile:
         print('PROFILING')
 
@@ -162,6 +163,7 @@ def validate(model, loss_function, dataloader, device, supervised, profile=False
         int: average validation loss per sample
     """
 
+    model.eval()
     cm = setup_profile_context_manager(profile, 'val')
     val_running_loss = torch.Tensor([0]).to(device)
     with cm as prof:

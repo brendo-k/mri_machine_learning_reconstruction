@@ -23,7 +23,7 @@ class MultiTaskUnet(nn.Module):
             ):
 
         super().__init__()
-        self.initial_unet = [Unet(2, 2, depth=initial_depth, chans=initial_channel) for _ in range(in_chan//2)]
+        self.initial_unet = torch.nn.ParameterList([Unet(2, 2, depth=initial_depth, chans=initial_channel) for _ in range(in_chan//2)])
         self.joint_unet = Unet(in_chan, out_chan, depth=joint_depth, chans=joint_channel)
 
     def forward(self, x):
