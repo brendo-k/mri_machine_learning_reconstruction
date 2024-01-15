@@ -4,6 +4,7 @@ from typing import Tuple, List
 import torch.nn as nn 
 import torch
 import torch.nn.functional as F
+from argparse import ArgumentParser
 
 class Unet(nn.Module):
     """
@@ -49,6 +50,11 @@ class Unet(nn.Module):
         x = self.conv1d(x)
         x = self.unpad(x, *pad_sizes)
         return x
+
+    @staticmethod
+    def add_model_specific_args(parser: ArgumentParser):
+        parser.add_argument('--depth', type=int, default=4)
+        return parser
 
     # pad input image to be divisible by 16 for unet downsampling
     def pad(

@@ -33,3 +33,9 @@ class ResNet(nn.Module):
         x = self.cascade(x) + x
         x = self.decode(x)
         return x
+
+    @staticmethod
+    def add_model_specific_args(parser):
+        parser.add_argument('--itterations', type=int, default=15, help='Number of residual blocks')
+        return parser
+

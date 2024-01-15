@@ -1,6 +1,7 @@
 import torch.nn as nn 
 import torch
 from ml_recon.models.unet import Unet
+from argparse import ArgumentParser
 
 class MultiTaskUnet(nn.Module):
     """
@@ -38,3 +39,11 @@ class MultiTaskUnet(nn.Module):
 
         return final
             
+
+    @staticmethod
+    def add_model_specific_args(parser: ArgumentParser):
+        parser.add_argument('--joint_chan', default=8, type=int)
+        parser.add_argument('--joint_depth', default=4, type=int)
+        parser.add_argument('--initial_depth', default=4, type=int)
+        parser.add_argument('--initial_chan', default=8, type=int)
+        return parser

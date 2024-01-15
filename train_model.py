@@ -43,7 +43,8 @@ def main(args):
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
 
-    model = setup_model_backbone(args.model, current_device, input_channels=2*len(args.contrasts), chans=args.channels, cascades=args.cascades)
+    model = setup_model_backbone(args)
+    model.to(current_device)
 
     model = setup_ddp(current_device, distributed, model)
 
@@ -55,7 +56,7 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = setup_scheduler(train_loader, optimizer, args.scheduler)
 
-    writer, writer_dir = create_writer(current_device, args)
+    writer, writer_dir, run_identifier = create_writer(current_device, args)
 
     for epoch in range(args.max_epochs):
         print(f'starting epoch: {epoch}')
@@ -90,7 +91,7 @@ def main(args):
         save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
 
-        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=True)
+        nmse, ssim, psnr = test(model, test_loader, PROFILE, mask_output=True)
         metrics = {}
         dataset = test_loader.dataset
         print(test_loader)
@@ -144,13 +145,12 @@ def create_writer(current_device, args):
 
         os.makedirs(os.path.join(writer_dir, 'weight_dir'))
         save_config(args, writer_dir)
-        if current_device == 0: 
-            writer = SummaryWriter(writer_dir)
-        else: 
-            writer = None
+        writer = SummaryWriter(writer_dir)
     else:
         writer = None
-    return writer, writer_dir
+        run_identifier = ''
+        writer_dir = ''
+    return writer, writer_dir, run_identifier
 
 def prepare_data(arg: argparse.Namespace, distributed: bool):
     data_dir = arg.data_dir
@@ -306,20 +306,38 @@ def plot_recon(model, data_loader, device, writer, epoch, loss_type, training_ty
         writer.add_images('images/' + training_type + '/target', recon_scaled.unsqueeze(1).abs(), epoch)
 
 
-def setup_model_backbone(model_name, current_device, input_channels=8, chans=18, cascades=6):
+def setup_model_backbone(args):
+    model_name = args.model
+    cascades = args.cascades
+    input_channels = 2*len(args.contrasts)
     if model_name == 'unet':
-        backbone = partial(Unet, in_chan=input_channels, out_chan=input_channels, depth=4, chans=chans)
+        backbone = partial(Unet, in_chan=input_channels, out_chan=input_channels, depth=4, chans=args.channels)
     elif model_name == 'resnet':
-        backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=15, chans=32)
+        backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=15, chans=args.channels)
     elif model_name == 'dncnn':
-        backbone = partial(DnCNN, in_chan=input_channels, out_chan=input_channels, feature_size=32, num_of_layers=15)
+        backbone = partial(DnCNN, in_chan=input_channels, out_chan=input_channels, channels=args.channels, num_of_layers=15)
     elif model_name == 'transformer':
         backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
         print('loaded swinunet!')
     elif model_name == 'unetr':
-        backbone = partial(UnetR, in_chan=input_channels, out_chan=input_channels, img_size=256)
+        backbone = partial(UnetR, 
+                           in_chan=input_channels, 
+                           out_chan=input_channels, 
+                           img_size=256, 
+                           hidden_size=args.hidden_size,
+                           mlp_dim=args.mlp_dim,
+                           num_heads=args.num_heads,
+                           feature_size=args.feature_size,
+                           )
     elif model_name == 'multitask':
-        backbone = partial(MultiTaskUnet, in_chan=input_channels, out_chan=input_channels, initial_channel=chans, joint_channel=8)
+        backbone = partial(MultiTaskUnet, 
+                           in_chan=input_channels, 
+                           out_chan=input_channels, 
+                           initial_channel=args.initial_chan,
+                           initial_depth=args.initial_depth,
+                           joint_depth=args.joint_depth,
+                           joint_channel=args.joint_chan
+                           )
         print('loaded multi-task!')
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
@@ -327,7 +345,6 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18,
     model = VarNet_mc(backbone, num_cascades=cascades)
     params = sum([x.numel()  for x in model.parameters()])
     print(f'Model has {params:,}')
-    model.to(current_device)
 
     return model
 
@@ -368,5 +385,17 @@ if __name__ == '__main__':
     parser = BratsDataset.add_model_specific_args(parser)
     parser = UndersampleDecorator.add_model_specific_args(parser)
 
+    args, _ = parser.parse_known_args()
+
+    if args.model == 'unet':
+        parser = Unet.add_model_specific_args(parser)
+    elif args.model == 'resnet':
+        parser = ResNet.add_model_specific_args(parser)
+    elif args.model == 'multitask':
+        parser = MultiTaskUnet.add_model_specific_args(parser)
+    elif args.model == 'unetr':
+        parser = UnetR.add_model_specific_args(parser)
+
     args = parser.parse_args()
+    
     main(args)
