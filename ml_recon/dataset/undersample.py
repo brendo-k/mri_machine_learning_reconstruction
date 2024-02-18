@@ -44,8 +44,14 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, center_square):
     probability_total = nx * one_over_R
     probability_total -= center_square
 
-    scaling_factor = probability_sum/probability_total
-    prob_map = prob_map/scaling_factor
+    if probability_sum > probability_total: 
+        scaling_factor = probability_total/probability_sum
+        prob_map = prob_map/scaling_factor
+    else:
+        inverse_total = nx - probability_total
+        inverse_sum = nx - probability_sum
+        scaling_factor = inverse_total / inverse_sum
+        prob_map = 1 - (1 - prob_map)*scaling_factor
 
     prob_map[nx // 2 - center_square // 2:nx // 2 + center_square // 2] = 1
     prob_map = np.tile(prob_map, (ny, 1))
@@ -102,12 +108,20 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
     probability_total = nx * ny * delta
     probability_total -= c_sq * c_sq
 
-    scaling_factor = probability_sum/probability_total
-    prob_map = prob_map/scaling_factor
+    if probability_total < probability_sum:
+        scaling_factor = probability_total / probability_sum
+        prob_map = prob_map*scaling_factor
+    else:
+        inverse_total = nx*ny - probability_total
+        inverse_sum = nx*ny - probability_sum
+        scaling_factor = inverse_total / inverse_sum
+        prob_map = 1 + (1 - prob_map)*scaling_factor
+        # inverse scale_factor
 
     prob_map[ny // 2 - c_sq // 2:ny // 2 + c_sq // 2, nx // 2 - c_sq // 2:nx // 2 + c_sq // 2] = 1
 
     assert np.isclose(prob_map.mean(), delta, 1e-3, 1e-3)
+    assert prob_map.max() < 1 and prob_map.min() > 0
 
     return prob_map
 
