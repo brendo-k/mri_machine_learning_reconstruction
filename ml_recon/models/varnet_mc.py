@@ -13,15 +13,22 @@ class VarNet_mc(nn.Module):
                  model_backbone: Union[nn.Module, partial],
                  num_cascades=6,
                  sens_chans=8,
+                 weight_sharing=False
                  ):
         super().__init__()
 
         # module cascades
         self.cascade = nn.ModuleList()
-
-        self.cascades = nn.ModuleList(
-            [VarnetBlock(model_backbone()) for _ in range(num_cascades)]
-        )
+        
+        if weight_sharing:
+            assert isinstance(model, nn.Module), "Model is not an instance of nn.Module"
+            self.cascades = nn.ModuleList(
+                [VarnetBlock(model_backbone) for _ in range(num_cascades)]
+            )
+        else:
+            self.cascades = nn.ModuleList(
+                [VarnetBlock(model_backbone()) for _ in range(num_cascades)]
+            )
 
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)

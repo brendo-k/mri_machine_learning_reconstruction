@@ -13,6 +13,7 @@ class KSpaceDataset(Dataset):
         super().__init__()
         self.nx = nx
         self.ny = ny
+        self.contrast_order = []
 
     def __len__(self):
         pass

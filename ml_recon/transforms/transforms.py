@@ -6,7 +6,7 @@ import einops
 
 # Normalize to [0, 1] range per contrast
 class normalize(object):
-    def __init__(self, norm_method='mean'):
+    def __init__(self, norm_method='max'):
         self.norm_method=norm_method
 
     def __call__(self, sample):

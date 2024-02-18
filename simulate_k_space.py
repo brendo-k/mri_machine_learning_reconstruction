@@ -33,7 +33,7 @@ def process_file(file, out_path, seed):
         if i % 3 == 0:
             cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed, same_phase=False)
+            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed+i, same_phase=False)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
         print(files)
-        seeds = [np.random.randint(0, 1_000_000_00) for _ in range(len(files))]
+        seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
 
         #for file in files:
         #    process_file(file, os.path.join(save_dir, split), np.random.randint(0, 1_000_000_000))

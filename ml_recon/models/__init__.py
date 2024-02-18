@@ -7,3 +7,4 @@ from .varnet_mc import VarNet_mc
 from .multi_task_unet import MultiTaskUnet
 from .unetr import UnetR
 from .patches import Patches
+from .SE_JD import SingleEncoderJointDecoder

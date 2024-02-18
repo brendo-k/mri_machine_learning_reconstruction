@@ -32,16 +32,16 @@ def psnr(
 
 
 def ssim(
-    gt: torch.Tensor, pred: torch.Tensor, maxval = None
-) -> np.ndarray:
+    gt: torch.Tensor, pred: torch.Tensor, device) -> torch.Tensor:
     """Compute Structural Similarity Index Metric (SSIM)"""
     if not gt.ndim == pred.ndim:
         raise ValueError("Ground truth dimensions does not match pred.")
 
-    maxval = gt.max() if maxval is None else maxval
+    maxval = gt.max() 
 
+    ssim_func = SSIMLoss().to(device)
     # subtract by 1 since ssimloss is inverted 
-    ssim = SSIMLoss()(
+    ssim = ssim_func(
             gt, pred, data_range=maxval
         )
 

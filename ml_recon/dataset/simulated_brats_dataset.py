@@ -155,7 +155,7 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed, same_phase=True):
+    def simulate_k_space(image, seed, same_phase=False):
         #image [Contrast height width]
         image_w_sense = SimulatedBrats.apply_sensetivities(image)
         #image_w_sense [Contrast coil height width]
@@ -184,11 +184,12 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=4, same_phase=True):
+    def generate_and_apply_phase(data, seed, center_region=4, same_phase=False):
         if same_phase: 
             nc = 1
         else:
-            nc = data.shape[1]
+            nc = data.shape[0]
+
         phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], nc, seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
@@ -196,14 +197,18 @@ class SimulatedBrats(KSpaceDataset):
 
     @staticmethod
     def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
+        rng = np.random.default_rng(seed)
+
         phase_frequency = np.zeros((1, nx, ny), dtype=np.complex64)
-        if same_phase:
+        if not same_phase:
             phase_frequency = np.tile(phase_frequency, (nc, 1, 1))
+
         center = (nx//2, ny//2)
         center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
         center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
-        rng = np.random.default_rng(seed)
-        coeff = rng.random(size=(nc, center_region, center_region)) + 1j * rng.random(size=(nc, center_region, center_region))
+        coeff = rng.random(size=(phase_frequency.shape[0], center_region, center_region)) + 1j * rng.random(size=(phase_frequency.shape[0], center_region, center_region))
+        coeff -= 0.5 + 1j * 0.5
+        print(center_box_x)
         phase_frequency[:, center_box_x, center_box_y] = coeff
 
         phase = fft_2d_img(phase_frequency)
@@ -214,7 +219,7 @@ class SimulatedBrats(KSpaceDataset):
 
     @staticmethod
     def apply_phase_map(data, phase):
-        return data * np.exp(1j * phase)
+        return data * np.exp(1j * np.expand_dims(phase, 1))
 
 
     @staticmethod
@@ -252,51 +257,41 @@ if __name__ == '__main__':
     dataset = SimulatedBrats(data_dir)
 
 
-    k_space = dataset[20]
-    volume_index, slice_index = dataset.get_vol_slice_index(20)
-    data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
-    images = dataset.resample(data, 256, 256)
-    images = np.transpose(images, (0, 2, 1))
-    images = torch.from_numpy(images)
+    #k_space = dataset[20]
+    #volume_index, slice_index = dataset.get_vol_slice_index(20)
+    #data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
+    #images = dataset.resample(data, 256, 256)
+    #images = np.transpose(images, (0, 2, 1))
+    #images = torch.from_numpy(images)
 
-
-    fig, ax = plt.subplots(1, 3)
-
-    k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
-    ax[0].imshow(images[0], cmap='gray')
-    ax[1].imshow(k_space_image, cmap='gray')
-    ax[2].imshow(images[0] - k_space_image)
 
     #fig, ax = plt.subplots(1, 3)
-    #
-    #mask = np.zeros((256, 256), dtype=bool) 
-    #mask[:, 128 - 5: 128 + 5] = 1
-    #k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0] * mask), coil_dim=0)
+
+    #k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
     #ax[0].imshow(images[0], cmap='gray')
     #ax[1].imshow(k_space_image, cmap='gray')
+    #ax[2].imshow(images[0] - k_space_image)
     #plt.show()
 
-    #image_slices(root_sum_of_squares(ifft_2d_img(k_space), coil_dim=1), cmap='gray')
+    #print(k_space.shape)
+    #cropped_k = k_space[0, :, 64:64+128, 64:64+128]
+    #print(cropped_k.shape)
+    #plt.imshow(root_sum_of_squares(ifft_2d_img(cropped_k), coil_dim=0))
     #plt.show()
 
-    #image_slices(np.real(ifft_2d_img(k_space[0])), cmap='gray')
-    #plt.figure(2)
-    #image_slices(np.imag(ifft_2d_img(k_space[0])), cmap='gray')
-    #plt.figure(3)
-    #image_slices(np.abs(ifft_2d_img(k_space[0])), cmap='gray')
+
+    phase3 = SimulatedBrats.build_phase(3, 256, 256, 4, same_phase=False, seed=None)
+    phase3_same = SimulatedBrats.build_phase(3, 256, 256, 4, same_phase=False, seed=None)
+
+    fig, ax = plt.subplots(2, 2)
+    ax[0, 0].imshow(phase3[0])
+    ax[1, 0].imshow(phase3[1])
+    ax[0, 1].imshow(phase3[2])
+    ax[1, 1].imshow(phase3[3])
+
+    fig, ax = plt.subplots(2, 2)
+    ax[0, 0].imshow(phase3_same[0])
+    ax[1, 0].imshow(phase3_same[1])
+    ax[0, 1].imshow(phase3_same[2])
+    ax[1, 1].imshow(phase3_same[3])
     plt.show()
-
-    #image_slices(np.abs(ifft_2d_img(k_space[0])))
-
-
-    #dataset = UndersampleDecorator(dataset)
-
-    #doub_under, under, dataset_k, k = dataset[0]
-
-    #image_slices(np.abs(ifft_2d_img(under[0])))
-
-    #image_slices(np.abs(ifft_2d_img(under[0]*mask)))
-
-    #image_slices(np.abs(ifft_2d_img(dataset_k[0])))
-
-    #plt.show()

@@ -60,7 +60,10 @@ def test(model, test_loader, profile, mask_output=True):
     torch.manual_seed(0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    num_contrasts = test_loader.dataset.contrasts
+    dataset = test_loader.dataset
+    if isinstance(dataset, torch.utils.data.Subset):
+        dataset = dataset.dataset
+    num_contrasts = dataset.contrasts
 
     nmse_values = torch.zeros((num_contrasts, len(test_loader)))
     ssim_values = torch.zeros((num_contrasts, len(test_loader)))

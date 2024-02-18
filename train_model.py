@@ -13,10 +13,9 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR, UnetR, MultiTaskUnet
+from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR, UnetR, MultiTaskUnet, SingleEncoderJointDecoder
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.m4raw_dataset import M4Raw 
-from ml_recon.dataset.kspace_brats import KSpaceBrats
 from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
 from ml_recon.utils import save_model, ifft_2d_img, root_sum_of_squares
@@ -172,15 +171,19 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
                 'poly_order': arg.poly_order,
                 'transforms': normalize(arg.norm_method)
             }
-    
+    print(arg.nx)
+    print(arg.ny)
+    print(undersampling_args)
     train_dataset = UndersampleDecorator(train_dataset, **undersampling_args)
     val_dataset = UndersampleDecorator(val_dataset, **undersampling_args)
     test_dataset = UndersampleDecorator(test_dataset, **undersampling_args)
     
     if arg.use_subset:
-        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
-        val_dataset, _ = random_split(val_dataset, [0.1, 0.9])
-        test_dataset, _ = random_split(test_dataset, [0.1, 0.9])
+        subset_amount = 0.05
+
+        train_dataset, _ = random_split(train_dataset, [subset_amount, 1-subset_amount])
+        val_dataset, _ = random_split(val_dataset, [subset_amount, 1-subset_amount])
+        test_dataset, _ = random_split(test_dataset, [subset_amount, 1-subset_amount])
 
     if distributed:
         print('Setting up distributed sampler')
@@ -310,10 +313,14 @@ def setup_model_backbone(args):
     model_name = args.model
     cascades = args.cascades
     input_channels = 2*len(args.contrasts)
+    weight_sharing = False
     if model_name == 'unet':
         backbone = partial(Unet, in_chan=input_channels, out_chan=input_channels, depth=4, chans=args.channels)
     elif model_name == 'resnet':
-        backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=15, chans=args.channels)
+        backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=args.itterations, chans=args.channels)
+    elif model_name == 'ws_resnet':
+        backbone = ResNet(in_chan=input_channels, out_chan=input_channels, itterations=args.itterations, chans=args.channels)
+        weight_sharing = True
     elif model_name == 'dncnn':
         backbone = partial(DnCNN, in_chan=input_channels, out_chan=input_channels, channels=args.channels, num_of_layers=15)
     elif model_name == 'transformer':
@@ -338,11 +345,21 @@ def setup_model_backbone(args):
                            joint_depth=args.joint_depth,
                            joint_channel=args.joint_chan
                            )
+    elif model_name == 'se_jd':
+        backbone = partial(
+                SingleEncoderJointDecoder, 
+                in_chan=input_channels, 
+                encoder_chan=args.encoder_chan, 
+                encoder_depth=args.encoder_depth, 
+                decoder_chan=args.decoder_chan, 
+                decoder_depth=args.decoder_depth, 
+                            )
+
         print('loaded multi-task!')
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 
-    model = VarNet_mc(backbone, num_cascades=cascades)
+    model = VarNet_mc(backbone, num_cascades=cascades, weight_sharing=weight_sharing)
     params = sum([x.numel()  for x in model.parameters()])
     print(f'Model has {params:,}')
 
@@ -367,7 +384,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help='')
     parser.add_argument('--max_epochs', type=int, default=50, help='')
     parser.add_argument('--num_workers', type=int, default=0, help='')
-    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer', 'multitask', 'unetr'], default='unet')
+    parser.add_argument('--model', type=str, choices=['unet', 'resnet', 'dncnn', 'transformer', 'multitask', 'unetr', 'ws_resnet', 'se_jd'], default='unet')
     parser.add_argument('--loss_type', type=str, choices=['supervised', 'noiser2noise', 'ssdu', 'k-weighted'], default='ssdu')
     parser.add_argument('--scheduler', type=str, choices=['none', 'cyclic', 'cosine_anneal', 'steplr'], default='none')
     parser.add_argument('--channels', type=int, default=18, help='')
@@ -391,10 +408,14 @@ if __name__ == '__main__':
         parser = Unet.add_model_specific_args(parser)
     elif args.model == 'resnet':
         parser = ResNet.add_model_specific_args(parser)
+    elif args.model == 'ws_resnet':
+        parser = ResNet.add_model_specific_args(parser)
     elif args.model == 'multitask':
         parser = MultiTaskUnet.add_model_specific_args(parser)
     elif args.model == 'unetr':
         parser = UnetR.add_model_specific_args(parser)
+    elif args.model == 'se_jd':
+        parser = SingleEncoderJointDecoder.add_model_specific_args(parser)
 
     args = parser.parse_args()
     
