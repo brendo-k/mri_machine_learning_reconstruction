@@ -5,3 +5,8 @@
 .vscode
 tags
 **/images/**
+tb_logs
+wandb
+.lr_find**
+.pytest_cache
+csv_logs

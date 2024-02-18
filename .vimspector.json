@@ -141,6 +141,53 @@
                     "userUnhandled": ""
                 }
             }
+        },
+        "Debug Test": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "module": "pytest",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                    "-q",
+                    "-s",
+                    "${file}"
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
+        }, 
+        "Debug LOUPE": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "train.py",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
         }
     }
 }

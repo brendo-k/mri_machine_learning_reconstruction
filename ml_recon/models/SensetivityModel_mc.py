@@ -68,14 +68,18 @@ class SensetivityModel_mc(nn.Module):
 
     def mask(self, coil_images, center_mask):
         masked_k_space = coil_images.clone()
+        center_x = center_mask.shape[-1] // 2
+        center_y = center_mask.shape[-2] // 2
         
         # height doesn't matter (since column wise sampling) 
-        squeezed_mask = center_mask[:, :, 0, 0, :].to(torch.int8)
-        center = squeezed_mask.shape[-1] // 2
+        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.90).to(torch.int8)
         # Get the first zero index starting from the center. This gives us "left"
         # and "right" sides of ACS
-        left = torch.argmin(squeezed_mask[..., :center].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask[..., center:], dim=-1)
+        left = torch.argmin(squeezed_mask[..., :center_x].flip(-1), dim=-1)
+        right = torch.argmin(squeezed_mask[..., center_x:], dim=-1)
+
+        assert (left != 0).any(), 'Left mask bounds should be more than 1!'
+        assert (right != 0).any(), 'Right mask bounds should be more than 1!'
 
         # force symmetric left and right acs boundries
         num_low_frequencies_tensor = torch.min(left, right)
@@ -84,7 +88,7 @@ class SensetivityModel_mc(nn.Module):
         # loop through num_low freq tensor and set acs lines to true
         for i in range(num_low_frequencies_tensor.shape[0]):
             for j in range(num_low_frequencies_tensor.shape[1]):
-                center_mask[i, j, ..., center-num_low_frequencies_tensor[i, j]:center + num_low_frequencies_tensor[i, j]] = True
+                center_mask[i, j, ..., center_x-num_low_frequencies_tensor[i, j]:center_x + num_low_frequencies_tensor[i, j]] = True
 
         assert not center_mask.isnan().any()
         return masked_k_space * center_mask

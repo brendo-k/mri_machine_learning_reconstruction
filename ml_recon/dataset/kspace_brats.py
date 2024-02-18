@@ -27,7 +27,6 @@ class KSpaceBrats(KSpaceDataset):
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
-            undersampling: Optional[Callable] = None,
             extension: str = "npy"
             ):
         assert contrasts, 'Contrast list should not be empty!'
@@ -107,5 +106,10 @@ class KSpaceBrats(KSpaceDataset):
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
             data = torch.as_tensor(fr['k_space'][slice_index, self.contrast_order_indexes])
+            x_start = data.shape[-2]//2 - self.nx//2
+            y_start = data.shape[-1]//2 - self.ny//2
+
+            data = data[:, :, x_start:x_start + self.nx, y_start:y_start + self.ny]
+            
 
         return data

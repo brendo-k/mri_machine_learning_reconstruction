@@ -12,7 +12,7 @@ class UndersampleDecorator(Dataset):
     def __init__(
         self, 
         dataset: KSpaceDataset, 
-        R: int = 4, 
+        R: int = 8, 
         R_hat: int = 2,
         poly_order: int = 8,
         acs_lines: int = 10,
@@ -41,11 +41,12 @@ class UndersampleDecorator(Dataset):
     def __len__(self):
         return self.dataset.__len__()
 
+
     def __getitem__(self, index):
-        k_space = self.dataset[index] #[con, chan, h, w] OR [chan, h, w]
+        k_space = self.dataset[index] #[con, chan, h, w] 
         
-        under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
-        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=self.deterministic)
+        under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=True)
+        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=self.deterministic, line_constrained=True)
 
         data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
         if self.transforms:
@@ -61,7 +62,7 @@ class UndersampleDecorator(Dataset):
 
         parser.add_argument(
                 "--R", 
-                default=4,
+                default=8,
                 type=int,
                 help="Omega undersampling factor"
                 )

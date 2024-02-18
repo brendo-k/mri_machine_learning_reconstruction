@@ -1,85 +1,89 @@
+import os
 import pytorch_lightning as pl
+from torch.utils.data import DataLoader
 
-class mri_module(pl.LightningModule):
-    def __init__(self):
+from ml_recon.dataset.k_space_dataset import KSpaceDataset
+from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+from ml_recon.utils import root_sum_of_squares, ifft_2d_img
+
+class MRI_Loader(pl.LightningDataModule):
+    def __init__(
+            self, 
+            dataset_name: str, 
+            data_dir: str, 
+            resolution: tuple[int, int] = (128, 128),
+            contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
+            num_workers: int = 0,
+            batch_size: int = 4
+            ):
+
         super().__init__()
 
-    def on_validation_epoch_end(self, val_logs):
-        # check inputs
-        for k in (
-            "batch_idx",
-            "fname",
-            "slice_num",
-            "max_value",
-            "output",
-            "target",
-            "val_loss",
-        ):
-            if k not in val_logs.keys():
-                raise RuntimeError(
-                    f"Expected key {k} in dict returned by validation_step."
+        self.data_dir = data_dir 
+        self.batch_size = batch_size
+        self.resolution = resolution
+        self.contrasts = contrasts
+        self.num_workers = num_workers
+
+        if dataset_name == 'brats': 
+            self.dataset_class = BratsDataset
+        elif dataset_name == 'fastmri':
+            self.dataset_class = FastMRIDataset
+
+    def setup(self, stage):
+        data_dir = os.listdir(self.data_dir)
+        print(self.contrasts)
+
+        train_file = next((name for name in data_dir if 'train' in name))
+        val_file = next((name for name in data_dir if 'val' in name))
+        test_file = next((name for name in data_dir if 'test' in name))
+
+        train_dir = os.path.join(self.data_dir, train_file)
+        val_dir = os.path.join(self.data_dir, val_file)
+        test_dir = os.path.join(self.data_dir, test_file)
+
+        self.train_dataset = self.dataset_class(train_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
+        self.val_dataset = self.dataset_class(val_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
+        self.test_dataset = self.dataset_class(test_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
+
+    def train_dataloader(self):
+        return DataLoader(
+                self.train_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                shuffle=True,
+                pin_memory=True
                 )
-        if val_logs["output"].ndim == 2:
-            val_logs["output"] = val_logs["output"].unsqueeze(0)
-        elif val_logs["output"].ndim != 3:
-            raise RuntimeError("Unexpected output size from validation_step.")
-        if val_logs["target"].ndim == 2:
-            val_logs["target"] = val_logs["target"].unsqueeze(0)
-        elif val_logs["target"].ndim != 3:
-            raise RuntimeError("Unexpected output size from validation_step.")
 
-        # pick a set of images to log if we don't have one already
-        if self.val_log_indices is None:
-            self.val_log_indices = list(
-                np.random.permutation(len(self.trainer.val_dataloaders[0]))[
-                    : self.num_log_images
-                ]
-            )
+    def val_dataloader(self):
+        return DataLoader(
+                self.val_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                pin_memory=True
+                )
 
-        # log images to tensorboard
-        if isinstance(val_logs["batch_idx"], int):
-            batch_indices = [val_logs["batch_idx"]]
-        else:
-            batch_indices = val_logs["batch_idx"]
-        for i, batch_idx in enumerate(batch_indices):
-            if batch_idx in self.val_log_indices:
-                key = f"val_images_idx_{batch_idx}"
-                target = val_logs["target"][i].unsqueeze(0)
-                output = val_logs["output"][i].unsqueeze(0)
-                error = torch.abs(target - output)
-                output = output / output.max()
-                target = target / target.max()
-                error = error / error.max()
-                self.log_image(f"{key}/target", target)
-                self.log_image(f"{key}/reconstruction", output)
-                self.log_image(f"{key}/error", error)
+    def test_dataloader(self):
+        return DataLoader(
+                self.test_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                pin_memory=True
+                )
 
-        # compute evaluation metrics
-        mse_vals = defaultdict(dict)
-        target_norms = defaultdict(dict)
-        ssim_vals = defaultdict(dict)
-        max_vals = dict()
-        for i, fname in enumerate(val_logs["fname"]):
-            slice_num = int(val_logs["slice_num"][i].cpu())
-            maxval = val_logs["max_value"][i].cpu().numpy()
-            output = val_logs["output"][i].cpu().numpy()
-            target = val_logs["target"][i].cpu().numpy()
 
-            mse_vals[fname][slice_num] = torch.tensor(
-                evaluate.mse(target, output)
-            ).view(1)
-            target_norms[fname][slice_num] = torch.tensor(
-                evaluate.mse(target, np.zeros_like(target))
-            ).view(1)
-            ssim_vals[fname][slice_num] = torch.tensor(
-                evaluate.ssim(target[None, ...], output[None, ...], maxval=maxval)
-            ).view(1)
-            max_vals[fname] = maxval
+class normalize_image_max(object):
+    def __call__(self, data):
+        target = data
+        img = root_sum_of_squares(ifft_2d_img(target), coil_dim=1)
 
-        return {
-            "val_loss": val_logs["val_loss"],
-            "mse_vals": dict(mse_vals),
-            "target_norms": dict(target_norms),
-            "ssim_vals": dict(ssim_vals),
-            "max_vals": max_vals,
-        }
+        return target/img.max()
+
+class normalize_k_max(object):
+    def __call__(self, data):
+        undersampled, target = data
+        k_max = target.abs().max()
+
+        return target/k_max
+

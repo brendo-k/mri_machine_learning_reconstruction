@@ -3,7 +3,7 @@ from typing import Union
 import numpy.typing as npt
 import torch
 
-def root_sum_of_squares(data: Union[torch.Tensor, npt.NDArray[np.float_]], coil_dim=0) -> Union[torch.Tensor, npt.NDArray[np.float_]]:
+def root_sum_of_squares(data: Union[torch.Tensor, npt.NDArray[np.float_]], coil_dim=0):
     """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
 
     Args:

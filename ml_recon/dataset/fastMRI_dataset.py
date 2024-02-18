@@ -11,13 +11,15 @@ from ml_recon.utils.read_headers import make_header
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 
 class FastMRIDataset(KSpaceDataset):
-    """This is a supervised slice dataloader. 
+    """This is a supervised slice dataloader. Returns data in [contrast, channel, height, width] where
+    contrast dimension is 1
 
     Args:
         data_dir: Directory of h5py files
         nx: resolution in the x direction
         ny: resolution in the y direction
-        raw_sample_filter: how to sample slices
+        build_new_header: builds a new header file so we don't have to every time
+        
     """
     def __init__(
             self,
@@ -26,14 +28,13 @@ class FastMRIDataset(KSpaceDataset):
             ny:int = 256,
             build_new_header: bool = False,
             transforms: Optional[Callable] = None,
-            undersample: Optional[Callable] = None
             ):
 
         # call super constructor
         super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
-        self.undersample = undersample
+        self.contrast_order = 't1'
 
         header_file = os.path.join(data_dir, 'header.json')
         if not os.path.isfile(header_file) or build_new_header:
@@ -62,9 +63,6 @@ class FastMRIDataset(KSpaceDataset):
 
         # add contrast dimension
         k_space = k_space.unsqueeze(0)
-
-        if self.undersample:
-            k_space = self.undersample(k_space)
 
         if self.transforms:
             k_space = self.transforms(k_space)
