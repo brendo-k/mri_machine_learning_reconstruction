@@ -66,13 +66,13 @@ class SensetivityModel_mc(nn.Module):
         images = images / rss_norm
         return images
 
-    def mask(self, coil_images, center_mask):
-        masked_k_space = coil_images.clone()
+    def mask(self, coil_k_spaces, center_mask):
+        masked_k_space = coil_k_spaces.clone()
         center_x = center_mask.shape[-1] // 2
         center_y = center_mask.shape[-2] // 2
         
         # height doesn't matter (since column wise sampling) 
-        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.90).to(torch.int8)
+        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
         # Get the first zero index starting from the center. This gives us "left"
         # and "right" sides of ACS
         left = torch.argmin(squeezed_mask[..., :center_x].flip(-1), dim=-1)

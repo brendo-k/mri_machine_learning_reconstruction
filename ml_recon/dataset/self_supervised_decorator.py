@@ -17,7 +17,8 @@ class UndersampleDecorator(Dataset):
         poly_order: int = 8,
         acs_lines: int = 10,
         transforms: Union[Callable, None] = None, 
-        deterministic: bool = False
+        deterministic: bool = False,
+        segregated: bool = False
     ):
         super().__init__()
 

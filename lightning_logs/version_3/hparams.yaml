@@ -1,0 +1,57 @@
+R: 4
+backbone: !!python/object/apply:functools.partial
+  args:
+  - &id001 !!python/name:ml_recon.models.unet.Unet ''
+  state: !!python/tuple
+  - *id001
+  - !!python/tuple []
+  - chans: 18
+    in_chan: 8
+    out_chan: 8
+  - null
+batch_size: 20
+contrast_order: !!python/object/apply:numpy.core.multiarray._reconstruct
+  args:
+  - !!python/name:numpy.ndarray ''
+  - !!python/tuple
+    - 0
+  - !!binary |
+    Yg==
+  state: !!python/tuple
+  - 1
+  - !!python/tuple
+    - 4
+  - !!python/object/apply:numpy.dtype
+    args:
+    - U5
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - 20
+    - 4
+    - 8
+  - false
+  - !!binary |
+    ZgAAAGwAAABhAAAAaQAAAHIAAAB0AAAAMQAAAAAAAAAAAAAAAAAAAHQAAAAxAAAAYwAAAGUAAAAA
+    AAAAdAAAADIAAAAAAAAAAAAAAAAAAAA=
+contrasts:
+- t1
+- t1ce
+- t2
+- flair
+data_dir: /home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/
+dataset_name: brats
+line_constrained: false
+lr: 0.001
+norm_method: img
+num_cascades: 5
+num_workers: 0
+resolution: !!python/tuple
+- 128
+- 128
+sense_chans: 8

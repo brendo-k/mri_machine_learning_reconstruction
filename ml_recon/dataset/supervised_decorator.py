@@ -15,6 +15,7 @@ class SupervisedDecorator(Dataset):
         poly_order: int = 8,
         acs_lines: int = 10,
         transforms: Union[Callable, None] = None, 
+        segregated: bool = False
     ):
         super().__init__()
 
@@ -22,6 +23,7 @@ class SupervisedDecorator(Dataset):
         self.contrasts = dataset[0].shape[0]
         self.contrast_order = dataset.contrast_order
         self.line_constrained = line_constrained
+        self.segregated = segregated
 
         self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
         # create omega probability the same size as number of contrasts
@@ -37,7 +39,13 @@ class SupervisedDecorator(Dataset):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
         
-        under, _ = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=self.line_constrained)
+        under, _ = apply_undersampling(self.random_index + index, 
+                                       self.omega_prob, 
+                                       k_space, 
+                                       deterministic=True, 
+                                       line_constrained=self.line_constrained, 
+                                       segregated=self.segregated
+                                       )
 
         if self.transforms: 
             under, k_space = self.transforms((under, k_space))

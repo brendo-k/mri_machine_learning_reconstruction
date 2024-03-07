@@ -1,17 +1,9 @@
-import pytorch_lightning as pl
-import os
-import typing
-
-from torch.utils.data import DataLoader
-
-from ml_recon.transforms import normalize
-from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.supervised_decorator import SupervisedDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.mri_module import MRI_Loader
 
 
-class SupervisedReconModule(MRI_Loader):
+class SupervisedDataset(MRI_Loader):
     def __init__(
             self, 
             dataset_name: str,
@@ -22,7 +14,8 @@ class SupervisedReconModule(MRI_Loader):
             resolution: tuple[int, int] = (128, 128),
             line_constrained: bool = True,
             num_workers: int = 0,
-            norm_method: str = 'img'
+            norm_method: str = 'k',
+            segregated: bool = False
             ):
         super().__init__(dataset_name, data_dir, resolution, contrasts, batch_size=batch_size, num_workers=num_workers)
         self.save_hyperparameters()
@@ -31,6 +24,7 @@ class SupervisedReconModule(MRI_Loader):
         self.batch_size = batch_size
         self.resolution = resolution
         self.line_constrained = line_constrained
+        self.segregated = segregated
         self.R = R
         
         if norm_method == 'img':
@@ -41,9 +35,10 @@ class SupervisedReconModule(MRI_Loader):
     def setup(self, stage):
         super().setup(stage)
 
-        self.train_dataset = SupervisedDecorator(self.train_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms)
-        self.val_dataset = SupervisedDecorator(self.val_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms)
-        self.test_dataset = SupervisedDecorator(self.test_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms)
+        self.train_dataset = SupervisedDecorator(self.train_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms, segregated=self.segregated)
+        self.val_dataset = SupervisedDecorator(self.val_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms, segregated=self.segregated)
+        self.test_dataset = SupervisedDecorator(self.test_dataset, R=self.R, line_constrained=self.line_constrained, transforms=self.transforms, segregated=self.segregated)
+
         self.contrast_order = self.train_dataset.contrast_order
 
 
