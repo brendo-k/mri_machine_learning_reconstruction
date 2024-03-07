@@ -17,7 +17,7 @@ def root_sum_of_squares(data: Union[torch.Tensor, npt.NDArray[np.float_]], coil_
     if isinstance(data, np.ndarray):
         return np.sqrt(np.sum(np.power(np.abs(data), 2), axis=coil_dim))
     elif isinstance(data, torch.Tensor):
-        return data.abs().pow(2).sum(coil_dim).sqrt()
+        return torch.sqrt(data.abs().pow(2).sum(coil_dim) + 1e-6)
     else:
         raise ValueError(f'Data should be either a numpy array or pytorch Tensor')
     
