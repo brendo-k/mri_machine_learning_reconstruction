@@ -85,7 +85,7 @@ class plReconModel(pl.LightningModule):
 
             k_space_scaled = k_space.abs()/(k_space.abs().max() / 20) 
             under_k = under_k.abs()/(under_k.abs().max() / 20)
-            diff = (estimated_image - image).abs()
+            diff = (estimated_image - image).abs()*10
 
             tensorboard.add_images(mode + '/recon', estimated_image.unsqueeze(1), self.current_epoch)
             tensorboard.add_images(mode + '/target', image.unsqueeze(1), self.current_epoch)
