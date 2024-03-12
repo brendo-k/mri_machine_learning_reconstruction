@@ -40,13 +40,12 @@ class pl_VarNet(plReconModel):
         self.loss = lambda target, prediction: L1L2Loss(torch.view_as_real(target), torch.view_as_real(prediction))
 
     def training_step(self, batch, batch_idx):
-        print(batch_idx)
         under, target = batch
 
         estimate_target = self.model(under, under != 0)
 
         loss = self.loss(target, estimate_target)
-        self.log('train_loss', loss, on_epoch=True, on_step=True, logger=True)
+        self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
         if batch_idx == 0: 
             self.plot_images((under, target), under != 0, 'train')
 
@@ -58,7 +57,7 @@ class pl_VarNet(plReconModel):
         estimate_target = self.model(under, under != 0)
 
         loss = self.loss(target, estimate_target)
-        self.log('val_loss', loss, on_epoch=True, logger=True)
+        self.log('val/val_loss', loss, on_epoch=True, logger=True)
         if batch_idx == 0: 
             self.plot_images((under, target), under != 0 , 'val')
         return loss
@@ -66,8 +65,6 @@ class pl_VarNet(plReconModel):
 
     def forward(self, data, sampling_mask): 
         under_k, k_space = data
-        print(under_k.type())
-        print(k_space.type())
         return self.model(under_k, sampling_mask)
 
     # optimizer configureation -> using adam w/ lr of 1e-3

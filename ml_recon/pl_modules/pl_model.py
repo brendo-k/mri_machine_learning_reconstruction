@@ -44,18 +44,18 @@ class plReconModel(pl.LightningModule):
             batch_psnr = psnr(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
 
             #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-            self.log("nmse_" + self.contrast_order[contrast], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
-            self.log("ssim_" + self.contrast_order[contrast], batch_ssim, on_epoch=True, prog_bar=True, logger=True)
-            self.log("ssim_torch_" + self.contrast_order[contrast], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
-            self.log("psnr_" + self.contrast_order[contrast], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
+            self.log("metrics/nmse_" + self.contrast_order[contrast], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
+            self.log("metrics/ssim_" + self.contrast_order[contrast], batch_ssim, on_epoch=True, prog_bar=True, logger=True)
+            self.log("metrics/ssim_torch_" + self.contrast_order[contrast], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
+            self.log("metrics/psnr_" + self.contrast_order[contrast], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
 
             total_ssim += batch_ssim
             total_psnr += batch_psnr
             total_nmse += batch_nmse
 
-        self.log('mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
-        self.log('mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
-        self.log('mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
+        self.log('metrics/mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
+        self.log('metrics/mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
+        self.log('metrics/mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
 
         tensorboard_logger = None
         if isinstance(self.loggers, list): 

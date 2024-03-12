@@ -54,7 +54,7 @@ class LOUPE(plReconModel):
 
         loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space)) + self.lambda_param * torch.sum(1 - sampling_mask[:, :, 0, :, :])
 
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             self.plot_images(k_space, 'train') 
@@ -68,7 +68,7 @@ class LOUPE(plReconModel):
 
         loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space))
 
-        self.log("val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             self.plot_images(k_space, 'val') 
@@ -144,7 +144,7 @@ class LOUPE(plReconModel):
                 # Scaling factor will be greater than 1 so we need to go into the 
                 # inverse of probs
                     inverse_total = self.image_size[2]*(1 - 1/self.R)
-                    inverse_sum = self.image_size[2] - probability_sum - self.center_region
+                    inverse_sum = self.image_size[2] - probability_sum[i] - self.center_region
                     scaling_factor = inverse_total / inverse_sum
                     inv_prob = (1 - probability[i])*scaling_factor
                     probability[i] = 1 - inv_prob
@@ -210,9 +210,6 @@ class LOUPE(plReconModel):
         assert sampling_mask.shape == k_space.shape, 'Sampling mask and k_space should have the same shape!'
 
         under_k = k_space * sampling_mask
-    
-        # Assert the pattern of zeros in the under-sampled k-space
-        assert ((under_k[0, 0, 0, :, :] == 0) == (under_k[0, 0, 1, :, :] == 0)).all()
     
         # Estimate k-space using the model
         estimate_k = self.recon_model((under_k, k_space), sampling_mask)
