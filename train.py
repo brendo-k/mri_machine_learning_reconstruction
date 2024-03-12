@@ -23,8 +23,8 @@ def main(args):
 
 
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
-    nx = 128
-    ny = 128
+    nx = args.nx
+    ny = args.ny
 
     data_module = SupervisedDataset(
             'brats', 
@@ -32,7 +32,7 @@ def main(args):
             batch_size=args.batch_size, 
             resolution=(ny, nx),
             num_workers=args.num_workers,
-            norm_method='k',
+            norm_method=args.norm_method,
             R=args.R,
             line_constrained=args.line_constrained,
             segregated=args.segregated
@@ -84,6 +84,9 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_train_batches', type=float, default=1.0)
     parser.add_argument('--segregated', action='store_true')
+    parser.add_argument('--nx', type=int, default=128)
+    parser.add_argument('--ny', type=int, default=128)
+    parser.add_argument('--norm_method', type=str, default='k')
     
     args = parser.parse_args()
 
