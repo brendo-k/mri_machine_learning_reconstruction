@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ml_recon.dataset.undersample import gen_pdf_columns, gen_pdf_bern, get_mask_from_distribution, get_mask_from_segregated_sampling
+from ml_recon.dataset.undersample import gen_pdf_columns, gen_pdf_bern, get_mask_from_distribution, get_mask_from_segregated_sampling, scale_pdf
 
 def test_line_probability_mask():
     pdf = gen_pdf_columns(300, 600, 1/4, 8, 10)
@@ -27,7 +27,23 @@ def test_bern_segregated():
     masks, probs = get_mask_from_segregated_sampling(pdf, rng, line_constrained = False)
     assert masks.shape == pdf.shape
     
+def test_scaling():
     
+    pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
+    pdf_R4 = gen_pdf_bern(120, 320, 1/4, 8, 10)
+    
+    scaled_pdf = scale_pdf(pdf_R8, 4, 10)
 
- 
+    np.testing.assert_allclose(scaled_pdf, pdf_R4) 
+    
+def test_scaling_multiple_dims():
+    
+    pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
+    pdf_R8 = np.tile(pdf_R8[np.newaxis, :, :], (6, 1, 1))
+    pdf_R4 = gen_pdf_bern(120, 320, 1/4, 8, 10)
+    pdf_R4 = np.tile(pdf_R4[np.newaxis, :, :], (6, 1, 1))
+    
+    scaled_pdf = scale_pdf(pdf_R8, 4, 10)
+
+    np.testing.assert_allclose(scaled_pdf, pdf_R4) 
     

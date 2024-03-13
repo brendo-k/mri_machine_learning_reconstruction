@@ -16,13 +16,15 @@ def calc_k(lambda_probability, omega_probability):
     
 def apply_undersampling(index, prob_map, k_space, line_constrained, deterministic, segregated):
     rng = get_random_generator(index, deterministic)
+    new_probs = None
     if not segregated:
         mask = get_mask_from_distribution(prob_map, rng, line_constrained)
+        new_probs = prob_map
     else:
-        mask, _ = get_mask_from_segregated_sampling(prob_map, rng, line_constrained)
+        mask, new_probs = get_mask_from_segregated_sampling(prob_map, rng, line_constrained)
         
     undersampled = k_space * np.expand_dims(mask, 1)
-    return undersampled, np.expand_dims(mask, 1)
+    return undersampled, np.expand_dims(mask, 1), new_probs
     
    
 def get_random_generator(index, deterministic):
@@ -41,25 +43,9 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, center_square):
     r /= np.max(r)
     prob_map = (1 - r) ** poylnomial_power
     prob_map[prob_map > 1] = 1
-    prob_map[nx // 2 - center_square // 2:nx // 2 + center_square // 2] = 0
 
-    probability_sum = prob_map.sum()
-
-    probability_total = nx * one_over_R
-    probability_total -= center_square
-
-    if probability_sum > probability_total: 
-        scaling_factor = probability_total/probability_sum
-        prob_map = prob_map/scaling_factor
-    else:
-        inverse_total = nx - nx*one_over_R
-        inverse_sum = nx - probability_sum - center_square
-        scaling_factor = inverse_total / inverse_sum
-        inv_prob_map = (1 - prob_map) * scaling_factor
-        prob_map = 1 - inv_prob_map
-
-    prob_map[nx // 2 - center_square // 2:nx // 2 + center_square // 2] = 1
     prob_map = np.tile(prob_map, (ny, 1))
+    prob_map = scale_pdf(prob_map, 1/one_over_R, center_square, True) 
     return prob_map
 
 def gen_pdf_columns_charlie(nx, ny, delta, p, c_sq):
@@ -106,24 +92,7 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
     prob_map[prob_map > 1] = 1
     prob_map[prob_map < 0] = 0
 
-    prob_map[ny // 2 - c_sq // 2:ny // 2 + c_sq // 2, nx // 2 - c_sq // 2:nx // 2 + c_sq // 2] = 0
-    
-    probability_sum = prob_map.sum()
-    
-    probability_total = nx * ny * delta
-    probability_total -= c_sq * c_sq
-
-    if probability_sum > probability_total:
-        scaling_factor = probability_total / probability_sum
-        prob_map = prob_map*scaling_factor
-    else:
-        inverse_total = nx*ny - nx*ny*delta
-        inverse_sum = nx*ny - probability_sum - c_sq * c_sq
-        scaling_factor = inverse_total / inverse_sum
-        prob_map = 1 - (1 - prob_map)*scaling_factor
-        # inverse scale_factor
-
-    prob_map[ny // 2 - c_sq // 2:ny // 2 + c_sq // 2, nx // 2 - c_sq // 2:nx // 2 + c_sq // 2] = 1
+    prob_map = scale_pdf(prob_map, 1/delta, c_sq, False)
 
     assert np.isclose(prob_map.mean(), delta, 1e-2, 0)
     assert prob_map.max() <= 1 and prob_map.min() >= 0
@@ -186,3 +155,69 @@ def get_mask_from_segregated_sampling(prob_map, rng, line_constrained):
                 new_probs[i - 1, :, :] = new_prob_map
 
     return masks, new_probs
+
+
+def scale_pdf(prob_map, R, center_square, line_constrained=False):
+    if not line_constrained:
+        shape = prob_map.shape
+        ny = shape[-2]
+        nx = shape[-1]
+        center = [ny//2, nx//2]
+        center_y_slice = slice(center[0] - center_square//2, center[0] + center_square//2)
+        center_x_slice = slice(center[1] - center_square//2, center[1] + center_square//2)
+        if prob_map.ndim == 2: 
+            prob_map = np.expand_dims(prob_map, axis=0)
+
+        prob_map[:, center_y_slice, center_x_slice] = 0
+        
+        probability_sum = prob_map.sum(axis=(-1, -2))
+        
+        probability_total = nx * ny * (1/R)
+        probability_total -= center_square * center_square
+        
+        for i in range(probability_sum.size): 
+            if probability_sum[i] > probability_total:
+                scaling_factor = probability_total / probability_sum
+                prob_map[i, ...] = prob_map[i, ...]*scaling_factor
+            else:
+                # inverse scale_factor
+                inverse_total = nx*ny - nx*ny*(1/R)
+                inverse_sum = nx*ny - probability_sum[i] - center_square * center_square
+                scaling_factor = inverse_total / inverse_sum
+                prob_map[i, ...] = 1 - (1 - prob_map[i, ...])*scaling_factor
+
+        prob_map[:, center_y_slice, center_x_slice] = 1
+        prob_map = np.squeeze(prob_map)
+
+    if line_constrained:
+        nx = prob_map.shape[-1]
+        center = [nx//2]
+        center_x_slice = slice(center[0] - center_square//2, center[0] + center_square//2)
+        prob_map[..., center_x_slice] = 0
+
+        if prob_map.ndim == 2: 
+            prob_map = np.expand_dims(prob_map, axis=0)
+
+        probability_sum = prob_map.sum(-1)
+        probability_sum = probability_sum[:, 0]
+
+        probability_total = nx * (1/R)
+        probability_total -= center_square
+
+        for i in range(len(probability_sum)): 
+            if probability_sum[i] > probability_total: 
+                scaling_factor = probability_total/probability_sum
+                prob_map = prob_map[i, ...]/scaling_factor
+            else:
+                inverse_total = nx - nx* (1/R)
+                inverse_sum = nx - probability_sum[i] - center_square
+                scaling_factor = inverse_total / inverse_sum
+                prob_map[i, ...] = 1 - (1 - prob_map[i, ...]) * scaling_factor
+
+        prob_map[..., center_x_slice] = 1
+        prob_map = np.squeeze(prob_map)
+
+
+    return prob_map
+
+

@@ -45,7 +45,9 @@ class pl_VarNet(plReconModel):
         estimate_target = self.model(under, under != 0)
 
         loss = self.loss(target, estimate_target)
+
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
+
         if batch_idx == 0: 
             self.plot_images((under, target), under != 0, 'train')
 

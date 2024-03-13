@@ -39,7 +39,7 @@ class SupervisedDecorator(Dataset):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
         
-        under, _ = apply_undersampling(self.random_index + index, 
+        under, _, _= apply_undersampling(self.random_index + index, 
                                        self.omega_prob, 
                                        k_space, 
                                        deterministic=True, 

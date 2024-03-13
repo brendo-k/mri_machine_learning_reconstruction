@@ -1,0 +1,195 @@
+{
+    "_version": "v0",
+    "source_type": "repo",
+    "source": {
+        "git": {
+            "remote": "git@github.com:brendo-k/mri_machine_learning_reconstruction.git",
+            "commit": "4d1b5c47edec7fa8c8cb49972026f8c923128431"
+        },
+        "entrypoint": [
+            "python",
+            "train.py"
+        ],
+        "notebook": false
+    },
+    "input_types": {
+        "wb_type": "typedDict",
+        "params": {
+            "type_map": {
+                "image_size": {
+                    "wb_type": "list",
+                    "params": {
+                        "element_type": {
+                            "wb_type": "number"
+                        },
+                        "length": 3
+                    }
+                },
+                "learned_R": {
+                    "wb_type": "number"
+                },
+                "contrast_order": {
+                    "wb_type": "list",
+                    "params": {
+                        "element_type": {
+                            "wb_type": "string"
+                        },
+                        "length": 4
+                    }
+                },
+                "center_region": {
+                    "wb_type": "number"
+                },
+                "prob_method": {
+                    "wb_type": "string"
+                },
+                "mask_method": {
+                    "wb_type": "string"
+                },
+                "sigmoid_slope1": {
+                    "wb_type": "number"
+                },
+                "sigmoid_slope2": {
+                    "wb_type": "number"
+                },
+                "lr": {
+                    "wb_type": "number"
+                },
+                "lambda_param": {
+                    "wb_type": "number"
+                },
+                "dataset_name": {
+                    "wb_type": "string"
+                },
+                "data_dir": {
+                    "wb_type": "string"
+                },
+                "batch_size": {
+                    "wb_type": "number"
+                },
+                "R": {
+                    "wb_type": "number"
+                },
+                "contrasts": {
+                    "wb_type": "list",
+                    "params": {
+                        "element_type": {
+                            "wb_type": "string"
+                        },
+                        "length": 4
+                    }
+                },
+                "resolution": {
+                    "wb_type": "list",
+                    "params": {
+                        "element_type": {
+                            "wb_type": "number"
+                        },
+                        "length": 2
+                    }
+                },
+                "line_constrained": {
+                    "wb_type": "boolean"
+                },
+                "num_workers": {
+                    "wb_type": "number"
+                },
+                "norm_method": {
+                    "wb_type": "string"
+                },
+                "segregated": {
+                    "wb_type": "boolean"
+                }
+            }
+        }
+    },
+    "output_types": {
+        "wb_type": "typedDict",
+        "params": {
+            "type_map": {
+                "_timestamp": {
+                    "wb_type": "number"
+                },
+                "_runtime": {
+                    "wb_type": "number"
+                },
+                "_step": {
+                    "wb_type": "number"
+                },
+                "train/train_loss_step": {
+                    "wb_type": "number"
+                },
+                "epoch": {
+                    "wb_type": "number"
+                },
+                "trainer/global_step": {
+                    "wb_type": "number"
+                },
+                "val/val_loss": {
+                    "wb_type": "number"
+                },
+                "train/train_loss_epoch": {
+                    "wb_type": "number"
+                },
+                "metrics/nmse_flair": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_flair": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_torch_flair": {
+                    "wb_type": "number"
+                },
+                "metrics/psnr_flair": {
+                    "wb_type": "number"
+                },
+                "metrics/nmse_t1": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_t1": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_torch_t1": {
+                    "wb_type": "number"
+                },
+                "metrics/psnr_t1": {
+                    "wb_type": "number"
+                },
+                "metrics/nmse_t1ce": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_t1ce": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_torch_t1ce": {
+                    "wb_type": "number"
+                },
+                "metrics/psnr_t1ce": {
+                    "wb_type": "number"
+                },
+                "metrics/nmse_t2": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_t2": {
+                    "wb_type": "number"
+                },
+                "metrics/ssim_torch_t2": {
+                    "wb_type": "number"
+                },
+                "metrics/psnr_t2": {
+                    "wb_type": "number"
+                },
+                "metrics/mean_ssim": {
+                    "wb_type": "number"
+                },
+                "metrics/mean_psnr": {
+                    "wb_type": "number"
+                },
+                "metrics/mean_nmse": {
+                    "wb_type": "number"
+                }
+            }
+        }
+    },
+    "runtime": "3.11.5"
+}
