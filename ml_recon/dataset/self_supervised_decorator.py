@@ -5,10 +5,11 @@ from torch.utils.data import Dataset
 from argparse import ArgumentParser
 
 from typing import Union, Callable 
-from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling
+from ml_recon.dataset.undersample import gen_pdf_columns, calc_k, apply_undersampling, scale_pdf
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
+from ml_recon.dataset.supervised_decorator import SupervisedDecorator
 
-class UndersampleDecorator(Dataset):
+class SelfSupervisedDecorator(SupervisedDecorator):
     def __init__(
         self, 
         dataset: KSpaceDataset, 
@@ -17,20 +18,14 @@ class UndersampleDecorator(Dataset):
         poly_order: int = 8,
         acs_lines: int = 10,
         transforms: Union[Callable, None] = None, 
-        deterministic: bool = False,
-        segregated: bool = False
+        segregated: bool = False,
+        line_constrained: bool = False,
     ):
-        super().__init__()
+        super().__init__(dataset, R, line_constrained, poly_order, acs_lines, transforms, segregated)
+        self.R_hat = R_hat
+        self.acs_lines = acs_lines
 
-        self.dataset = dataset
-        self.contrasts = dataset[0].shape[0]
-        self.deterministic = deterministic
-
-        self.omega_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
-        self.lambda_prob = gen_pdf_columns(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines)
-
-        self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
-        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+        self.lambda_prob = scale_pdf(self.omega_prob, R_hat, acs_lines) 
 
         one_minus_eps = 1 - 1e-3
         self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
@@ -46,13 +41,21 @@ class UndersampleDecorator(Dataset):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
         
-        under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=True)
-        doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=self.deterministic, line_constrained=True)
+        under, mask_omega, new_prob = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=True, segregated=self.segregated)
+        # scale pdf
+        scaled_new_prob = scale_pdf(new_prob, self.R_hat, self.acs_lines)
+        doub_under, mask_lambda, _ = apply_undersampling(index, scaled_new_prob, under, deterministic=False, line_constrained=True, segregated=False)
+        
+        # input is doubly undersampled
+        input = doub_under
+        
+        # loss mask is what is not in double undersampled
+        loss_mask = mask_omega & ~mask_lambda
+        target = under * loss_mask
 
-        data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
         if self.transforms:
-            data = self.transforms(data)
-        return data
+            input, target = self.transforms((input, target))
+        return input, target
 
     @staticmethod
     def add_model_specific_args(parent_parser):  

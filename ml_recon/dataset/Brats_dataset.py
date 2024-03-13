@@ -75,7 +75,7 @@ class BratsDataset(KSpaceDataset):
 
         return parser
 
-from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+from ml_recon.dataset.self_supervised_decorator import SelfSupervisedDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 if __name__ == '__main__':
     

@@ -5,11 +5,13 @@ from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet
 from ml_recon.pl_modules.pl_loupe import LOUPE
 from ml_recon.pl_modules.pl_supervised import SupervisedDataset
+from ml_recon.pl_modules.pl_self_supervsied import SelfSupervisedDataset
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from functools import partial
 
@@ -18,25 +20,41 @@ def main(args):
     torch.autograd.set_detect_anomaly(True)
     tb_logger = TensorBoardLogger('tb_logs', default_hp_metric=False)
     csv_logger = CSVLogger('csv_logs')
-    wandb_logger = WandbLogger(project='MRI Reconstruction')
+    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
     trainer = pl.Trainer(max_epochs=args.max_epochs, logger=[tb_logger, csv_logger, wandb_logger], limit_train_batches=args.limit_train_batches)
 
 
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
     nx = args.nx
     ny = args.ny
+    
+    if args.supervised:
+        data_module = SupervisedDataset(
+                'brats', 
+                data_dir, 
+                batch_size=args.batch_size, 
+                resolution=(ny, nx),
+                num_workers=args.num_workers,
+                norm_method=args.norm_method,
+                R=args.R,
+                line_constrained=args.line_constrained,
+                segregated=args.segregated
+                ) 
 
-    data_module = SupervisedDataset(
-            'brats', 
-            data_dir, 
-            batch_size=args.batch_size, 
-            resolution=(ny, nx),
-            num_workers=args.num_workers,
-            norm_method=args.norm_method,
-            R=args.R,
-            line_constrained=args.line_constrained,
-            segregated=args.segregated
-            ) 
+    else:
+        data_module = SelfSupervisedDataset(
+                'brats', 
+                data_dir, 
+                batch_size=args.batch_size, 
+                resolution=(ny, nx),
+                num_workers=args.num_workers,
+                norm_method=args.norm_method,
+                R=args.R,
+                line_constrained=args.line_constrained,
+                segregated=args.segregated
+                )
+
+
     data_module.setup('train')
     
     backbone = partial(Unet, in_chan=8, out_chan=8, chans=18)
@@ -87,6 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
+    parser.add_argument('--supervised', action='store_true')
     
     args = parser.parse_args()
 
