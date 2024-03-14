@@ -40,7 +40,6 @@ def main(args):
                 line_constrained=args.line_constrained,
                 segregated=args.segregated
                 ) 
-
     else:
         data_module = SelfSupervisedDataset(
                 'brats', 
