@@ -52,7 +52,7 @@ class LOUPE(plReconModel):
         sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
         #sampling_mask [batch, contrast, channel, height, width]
 
-        loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space)) + self.lambda_param * torch.sum(1 - sampling_mask[:, :, 0, :, :])
+        loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space)) + self.lambda_param * torch.sum(torch.any(1 - sampling_mask[:, :, 0, :, :], dim=1)) / k_space.shape[0]
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
@@ -106,8 +106,8 @@ class LOUPE(plReconModel):
                     probability[i] = (probability[i] * scaling_factor)
                 else:
                     print('Inverse prob scaling!')
-                    inverse_total = torch.prod(probability.shape[-2:])*(1 - 1/self.R)
-                    inverse_sum = torch.prod(probability.shape[-2:]) - probability_sum[i] - self.center_region**2
+                    inverse_total = self.image_size[1]*self.image_size[2]*(1 - 1/self.R)
+                    inverse_sum = (self.image_size[1]*self.image_size[2]) - probability_sum[i] - self.center_region**2
                     scaling_factor = inverse_total / inverse_sum
 
                     assert scaling_factor <= 1 and scaling_factor >= 0
@@ -152,10 +152,8 @@ class LOUPE(plReconModel):
             center_box = 1-center_mask
             for i in range(len(probability)):
                 probability[i] = probability[i] + center_box
-
         else:
             raise ValueError(f'No prob method found for {self.prob_method}')
-
         
         return probability
 
