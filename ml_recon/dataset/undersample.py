@@ -19,7 +19,7 @@ def apply_undersampling(index, prob_map, k_space, line_constrained, deterministi
     new_probs = None
     if not segregated:
         mask = get_mask_from_distribution(prob_map, rng, line_constrained)
-        new_probs = prob_map
+        new_probs = prob_map.copy()
     else:
         mask, new_probs = get_mask_from_segregated_sampling(prob_map, rng, line_constrained)
         
@@ -40,7 +40,7 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, center_square):
     xv = np.linspace(-1, 1, nx)
     r = np.abs(xv)
     # normalize to 1
-    r /= np.max(r)
+    r = r / (np.max(r) + 1/nx)
     prob_map = (1 - r) ** poylnomial_power
     prob_map[prob_map > 1] = 1
 
@@ -103,9 +103,9 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
 def get_mask_from_distribution(prob_map, rng, line_constrained):
     prob_map[prob_map > 0.999] = 1
     if line_constrained:
-        (_, nx, _) = np.shape(prob_map)
+        (_, ny, _) = np.shape(prob_map)
         mask1d = rng.binomial(1, prob_map[:, 0, :]).astype(bool)
-        mask = np.repeat(mask1d[:, np.newaxis, :], nx, axis=1)
+        mask = np.repeat(mask1d[:, np.newaxis, :], ny, axis=1)
     else:
         mask = rng.binomial(1, prob_map).astype(bool)
     return mask
@@ -118,14 +118,39 @@ def get_mask_from_segregated_sampling(prob_map, rng, line_constrained):
     masks = np.zeros_like(prob_map, dtype=bool)
     new_probs = np.zeros_like(prob_map)
     if line_constrained:
-        for i in range((prob_map.shape[0])):
-            (_, nx, _) = np.shape(prob_map)
-            mask1d = rng.binomial(1, init_prob_map[:, 0, :]).astype(bool)
-            masks[i, :, :] = np.repeat(mask1d[:, np.newaxis, :], nx, axis=1)
+        init_prob_map = init_prob_map[0, :]
+        (ny) = np.shape(init_prob_map)
+        for i in range(1, (prob_map.shape[0]) + 1):
+            if i == 1:
+                mask1d = rng.binomial(1, init_prob_map).astype(bool)
+                masks[i-1, :, :] = np.repeat(mask1d[np.newaxis, :], ny, axis=0)
+                new_probs[i - 1, :, :] = init_prob_map
+            else:
+                sampled = np.any(masks[:, 0, :] == True, axis=0)
+                new_prob_map = prob_map[0, 0, :].copy()
 
-            sampled = np.any(masks[:, 0, :] == True, axis=0).astype(np.int32)
-            init_prob_map[sampled == 1] = init_prob_map[sampled == 1] * omega
-            init_prob_map[sampled == 0] = init_prob_map[sampled == 0] * (1 - omega * sampled.mean())/(1-sampled.mean())
+                expected_value_sampled = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i)
+                expected_value_sampled_prev = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i-1)
+
+                not_changed_index = (expected_value_sampled > 1) & (expected_value_sampled_prev > 1)
+
+                index = expected_value_sampled < 1 
+                index = index & ~not_changed_index
+                new_prob_map[index & sampled] = init_prob_map[index & sampled] * omega
+                new_prob_map[index & ~sampled] = init_prob_map[index & ~sampled] * ((1 - omega * expected_value_sampled_prev[index & ~sampled]) / (1 - expected_value_sampled_prev[index & ~sampled]))
+
+                # expected value is over 1 in these locations! Have to change sampling equation
+                # for these voxels
+                index = expected_value_sampled > 1 
+                index = index & ~not_changed_index
+                new_prob_map[index & sampled] = (expected_value_sampled_prev[index & sampled] - 1 + init_prob_map[index & sampled]) / (expected_value_sampled_prev[index & sampled])
+                new_prob_map[index & ~sampled] = 1
+            
+                sampled_mask = rng.binomial(1, new_prob_map).astype(bool)
+
+                masks[i - 1, :, :] = np.repeat(sampled_mask[np.newaxis, :], ny, axis=0)
+                new_probs[i - 1, :, :] = np.repeat(new_prob_map[np.newaxis, :], ny, axis=0)
+
     else:
         for i in range(1, prob_map.shape[0] + 1):
             if i == 1:
@@ -157,7 +182,8 @@ def get_mask_from_segregated_sampling(prob_map, rng, line_constrained):
     return masks, new_probs
 
 
-def scale_pdf(prob_map, R, center_square, line_constrained=False):
+def scale_pdf(input_prob, R, center_square, line_constrained=False):
+    prob_map = input_prob.copy() 
     if not line_constrained:
         shape = prob_map.shape
         ny = shape[-2]
@@ -177,7 +203,7 @@ def scale_pdf(prob_map, R, center_square, line_constrained=False):
         
         for i in range(probability_sum.size): 
             if probability_sum[i] > probability_total:
-                scaling_factor = probability_total / probability_sum
+                scaling_factor = probability_total / probability_sum[i]
                 prob_map[i, ...] = prob_map[i, ...]*scaling_factor
             else:
                 # inverse scale_factor
@@ -204,10 +230,10 @@ def scale_pdf(prob_map, R, center_square, line_constrained=False):
         probability_total = nx * (1/R)
         probability_total -= center_square
 
-        for i in range(len(probability_sum)): 
+        for i in range(probability_sum.size): 
             if probability_sum[i] > probability_total: 
-                scaling_factor = probability_total/probability_sum
-                prob_map = prob_map[i, ...]/scaling_factor
+                scaling_factor = probability_total/probability_sum[i]
+                prob_map = prob_map[i, ...] * scaling_factor
             else:
                 inverse_total = nx - nx* (1/R)
                 inverse_sum = nx - probability_sum[i] - center_square

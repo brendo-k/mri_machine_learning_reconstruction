@@ -20,14 +20,15 @@ class plReconModel(pl.LightningModule):
         self.contrast_order = contrast_order
 
     def test_step(self, batch, _):
-        under, k_space = batch
+        batch['input'] = batch['fs_k_space'] * batch['omega_mask']
+        batch['mask'] = batch['omega_mask']
 
-        estimate_k = self(batch, under != 0)
+        estimate_k = self(batch)
 
         #loss = self.loss(estimate_k, k_space)
         ssim_loss = StructuralSimilarityIndexMeasure().to(self.device)
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
-        ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
+        ground_truth_image = root_sum_of_squares(ifft_2d_img(batch['fs_k_space']), coil_dim=2) 
         total_ssim = 0
         total_psnr = 0
         total_nmse = 0
@@ -69,17 +70,14 @@ class plReconModel(pl.LightningModule):
                    'mean_nmse': total_nmse/len(self.contrast_order),
                    })
 
-    def plot_images(self, batch, sampling_mask, mode='train'):
+    def plot_images(self, under_k, estimate_k, k_space, mask, mode='train'):
         with torch.no_grad():
-            under_k, k_space = batch
-
-            estimate_k = self(batch, sampling_mask)
             
             estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
             image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
 
-            estimated_image = estimated_image[0]/estimated_image[0].max()
-            image = image[0]/image[0].max()
+            estimated_image = estimated_image[0]/estimated_image[0].amax(0)
+            image = image[0]/image[0].amax(0)
             tensorboard = self.logger.experiment
 
 
@@ -92,7 +90,7 @@ class plReconModel(pl.LightningModule):
             tensorboard.add_images(mode + '/diff', diff.unsqueeze(1), self.current_epoch)
             tensorboard.add_image(mode + '/k', k_space_scaled[0, 0, [0]].clamp(0, 1), self.current_epoch)
             tensorboard.add_image(mode + '/under_k', under_k[0, 0, [0]].clamp(0, 1), self.current_epoch)
-            tensorboard.add_images(mode + '/mask', sampling_mask[0, :, [0], :, :], self.current_epoch)
+            tensorboard.add_images(mode + '/mask', mask[0, :, [0], :, :], self.current_epoch)
             if isinstance(self.loggers, list): 
 
                 wandb_logger = None
@@ -106,5 +104,5 @@ class plReconModel(pl.LightningModule):
                     wandb_logger.log_image(mode + '/target', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
                     wandb_logger.log_image(mode + '/k', [k_space_scaled[0, 0, [0]].clamp(0, 1).cpu().numpy()])
                     wandb_logger.log_image(mode + '/under_k', [under_k[0, 0, [0]].clamp(0, 1).cpu().numpy()])
-                    wandb_logger.log_image(mode + '/mask', np.split(sampling_mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
+                    wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
                     wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))

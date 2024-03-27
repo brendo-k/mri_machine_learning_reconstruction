@@ -30,6 +30,7 @@ class SensetivityModel_mc(nn.Module):
         if self.mask_center:
             images = self.mask(images, mask) 
         assert not torch.isnan(images).any()
+        # get the first image for estimating coil sensetivites
         images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
@@ -67,28 +68,35 @@ class SensetivityModel_mc(nn.Module):
         return images
 
     def mask(self, coil_k_spaces, center_mask):
+        # coil_k: [b cont chan height width]
         masked_k_space = coil_k_spaces.clone()
         center_x = center_mask.shape[-1] // 2
         center_y = center_mask.shape[-2] // 2
         
         # height doesn't matter (since column wise sampling) 
-        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
+        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.85).to(torch.int8)
+        squeezed_mask = (center_mask[:, :, 0, :, center_x] > 0.85).to(torch.int8)
         # Get the first zero index starting from the center. This gives us "left"
         # and "right" sides of ACS
         left = torch.argmin(squeezed_mask[..., :center_x].flip(-1), dim=-1)
         right = torch.argmin(squeezed_mask[..., center_x:], dim=-1)
+        top = torch.argmin(squeezed_mask[..., :center_y].flip(-1), dim=-1)
+        bottom = torch.argmin(squeezed_mask[..., center_y:], dim=-1)
 
         assert (left != 0).any(), 'Left mask bounds should be more than 1!'
         assert (right != 0).any(), 'Right mask bounds should be more than 1!'
+        assert (top != 0).any(), 'Left mask bounds should be more than 1!'
+        assert (bottom != 0).any(), 'Right mask bounds should be more than 1!'
 
         # force symmetric left and right acs boundries
-        num_low_frequencies_tensor = torch.min(left, right)
+        low_freq_x = torch.min(left, right)
+        low_freq_y = torch.min(top, bottom)
 
         center_mask = torch.zeros_like(masked_k_space, dtype=torch.bool)
         # loop through num_low freq tensor and set acs lines to true
-        for i in range(num_low_frequencies_tensor.shape[0]):
-            for j in range(num_low_frequencies_tensor.shape[1]):
-                center_mask[i, j, ..., center_x-num_low_frequencies_tensor[i, j]:center_x + num_low_frequencies_tensor[i, j]] = True
+        for i in range(low_freq_x.shape[0]):
+            for j in range(low_freq_y.shape[1]):
+                center_mask[i, j, :, center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], center_x-low_freq_x[i, j]:center_x + low_freq_x[i, j]] = True
 
         assert not center_mask.isnan().any()
         return masked_k_space * center_mask

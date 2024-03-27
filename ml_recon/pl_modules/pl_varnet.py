@@ -40,34 +40,34 @@ class pl_VarNet(plReconModel):
         self.loss = lambda target, prediction: L1L2Loss(torch.view_as_real(target), torch.view_as_real(prediction))
 
     def training_step(self, batch, batch_idx):
-        under, target = batch
 
-        estimate_target = self.model(under, under != 0)
+        estimate_target = self(batch)
 
-        loss = self.loss(target, estimate_target)
+        loss = self.loss(batch['target'], estimate_target)
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
 
         if batch_idx == 0: 
-            self.plot_images((under, target), under != 0, 'train')
+            self.plot_images(batch, 'train')
 
         return loss
 
 
     def validation_step(self, batch, batch_idx):
-        under, target = batch
-        estimate_target = self.model(under, under != 0)
+        estimate_target = self.forward(batch)
 
-        loss = self.loss(target, estimate_target)
+        loss = self.loss(batch['target'], estimate_target)
         self.log('val/val_loss', loss, on_epoch=True, logger=True)
         if batch_idx == 0: 
-            self.plot_images((under, target), under != 0 , 'val')
+            self.plot_images(batch, 'val')
         return loss
 
 
-    def forward(self, data, sampling_mask): 
-        under_k, k_space = data
-        return self.model(under_k, sampling_mask)
+    def forward(self, data): 
+        print(data)
+        print(data.keys())
+        under_k, mask = data['input'], data['mask']
+        return self.model(under_k, mask)
 
     # optimizer configureation -> using adam w/ lr of 1e-3
     def configure_optimizers(self):
@@ -75,17 +75,18 @@ class pl_VarNet(plReconModel):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-3) 
         return [optimizer], [scheduler]
 
-    def plot_images(self, batch, sampling_mask, mode='train'):
+    def plot_images(self, batch, mode='train'):
         #pass
-        under_k, k_space = batch
-        super().plot_images((under_k, k_space), sampling_mask, mode) 
+        under_k = batch['input']
         with torch.no_grad():
+            estimate_k = self(batch)
+            super().plot_images(under_k, estimate_k, batch['fs_k_space'], batch['mask'], mode) 
             tensorboard = self.logger.experiment
             sampling_mask = under_k != 0
 
             sense_maps = self.model.sens_model(under_k, under_k != 0)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
-            masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(k_space))
+            masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(under_k))
             masked_k = masked_k[0, 0, [0], :, :].abs()/(masked_k[0, 0, [0], :, :].abs().max()/20)
 
             tensorboard.add_images(mode + '/sense_maps', sense_maps/sense_maps.max(), self.current_epoch)

@@ -40,10 +40,14 @@ def test_scaling_multiple_dims():
     
     pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
     pdf_R8 = np.tile(pdf_R8[np.newaxis, :, :], (6, 1, 1))
+    pdf_R8_copy = pdf_R8.copy()
     pdf_R4 = gen_pdf_bern(120, 320, 1/4, 8, 10)
     pdf_R4 = np.tile(pdf_R4[np.newaxis, :, :], (6, 1, 1))
     
     scaled_pdf = scale_pdf(pdf_R8, 4, 10)
 
     np.testing.assert_allclose(scaled_pdf, pdf_R4) 
+
+    #ensure no inplace operations took place
+    np.testing.assert_allclose(pdf_R8, pdf_R8_copy) 
     

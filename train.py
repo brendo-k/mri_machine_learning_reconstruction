@@ -4,8 +4,7 @@ import torch
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet
 from ml_recon.pl_modules.pl_loupe import LOUPE
-from ml_recon.pl_modules.pl_supervised import SupervisedDataset
-from ml_recon.pl_modules.pl_self_supervsied import SelfSupervisedDataset
+from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
@@ -17,42 +16,26 @@ from functools import partial
 
 
 def main(args):
-    torch.autograd.set_detect_anomaly(True)
     tb_logger = TensorBoardLogger('tb_logs', default_hp_metric=False)
-    csv_logger = CSVLogger('csv_logs')
     wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
-    trainer = pl.Trainer(max_epochs=args.max_epochs, logger=[tb_logger, csv_logger, wandb_logger], limit_train_batches=args.limit_train_batches)
+    trainer = pl.Trainer(max_epochs=args.max_epochs, logger=[tb_logger, wandb_logger], limit_train_batches=args.limit_train_batches)
 
 
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
     nx = args.nx
     ny = args.ny
     
-    if args.supervised:
-        data_module = SupervisedDataset(
-                'brats', 
-                data_dir, 
-                batch_size=args.batch_size, 
-                resolution=(ny, nx),
-                num_workers=args.num_workers,
-                norm_method=args.norm_method,
-                R=args.R,
-                line_constrained=args.line_constrained,
-                segregated=args.segregated
-                ) 
-    else:
-        data_module = SelfSupervisedDataset(
-                'brats', 
-                data_dir, 
-                batch_size=args.batch_size, 
-                resolution=(ny, nx),
-                num_workers=args.num_workers,
-                norm_method=args.norm_method,
-                R=args.R,
-                line_constrained=args.line_constrained,
-                segregated=args.segregated
-                )
-
+    data_module = UndersampledDataset(
+            'brats', 
+            data_dir, 
+            batch_size=args.batch_size, 
+            resolution=(ny, nx),
+            num_workers=args.num_workers,
+            norm_method=args.norm_method,
+            R=args.R,
+            line_constrained=args.line_constrained,
+            self_supervsied=args.self_supervised
+            ) 
 
     data_module.setup('train')
     
@@ -72,7 +55,8 @@ def main(args):
                 contrast_order=data_module.contrast_order,
                 lr = args.lr,
                 mask_method=args.mask_method, 
-                lambda_param=args.lambda_param
+                lambda_param=args.lambda_param,
+                fd_param=args.fd_param
                 )
 
     # AUTOMATIC HYPERPARAMETER TUNING
@@ -94,7 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--learn_sampling', action='store_true')
     parser.add_argument('--line_constrained', action='store_true')
-    parser.add_argument('--batch_size', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--mask_method', type=str, default='all')
     parser.add_argument('--R', type=int, default=6)
@@ -104,7 +88,8 @@ if __name__ == '__main__':
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
-    parser.add_argument('--supervised', action='store_true')
+    parser.add_argument('--self_supervised', action='store_true')
+    parser.add_argument('--fd_param', type=float, default=0)
     
     args = parser.parse_args()
 
