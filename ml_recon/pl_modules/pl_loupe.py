@@ -5,6 +5,7 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 import einops
 
 from ml_recon.losses import L1L2Loss
+from ml_recon.dataset.undersample import scale_pdf
 from ml_recon.pl_modules.pl_model import plReconModel
 
 class LOUPE(plReconModel):
@@ -21,6 +22,7 @@ class LOUPE(plReconModel):
             sigmoid_slope2 = 200,
             lr=1e-2,
             lambda_param = 0,
+            fd_param = 0,
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -36,23 +38,27 @@ class LOUPE(plReconModel):
         self.sigmoid_slope_2 = sigmoid_slope2
         self.lambda_param = lambda_param
         self.prob_method = prob_method
+        self.fd_param = fd_param
 
         if prob_method == 'loupe':
-            O = [torch.rand((image_size[1], image_size[2]))*(1 - 2e-2) + 1e-2 for _ in range(len(self.contrast_order))]
-            self.sampling_weights = nn.ParameterList([nn.Parameter(-torch.log(1/samp - 1) / self.sigmoid_slope_1) for samp in O])
+            O = torch.from_numpy(scale_pdf(np.random.randn(*image_size)*(1 - 2e-2) + 1e-2, learned_R, center_region, line_constrained=False))
+            self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_1)
         elif prob_method == 'line_loupe':
-            O = [torch.rand(image_size[2])*(1 - 2e-2) + 1e-2 for _ in range(len(self.contrast_order))]
-            self.sampling_weights = nn.ParameterList([nn.Parameter(-torch.log(1/samp - 1) / self.sigmoid_slope_1) for samp in O])
+            O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
+            self.sampling_weights = -torch.log((1/O) - 1) / self.sigmoid_slope_k
         elif prob_method == 'gubmel':
             self.sampling_weights = nn.Parameter(torch.rand(image_size))
 
 
     def training_step(self, batch, batch_idx):
-        under, k_space = batch
+        k_space = batch['fs_k_space']
         sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
         #sampling_mask [batch, contrast, channel, height, width]
 
-        loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space)) + self.lambda_param * torch.sum(torch.any(1 - sampling_mask[:, :, 0, :, :], dim=1)) / k_space.shape[0]
+        loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space)) 
+        loss = loss + self.lambda_param * torch.sum(torch.any(1 - sampling_mask[:, :, 0, :, :], dim=1)) / k_space.shape[0]
+        loss = loss + self.fd_param * torch.pow(self.sampling_weights.diff(dim=-1), 2).sum() / k_space.shape[0]
+        loss = loss + self.fd_param * self.sampling_weights.diff(dim=-2).pow(2).sum() / k_space.shape[0]
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
@@ -63,7 +69,7 @@ class LOUPE(plReconModel):
 
 
     def validation_step(self, batch, batch_idx):
-        under, k_space = batch
+        k_space = batch['fs_k_space']
         sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
 
         loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space))
@@ -74,8 +80,8 @@ class LOUPE(plReconModel):
             self.plot_images(k_space, 'val') 
 
 
-    def forward(self, batch, _): 
-        _, k_space = batch
+    def forward(self, batch): 
+        k_space = batch['fs_k_space']
         _, _, estimate_k = self.pass_through_model(k_space)
         return estimate_k
 
@@ -164,7 +170,7 @@ class LOUPE(plReconModel):
 
         assert not any((torch.isnan(samp_weights).any() for samp_weights in self.sampling_weights))
         if 'loupe' in self.prob_method:
-            probability = [torch.sigmoid(samp_weights * self.sigmoid_slope_1) for samp_weights in self.sampling_weights]
+            probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
             assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
             assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
         elif self.prob_method == 'gumbel': 
@@ -210,7 +216,7 @@ class LOUPE(plReconModel):
         under_k = k_space * sampling_mask
     
         # Estimate k-space using the model
-        estimate_k = self.recon_model((under_k, k_space), sampling_mask)
+        estimate_k = self.recon_model({'input': under_k, 'mask': sampling_mask})
     
         return sampling_mask, under_k, estimate_k
 
@@ -223,7 +229,8 @@ class LOUPE(plReconModel):
     def plot_images(self, k_space, mode='train'):
         with torch.no_grad():
             sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
-            super().plot_images((under_k, k_space), sampling_mask, mode)
+
+            super().plot_images(under_k, k_space, estimate_k, sampling_mask, mode)
 
             tensorboard = self.logger.experiment
 
@@ -237,10 +244,10 @@ class LOUPE(plReconModel):
                 
             weight_list = [weight for weight in self.sampling_weights]
             sampling_weights = torch.stack(weight_list, dim=0)
-            weights = sampling_weights.unsqueeze(1)
+            weights = (sampling_weights.unsqueeze(1)-sampling_weights.amin(0))/(sampling_weights.amax(0) - sampling_weights.amin(0))
             if sampling_weights.ndim == 2:
                 weights = einops.repeat(weights, 'c chan h -> c chan h w', w=sampling_weights.shape[1])
-            tensorboard.add_images(mode + '/sample_weights', weights/weights.max(), self.current_epoch)
+            tensorboard.add_images(mode + '/sample_weights', weights, self.current_epoch)
 
             if isinstance(self.loggers, list): 
 

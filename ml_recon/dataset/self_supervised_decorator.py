@@ -24,12 +24,12 @@ class SelfSupervisedDecorator(SupervisedDecorator):
         super().__init__(dataset, R, line_constrained, poly_order, acs_lines, transforms, segregated)
         self.R_hat = R_hat
         self.acs_lines = acs_lines
+        self.random_index = random.randint(0, 10000)
 
-        self.lambda_prob = scale_pdf(self.omega_prob, R_hat, acs_lines) 
+        self.lambda_prob = scale_pdf(self.omega_prob, R_hat, acs_lines, line_constrained=line_constrained) 
 
         one_minus_eps = 1 - 1e-3
         self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
-        self.random_index = random.randint(0, 10000)
 
         self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
         self.transforms = transforms
@@ -41,21 +41,25 @@ class SelfSupervisedDecorator(SupervisedDecorator):
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
         
-        under, mask_omega, new_prob = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=True, segregated=self.segregated)
+        under, mask_omega, new_prob = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True, line_constrained=self.line_constrained, segregated=self.segregated)
         # scale pdf
         scaled_new_prob = scale_pdf(new_prob, self.R_hat, self.acs_lines)
-        doub_under, mask_lambda, _ = apply_undersampling(index, scaled_new_prob, under, deterministic=False, line_constrained=True, segregated=False)
-        
-        # input is doubly undersampled
-        input = doub_under
+        doub_under, mask_lambda, _ = apply_undersampling(index, scaled_new_prob, under, deterministic=False, line_constrained=self.line_constrained, segregated=False)
         
         # loss mask is what is not in double undersampled
-        loss_mask = mask_omega & ~mask_lambda
-        target = under * loss_mask
+        target = under * ~mask_lambda
+        
+        output = {
+                'input': doub_under, 
+                'target': target, 
+                'fs_k_space': k_space,
+                'mask_omega': mask_omega, 
+                'mask_lambda': mask_lambda
+                }
 
         if self.transforms:
-            input, target = self.transforms((input, target))
-        return input, target
+            output = self.transforms(output)
+        return output
 
     @staticmethod
     def add_model_specific_args(parent_parser):  

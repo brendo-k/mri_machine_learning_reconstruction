@@ -10,5 +10,5 @@ wandb
 .lr_find**
 .pytest_cache
 csv_logs
-artifacts
 lightning_logs
+artifacts

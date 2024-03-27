@@ -248,7 +248,6 @@ class SimulatedBrats(KSpaceDataset):
         return interp_data
 
 
-from ml_recon.dataset.self_supervised_decorator import SelfSupervisedDecorator
 import matplotlib.pyplot as plt
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
 if __name__ == '__main__':

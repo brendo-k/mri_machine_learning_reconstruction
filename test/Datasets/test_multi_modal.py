@@ -4,7 +4,7 @@ import pytest
 import os
 
 from ml_recon.dataset.Brats_dataset import BratsDataset
-from ml_recon.dataset.self_supervised_decorator import UndersampleDecorator
+from ml_recon.dataset.self_supervised_decorator import SelfSupervisedDecorator
 
 @pytest.fixture
 def brats_dataset(request) -> BratsDataset:
@@ -31,7 +31,7 @@ def test_init(brats_dataset):
 
 @pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
 def test_samples(brats_dataset):
-    dataset = UndersampleDecorator(brats_dataset)
+    dataset = SelfSupervisedDecorator(brats_dataset)
     doub_under, under, k_space, k = dataset[0]
     
     assert doub_under.shape == (4, 8, 256, 256)
@@ -54,7 +54,7 @@ def test_samples(brats_dataset):
 
 @pytest.mark.parametrize("brats_dataset", test_cases, indirect=True)
 def test_undersampling_all_same(brats_dataset):
-    dataset = UndersampleDecorator(brats_dataset)
+    dataset = SelfSupervisedDecorator(brats_dataset)
     doub_under, under, k_space, k = dataset[0]
     
     doub_mask = doub_under == 0
