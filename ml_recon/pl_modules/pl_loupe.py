@@ -244,7 +244,7 @@ class LOUPE(plReconModel):
                 
             if probability.ndim == 2:
                 probability = einops.repeat(probability, 'c chan h -> c chan h w', w=probability.shape[1])
-            tensorboard.add_images(mode + '/probability', probability, self.current_epoch)
+            tensorboard.add_images(mode + '/probability', probability.unsqueeze(1), self.current_epoch)
 
             if isinstance(self.loggers, list): 
 
