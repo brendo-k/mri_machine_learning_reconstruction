@@ -230,6 +230,7 @@ class LOUPE(plReconModel):
             sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
 
             super().plot_images(under_k, k_space, estimate_k, sampling_mask, mode)
+            probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
 
             tensorboard = self.logger.experiment
 
@@ -241,12 +242,9 @@ class LOUPE(plReconModel):
             tensorboard.add_images(mode + '/sense_maps', sense_maps/sense_maps.max(), self.current_epoch)
             tensorboard.add_image(mode + '/sense_mask', masked_k, self.current_epoch)
                 
-            weight_list = [weight for weight in self.sampling_weights]
-            sampling_weights = torch.stack(weight_list, dim=0)
-            weights = (sampling_weights.unsqueeze(1)-sampling_weights.amin(0))/(sampling_weights.amax(0) - sampling_weights.amin(0))
-            if sampling_weights.ndim == 2:
-                weights = einops.repeat(weights, 'c chan h -> c chan h w', w=sampling_weights.shape[1])
-            tensorboard.add_images(mode + '/sample_weights', weights, self.current_epoch)
+            if probability.ndim == 2:
+                probability = einops.repeat(probability, 'c chan h -> c chan h w', w=probability.shape[1])
+            tensorboard.add_images(mode + '/probability', probability, self.current_epoch)
 
             if isinstance(self.loggers, list): 
 
@@ -256,7 +254,7 @@ class LOUPE(plReconModel):
                         wandb_logger = logger
                 if wandb_logger:
                     assert isinstance(wandb_logger, WandbLogger)
-                    wandb_logger.log_image(mode + '/sample_weights', np.split(weights.cpu().numpy(), weights.shape[0], 0))
+                    wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
 
 
 
