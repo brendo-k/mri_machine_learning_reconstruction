@@ -41,11 +41,11 @@ class LOUPE(plReconModel):
         self.fd_param = fd_param
 
         if prob_method == 'loupe':
-            O = torch.from_numpy(scale_pdf(np.random.randn(*image_size)*(1 - 2e-2) + 1e-2, learned_R, center_region, line_constrained=False))
+            O = torch.rand(image_size)*(1 - 2e-2) + 1e-2
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_1)
         elif prob_method == 'line_loupe':
             O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
-            self.sampling_weights = -torch.log((1/O) - 1) / self.sigmoid_slope_k
+            self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k)
         elif prob_method == 'gubmel':
             self.sampling_weights = nn.Parameter(torch.rand(image_size))
 
@@ -168,18 +168,17 @@ class LOUPE(plReconModel):
     def pass_through_model(self, k_space, deterministic=False):
         # Calculate probability and normalize
 
-        assert not any((torch.isnan(samp_weights).any() for samp_weights in self.sampling_weights))
+        assert not torch.isnan(self.sampling_weights).any() 
         if 'loupe' in self.prob_method:
             probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
-            assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
-            assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
+            assert probability.min() >= 0 , f'Probability should be greater than 1 but found {probability.min()}'
+            assert probability.max() <= 1 , f'Probability should be less than 1 but found {probability.max()}'
         elif self.prob_method == 'gumbel': 
             probability = self.sampling_weights
         else:
             raise TypeError('prob_method should be loupe or gumbel')
 
-        prob_list = self.norm_prob(probability)
-        norm_probability = torch.stack(prob_list, dim=0)
+        norm_probability = self.norm_prob(probability)
 
         assert not torch.isnan(norm_probability).any()
 

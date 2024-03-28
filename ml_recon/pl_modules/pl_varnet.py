@@ -64,8 +64,6 @@ class pl_VarNet(plReconModel):
 
 
     def forward(self, data): 
-        print(data)
-        print(data.keys())
         under_k, mask = data['input'], data['mask']
         return self.model(under_k, mask)
 
