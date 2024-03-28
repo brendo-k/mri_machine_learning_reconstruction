@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-import torch
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet

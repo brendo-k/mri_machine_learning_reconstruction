@@ -170,15 +170,16 @@ class LOUPE(plReconModel):
 
         assert not torch.isnan(self.sampling_weights).any() 
         if 'loupe' in self.prob_method:
-            probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
-            assert probability.min() >= 0 , f'Probability should be greater than 1 but found {probability.min()}'
-            assert probability.max() <= 1 , f'Probability should be less than 1 but found {probability.max()}'
+            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
+            assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
+            assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
         elif self.prob_method == 'gumbel': 
             probability = self.sampling_weights
         else:
             raise TypeError('prob_method should be loupe or gumbel')
 
         norm_probability = self.norm_prob(probability)
+        norm_probability = torch.stack(norm_probability, dim=0)
 
         assert not torch.isnan(norm_probability).any()
 
@@ -229,7 +230,7 @@ class LOUPE(plReconModel):
         with torch.no_grad():
             sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
 
-            super().plot_images(under_k, k_space, estimate_k, sampling_mask, mode)
+            super().plot_images(under_k, estimate_k, k_space, sampling_mask, mode)
             probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
 
             tensorboard = self.logger.experiment
@@ -255,6 +256,8 @@ class LOUPE(plReconModel):
                 if wandb_logger:
                     assert isinstance(wandb_logger, WandbLogger)
                     wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
+                    wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
+                    wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
 
 
 
