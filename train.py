@@ -55,7 +55,8 @@ def main(args):
                 lr = args.lr,
                 mask_method=args.mask_method, 
                 lambda_param=args.lambda_param,
-                fd_param=args.fd_param
+                fd_param=args.fd_param,
+                learn_R=args.learn_R
                 )
 
     # AUTOMATIC HYPERPARAMETER TUNING
@@ -89,6 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
+    parser.add_argument('--learn_R', action='store_true')
     
     args = parser.parse_args()
 
