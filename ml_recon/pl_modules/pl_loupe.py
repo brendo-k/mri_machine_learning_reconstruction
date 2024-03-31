@@ -7,6 +7,8 @@ import einops
 from ml_recon.losses import L1L2Loss
 from ml_recon.dataset.undersample import scale_pdf
 from ml_recon.pl_modules.pl_model import plReconModel
+from ml_recon.utils.evaluate import nmse, ssim, psnr
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 
 class LOUPE(plReconModel):
     def __init__(
@@ -23,6 +25,7 @@ class LOUPE(plReconModel):
             lr=1e-2,
             lambda_param = 0,
             fd_param = 0,
+            learn_R = False,
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -33,6 +36,7 @@ class LOUPE(plReconModel):
         self.mask_method = mask_method
         self.lr = lr
         self.center_region = center_region
+        self.learn_R = learn_R
 
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
@@ -48,6 +52,11 @@ class LOUPE(plReconModel):
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k)
         elif prob_method == 'gubmel':
             self.sampling_weights = nn.Parameter(torch.rand(image_size))
+
+        if self.learn_R: 
+            self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+        else: 
+            self.R_value = torch.full((image_size[0],), self.R)
 
 
     def training_step(self, batch, batch_idx):
@@ -74,7 +83,14 @@ class LOUPE(plReconModel):
 
         loss = L1L2Loss(torch.view_as_real(estimate_k), torch.view_as_real(k_space))
 
+        estimated_img = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
+        img = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
+        ssim_val = 0
+        for i in range(img.shape[1]):
+            ssim_val += ssim(img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device)
+
         self.log("val/val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim", ssim_val/img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             self.plot_images(k_space, 'val') 
@@ -86,6 +102,8 @@ class LOUPE(plReconModel):
         return estimate_k
 
     def norm_prob(self, probability):
+        if self.learn_R:
+            self.learn_R = self.R/self.learn_R.mean()
         if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
             center = [self.image_size[1]//2, self.image_size[2]//2]
 
@@ -99,10 +117,10 @@ class LOUPE(plReconModel):
                 probability[i] = probability[i] * center_mask
                 probability_sum.append(torch.sum(probability[i], dim=[-1, -2]))
 
-            probability_total = self.image_size[-1] * self.image_size[-2]/ self.R
-            probability_total = probability_total - self.center_region ** 2
             
             for i in range(len(probability_sum)):
+                probability_total = self.image_size[-1] * self.image_size[-2]/ self.R_value[i]
+                probability_total = probability_total - self.center_region ** 2
                 if probability_sum[i] > probability_total:
                     scaling_factor = probability_total / probability_sum[i]
 
@@ -112,7 +130,7 @@ class LOUPE(plReconModel):
                     probability[i] = (probability[i] * scaling_factor)
                 else:
                     print('Inverse prob scaling!')
-                    inverse_total = self.image_size[1]*self.image_size[2]*(1 - 1/self.R)
+                    inverse_total = self.image_size[1]*self.image_size[2]*(1 - 1/self.R_value[i])
                     inverse_sum = (self.image_size[1]*self.image_size[2]) - probability_sum[i] - self.center_region**2
                     scaling_factor = inverse_total / inverse_sum
 
@@ -137,10 +155,10 @@ class LOUPE(plReconModel):
                 probability[i] = probability[i] * center_mask
                 probability_sum.append(torch.sum(probability[i], dim=[-1]) - probability[i][center_bb_x[0]:center_bb_x[1]].sum())
 
-            probability_total = self.image_size[2] / self.R
-            probability_total -= self.center_region
 
             for i in range(len(probability_sum)):
+                probability_total = self.image_size[2] / self.R_value[i]
+                probability_total -= self.center_region
                 # if probability sum is greater than total scaling factor will 
                 # be less than 1 so we can multiply
                 if probability_sum[i] > probability_total: 
@@ -149,7 +167,7 @@ class LOUPE(plReconModel):
                 else:
                 # Scaling factor will be greater than 1 so we need to go into the 
                 # inverse of probs
-                    inverse_total = self.image_size[2]*(1 - 1/self.R)
+                    inverse_total = self.image_size[2]*(1 - 1/self.R_value[i])
                     inverse_sum = self.image_size[2] - probability_sum[i] - self.center_region
                     scaling_factor = inverse_total / inverse_sum
                     inv_prob = (1 - probability[i])*scaling_factor
