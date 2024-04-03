@@ -77,7 +77,8 @@ class normalize_image_max(object):
 
         data.update({
             'input': input/scaling_factor, 
-            'target': target/scaling_factor
+            'target': target/scaling_factor,
+            'fs_k_space': data['fs_k_space']/scaling_factor
             })
         return data
 
@@ -90,5 +91,6 @@ class normalize_k_max(object):
         data.update({
             'input': input/undersample_max, 
             'target': target/undersample_max,
+            'fs_k_space': data['fs_k_space']/undersample_max
             })
         return data
