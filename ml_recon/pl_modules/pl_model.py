@@ -76,9 +76,9 @@ class plReconModel(pl.LightningModule):
             estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
             image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
 
-            estimated_image = estimated_image[0]/estimated_image[0].amax((-1, -2), keepdim=True)
+            estimated_image = estimated_image[0]/image[0].amax((-1, -2), keepdim=True)
             image = image[0]/image[0].amax((-1, -2), keepdim=True)
-            diff = (estimated_image - image).abs()*20
+            diff = (estimated_image - image).abs()*5
             tensorboard = self.logger.experiment
 
 
