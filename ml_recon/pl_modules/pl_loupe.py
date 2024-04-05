@@ -15,7 +15,7 @@ class LOUPE(plReconModel):
             self, 
             recon_model,
             image_size, 
-            learned_R, 
+            R, 
             contrast_order, 
             center_region = 10,
             prob_method='loupe', 
@@ -31,7 +31,7 @@ class LOUPE(plReconModel):
         self.save_hyperparameters(ignore='recon_model')
         self.image_size = image_size
         self.contrast_order = contrast_order
-        self.R = learned_R
+        self.R = R
         self.recon_model = recon_model
         self.mask_method = mask_method
         self.lr = lr
@@ -103,7 +103,7 @@ class LOUPE(plReconModel):
 
     def norm_prob(self, probability):
         if self.learn_R:
-            self.learn_R = self.R/self.learn_R.mean()
+            self.R_value = self.R_value * (self.R/self.R_value.mean())
         if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
             center = [self.image_size[1]//2, self.image_size[2]//2]
 

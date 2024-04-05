@@ -33,24 +33,18 @@ class plReconModel(pl.LightningModule):
         total_psnr = 0
         total_nmse = 0
 
-        output_mask = (ground_truth_image > 0.01)
-        estimated_image *= output_mask
-        ground_truth_image *= output_mask
-
 
         for contrast in range(len(self.contrast_order)):
             batch_nmse = nmse(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
-            batch_ssim = ssim(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :], self.device)
             batch_ssim_torch = ssim_loss(estimated_image[:, [contrast], :, :], ground_truth_image[:, [contrast], :, :])
             batch_psnr = psnr(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
 
             #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
             self.log("metrics/nmse_" + self.contrast_order[contrast], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
-            self.log("metrics/ssim_" + self.contrast_order[contrast], batch_ssim, on_epoch=True, prog_bar=True, logger=True)
             self.log("metrics/ssim_torch_" + self.contrast_order[contrast], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
             self.log("metrics/psnr_" + self.contrast_order[contrast], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
 
-            total_ssim += batch_ssim
+            total_ssim += batch_ssim_torch
             total_psnr += batch_psnr
             total_nmse += batch_nmse
 
@@ -78,16 +72,21 @@ class plReconModel(pl.LightningModule):
 
             estimated_image = estimated_image[0]/image[0].amax((-1, -2), keepdim=True)
             image = image[0]/image[0].amax((-1, -2), keepdim=True)
-            diff = (estimated_image - image).abs()*5
+            diff = (estimated_image - image).abs()*10
             tensorboard = self.logger.experiment
-
-
             k_space_scaled = k_space.abs()/(k_space.abs().max() / 20) 
             under_k = under_k.abs()/(under_k.abs().max() / 20)
 
-            tensorboard.add_images(mode + '/recon', estimated_image.unsqueeze(1), self.current_epoch)
-            tensorboard.add_images(mode + '/target', image.unsqueeze(1), self.current_epoch)
-            tensorboard.add_images(mode + '/diff', diff.unsqueeze(1), self.current_epoch)
+            estimated_image = estimated_image.clamp(0, 1)
+            image = image.clamp(0, 1)
+            diff = diff.clamp(0, 1)
+            under_k = under_k.clamp(0, 1)
+            k_space_scaled = k_space_scaled.clamp(0, 1)
+            
+
+            tensorboard.add_images(mode + '/recon', estimated_image.unsqueeze(1).clamp(0, 1), self.current_epoch)
+            tensorboard.add_images(mode + '/target', image.unsqueeze(1).clamp(0, 1), self.current_epoch)
+            tensorboard.add_images(mode + '/diff', diff.unsqueeze(1).clamp(0, 1), self.current_epoch)
             tensorboard.add_image(mode + '/k', k_space_scaled[0, 0, [0]].clamp(0, 1), self.current_epoch)
             tensorboard.add_image(mode + '/under_k', under_k[0, 0, [0]].clamp(0, 1), self.current_epoch)
             tensorboard.add_images(mode + '/mask', mask[0, :, [0], :, :], self.current_epoch)
