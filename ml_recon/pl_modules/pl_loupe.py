@@ -5,7 +5,7 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 import einops
 
 from ml_recon.losses import L1L2Loss
-from ml_recon.dataset.undersample import scale_pdf
+from ml_recon.dataset.undersample import scale_pdf, gen_pdf_bern, gen_pdf_columns
 from ml_recon.pl_modules.pl_model import plReconModel
 from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
@@ -23,6 +23,7 @@ class LOUPE(plReconModel):
             sigmoid_slope1 = 5,
             sigmoid_slope2 = 200,
             lr=1e-2,
+            warm_start:bool = False, 
             lambda_param = 0,
             fd_param = 0,
             learn_R = False,
@@ -45,7 +46,11 @@ class LOUPE(plReconModel):
         self.fd_param = fd_param
 
         if prob_method == 'loupe':
-            O = torch.rand(image_size)*(1 - 2e-2) + 1e-2
+            if warm_start: 
+                O = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region) 
+                O = torch.from_numpy(np.tile(O[np.newaxis, :, :], (image_size[0], 1, 1)))
+            else:
+                O = torch.rand(image_size)*(1 - 2e-2) + 1e-2
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_1)
         elif prob_method == 'line_loupe':
             O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
