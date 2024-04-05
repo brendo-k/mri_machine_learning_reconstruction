@@ -184,7 +184,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=4, same_phase=False):
+    def generate_and_apply_phase(data, seed, center_region=8, same_phase=False):
         if same_phase: 
             nc = 1
         else:
@@ -208,7 +208,6 @@ class SimulatedBrats(KSpaceDataset):
         center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
         coeff = rng.random(size=(phase_frequency.shape[0], center_region, center_region)) + 1j * rng.random(size=(phase_frequency.shape[0], center_region, center_region))
         coeff -= 0.5 + 1j * 0.5
-        print(center_box_x)
         phase_frequency[:, center_box_x, center_box_y] = coeff
 
         phase = fft_2d_img(phase_frequency)
@@ -225,7 +224,7 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_noise(k_space, seed):
         rng = np.random.default_rng(seed)
-        noise_scale = 0.008
+        noise_scale = 0.05
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space

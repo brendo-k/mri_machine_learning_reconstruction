@@ -24,7 +24,6 @@ def process_file(file, out_path, seed):
         
     images = np.stack(images, axis=0)
     k_space = np.zeros((4, 12, 256, 256, (images.shape[-1] - 106)//3), dtype=np.complex64)
-    print(k_space.shape)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -44,7 +43,6 @@ def process_file(file, out_path, seed):
 
     try:
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
-        print(save_file)
         with h5py.File(save_file, 'w') as fr:
             dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64)
             dset[...] = k_space
@@ -68,7 +66,7 @@ if __name__ == '__main__':
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
-    num_processes = 16#int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
@@ -78,7 +76,6 @@ if __name__ == '__main__':
         results = []
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
-        print(files)
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
 
         #for file in files:

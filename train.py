@@ -20,7 +20,7 @@ def main(args):
     trainer = pl.Trainer(max_epochs=args.max_epochs, logger=[tb_logger, wandb_logger], limit_train_batches=args.limit_train_batches)
 
 
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
+    data_dir = args.data_dir
     nx = args.nx
     ny = args.ny
     
@@ -91,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
     parser.add_argument('--learn_R', action='store_true')
+    parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     
     args = parser.parse_args()
 
