@@ -86,7 +86,7 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
     # generates 2D polynomial variable density with sampling factor delta, fully sampled central square c_sq
     xv, yv = np.meshgrid(np.linspace(-1, 1, nx), np.linspace(-1, 1, ny))
     r = np.sqrt(xv ** 2 + yv ** 2)
-    r /= np.max(r)
+    r /= (np.max(r) + 2/ny)
 
     prob_map = (1 - r) ** p
     prob_map[prob_map > 1] = 1
