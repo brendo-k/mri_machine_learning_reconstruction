@@ -212,9 +212,16 @@ class LOUPE(plReconModel):
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
-        center_x, center_y = norm_probability.shape[1], norm_probability[2]
-        acs_box = norm_probability[: center_x-self.center_region//2:center_x+self.center_region//2, center_y-self.center_region//2:center_y+self.center_region//2]
-        torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region))
+        # make sure acs box is ones
+        center_x, center_y = norm_probability.shape[1]//2, norm_probability.shape[2]//2
+        acs_x = slice(center_x-self.center_region//2, center_x+self.center_region//2)
+        acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
+        acs_box = norm_probability[:, acs_y, acs_x]
+        torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
+    
+        # ensure acs line probabilities are really large so there is no change that they aren't sampled
+        norm_probability[:, acs_y, acs_x] = norm_probability[:, acs_y, acs_x] * 10
+        
 
         if self.prob_method == 'loupe':
             activation = norm_probability - torch.rand((k_space.shape[0],) + self.image_size, device=self.device)

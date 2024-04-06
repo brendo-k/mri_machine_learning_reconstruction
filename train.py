@@ -4,6 +4,7 @@ from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet
 from ml_recon.pl_modules.pl_loupe import LOUPE
 from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
+from ml_recon.models import Unet
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
@@ -12,7 +13,6 @@ from pytorch_lightning.tuner.tuning import Tuner
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from functools import partial
-
 
 def main(args):
     tb_logger = TensorBoardLogger('tb_logs', default_hp_metric=False)
