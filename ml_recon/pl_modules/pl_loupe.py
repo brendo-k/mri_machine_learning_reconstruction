@@ -119,6 +119,8 @@ class LOUPE(plReconModel):
             center_bb_y = [center[1]-self.center_region//2,center[1]+self.center_region//2]
             
             probability_sum = []
+
+            # create acs mask of zeros for acs box and zeros elsewhere
             center_mask = torch.ones(self.image_size[1], self.image_size[2], device=self.device)
             center_mask[center_bb_x[0]:center_bb_x[1], center_bb_y[0]:center_bb_y[1]] = 0
             for i in range(len(probability)):
@@ -147,7 +149,8 @@ class LOUPE(plReconModel):
 
                     inv_prob = (1 - probability[i])*scaling_factor
                     probability[i] = (1 - inv_prob)
-            
+           
+            # acs box is now ones and everything else is zeros
             center_box = 1 - center_mask
             for i in range(len(probability)):
                 probability[i] = probability[i] + center_box 
@@ -206,17 +209,15 @@ class LOUPE(plReconModel):
 
         norm_probability = self.norm_prob(probability)
         norm_probability = torch.stack(norm_probability, dim=0)
-
+        
+        # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
+        center_x, center_y = norm_probability.shape[1], norm_probability[2]
+        acs_box = norm_probability[: center_x-self.center_region//2:center_x+self.center_region//2, center_y-self.center_region//2:center_y+self.center_region//2]
+        torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region))
 
         if self.prob_method == 'loupe':
             activation = norm_probability - torch.rand((k_space.shape[0],) + self.image_size, device=self.device)
-            # slope increase as epochs continue
-            #if self.current_epoch > 50:
-            #    self.sigmoid_slope_2 += 2
-            #if self.current_epoch > 50: 
-            #    self.sigmoid_slope_1 *= 1.1
-            # Generate sampling mask
         elif self.prob_method == 'gumbel':
             activation = torch.log(norm_probability) + self.sample_gumbel((k_space.shape[0],) + self.image_size)
         elif self.prob_method == 'line_loupe':
