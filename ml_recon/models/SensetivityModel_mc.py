@@ -74,8 +74,8 @@ class SensetivityModel_mc(nn.Module):
         center_y = center_mask.shape[-2] // 2
         
         # height doesn't matter (since column wise sampling) 
-        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.85).to(torch.int8)
-        squeezed_mask = (center_mask[:, :, 0, :, center_x] > 0.85).to(torch.int8)
+        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
+        squeezed_mask = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
         # Get the first zero index starting from the center. This gives us "left"
         # and "right" sides of ACS
         left = torch.argmin(squeezed_mask[..., :center_x].flip(-1), dim=-1)
@@ -100,7 +100,7 @@ class SensetivityModel_mc(nn.Module):
 
         assert not center_mask.isnan().any()
         return masked_k_space * center_mask
-    
+
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
         b, c, h, w = x.shape
