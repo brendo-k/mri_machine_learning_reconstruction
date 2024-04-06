@@ -59,7 +59,7 @@ def main(args):
                 learn_R=args.learn_R
                 )
 
-    # AUTOMATIC HYPERPARAMETER TUNING
+    ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
     #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
