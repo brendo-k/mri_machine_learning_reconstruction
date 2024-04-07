@@ -49,6 +49,7 @@ class LOUPE(plReconModel):
             if warm_start: 
                 O = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region).astype(np.float32)
                 O = torch.from_numpy(np.tile(O[np.newaxis, :, :], (image_size[0], 1, 1)))
+                O = O/(O.max() + 1e-3)
             else:
                 O = torch.rand(image_size)*(1 - 2e-2) + 1e-2
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_1)
@@ -115,14 +116,14 @@ class LOUPE(plReconModel):
         if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
             center = [self.image_size[1]//2, self.image_size[2]//2]
 
-            center_bb_x = [center[0]-self.center_region//2,center[0]+self.center_region//2]
-            center_bb_y = [center[1]-self.center_region//2,center[1]+self.center_region//2]
+            center_bb_x = slice(center[0]-self.center_region//2,center[0]+self.center_region//2)
+            center_bb_y = slice(center[1]-self.center_region//2,center[1]+self.center_region//2)
             
             probability_sum = []
 
             # create acs mask of zeros for acs box and zeros elsewhere
             center_mask = torch.ones(self.image_size[1], self.image_size[2], device=self.device)
-            center_mask[center_bb_x[0]:center_bb_x[1], center_bb_y[0]:center_bb_y[1]] = 0
+            center_mask[center_bb_y, center_bb_x] = 0
             for i in range(len(probability)):
                 probability[i] = probability[i] * center_mask
                 probability_sum.append(torch.sum(probability[i], dim=[-1, -2]))
@@ -148,12 +149,10 @@ class LOUPE(plReconModel):
                     assert not torch.isnan(scaling_factor)
 
                     inv_prob = (1 - probability[i])*scaling_factor
-                    probability[i] = (1 - inv_prob)
            
             # acs box is now ones and everything else is zeros
-            center_box = 1 - center_mask
             for i in range(len(probability)):
-                probability[i] = probability[i] + center_box 
+                probability[i][center_bb_y, center_bb_x] = 1
 
         elif self.prob_method == 'line_loupe':
             center = self.image_size[2]//2
@@ -292,9 +291,10 @@ class LOUPE(plReconModel):
                     wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
                     wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
                     wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
+                    cur_R = self.R_value * (self.R/self.R_value.mean())
                     for i in range(len(self.contrast_order)):
                         contrast = self.contrast_order[i]
-                        self.log(mode + "/R_Value_" + contrast, self.R_value[i], on_epoch=True, logger=True)
+                        self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)
 
 
 
