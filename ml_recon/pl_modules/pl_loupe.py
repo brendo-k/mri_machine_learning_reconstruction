@@ -47,7 +47,7 @@ class LOUPE(plReconModel):
 
         if prob_method == 'loupe':
             if warm_start: 
-                O = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region) 
+                O = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region).astype(np.float32)
                 O = torch.from_numpy(np.tile(O[np.newaxis, :, :], (image_size[0], 1, 1)))
             else:
                 O = torch.rand(image_size)*(1 - 2e-2) + 1e-2

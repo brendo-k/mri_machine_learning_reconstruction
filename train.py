@@ -56,7 +56,8 @@ def main(args):
                 mask_method=args.mask_method, 
                 lambda_param=args.lambda_param,
                 fd_param=args.fd_param,
-                learn_R=args.learn_R
+                learn_R=args.learn_R,
+                warm_start=args.warm_start
                 )
 
     ## AUTOMATIC HYPERPARAMETER TUNING
@@ -91,6 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
     parser.add_argument('--learn_R', action='store_true')
+    parser.add_argument('--warm_start', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     
     args = parser.parse_args()
