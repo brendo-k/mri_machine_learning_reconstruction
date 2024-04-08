@@ -140,7 +140,6 @@ class LOUPE(plReconModel):
 
                     probability[i] = (probability[i] * scaling_factor)
                 else:
-                    print('Inverse prob scaling!')
                     inverse_total = self.image_size[1]*self.image_size[2]*(1 - 1/cur_R[i])
                     inverse_sum = (self.image_size[1]*self.image_size[2]) - probability_sum[i] - self.center_region**2
                     scaling_factor = inverse_total / inverse_sum

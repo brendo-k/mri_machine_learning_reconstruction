@@ -39,9 +39,7 @@ class plReconModel(pl.LightningModule):
 
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
-        print(estimated_image.shape)
         for i in range(estimated_image.shape[0]):
-            print(estimated_image[i].unsqueeze(1).shape)
             wandb_logger.log_image('test' + '/recon', np.split(estimated_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
             wandb_logger.log_image('test' + '/target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
@@ -82,8 +80,6 @@ class plReconModel(pl.LightningModule):
             under_k = under_k.clamp(0, 1)
             k_space_scaled = k_space_scaled.clamp(0, 1)
             wandb_logger = self.logger
-            print(self.logger)
-            print(wandb_logger)
 
             contrasts = estimated_image.shape[0]
             wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
