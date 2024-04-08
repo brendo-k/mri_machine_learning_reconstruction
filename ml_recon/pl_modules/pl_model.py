@@ -37,6 +37,14 @@ class plReconModel(pl.LightningModule):
         ground_truth_image *= mask
 
 
+        wandb_logger = self.logger
+        contrasts = estimated_image.shape[1]
+        print(estimated_image.shape)
+        for i in range(estimated_image.shape[0]):
+            print(estimated_image[i].unsqueeze(1).shape)
+            wandb_logger.log_image('test' + '/recon', np.split(estimated_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image('test' + '/target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+
         for contrast in range(len(self.contrast_order)):
             batch_nmse = nmse(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
             batch_ssim_torch = ssim_loss(estimated_image[:, [contrast], :, :], ground_truth_image[:, [contrast], :, :])
@@ -55,17 +63,6 @@ class plReconModel(pl.LightningModule):
         self.log('metrics/mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
         self.log('metrics/mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
 
-        tensorboard_logger = None
-        if isinstance(self.loggers, list): 
-            for logger in self.loggers: 
-                if isinstance(logger, TensorBoardLogger):
-                    tensorboard_logger = logger
-            if tensorboard_logger:
-                tensorboard_logger.log_hyperparams(self.hparams, {
-                   'mean_ssim': total_ssim/len(self.contrast_order),
-                   'mean_psnr': total_psnr/len(self.contrast_order),
-                   'mean_nmse': total_nmse/len(self.contrast_order),
-                   })
 
     def plot_images(self, under_k, estimate_k, k_space, mask, mode='train'):
         with torch.no_grad():
@@ -76,7 +73,6 @@ class plReconModel(pl.LightningModule):
             estimated_image = estimated_image[0]/image[0].amax((-1, -2), keepdim=True)
             image = image[0]/image[0].amax((-1, -2), keepdim=True)
             diff = (estimated_image - image).abs()*10
-            tensorboard = self.logger.experiment
             k_space_scaled = k_space.abs()/(k_space.abs().max() / 20) 
             under_k = under_k.abs()/(under_k.abs().max() / 20)
 
@@ -85,26 +81,14 @@ class plReconModel(pl.LightningModule):
             diff = diff.clamp(0, 1)
             under_k = under_k.clamp(0, 1)
             k_space_scaled = k_space_scaled.clamp(0, 1)
-            
+            wandb_logger = self.logger
+            print(self.logger)
+            print(wandb_logger)
 
-            tensorboard.add_images(mode + '/recon', estimated_image.unsqueeze(1).clamp(0, 1), self.current_epoch)
-            tensorboard.add_images(mode + '/target', image.unsqueeze(1).clamp(0, 1), self.current_epoch)
-            tensorboard.add_images(mode + '/diff', diff.unsqueeze(1).clamp(0, 1), self.current_epoch)
-            tensorboard.add_image(mode + '/k', k_space_scaled[0, 0, [0]].clamp(0, 1), self.current_epoch)
-            tensorboard.add_image(mode + '/under_k', under_k[0, 0, [0]].clamp(0, 1), self.current_epoch)
-            tensorboard.add_images(mode + '/mask', mask[0, :, [0], :, :], self.current_epoch)
-            if isinstance(self.loggers, list): 
-
-                wandb_logger = None
-                for logger in self.loggers: 
-                    if isinstance(logger, WandbLogger):
-                        wandb_logger = logger
-                if wandb_logger:
-                    assert isinstance(wandb_logger, WandbLogger)
-                    contrasts = estimated_image.shape[0]
-                    wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-                    wandb_logger.log_image(mode + '/target', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-                    wandb_logger.log_image(mode + '/k', [k_space_scaled[0, 0, [0]].clamp(0, 1).cpu().numpy()])
-                    wandb_logger.log_image(mode + '/under_k', [under_k[0, 0, [0]].clamp(0, 1).cpu().numpy()])
-                    wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
-                    wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            contrasts = estimated_image.shape[0]
+            wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/target', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/k', [k_space_scaled[0, 0, [0]].clamp(0, 1).cpu().numpy()])
+            wandb_logger.log_image(mode + '/under_k', [under_k[0, 0, [0]].clamp(0, 1).cpu().numpy()])
+            wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))

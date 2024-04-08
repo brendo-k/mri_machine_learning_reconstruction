@@ -15,9 +15,8 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from functools import partial
 
 def main(args):
-    tb_logger = TensorBoardLogger('tb_logs', default_hp_metric=False)
     wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
-    trainer = pl.Trainer(max_epochs=args.max_epochs, logger=[tb_logger, wandb_logger], limit_train_batches=args.limit_train_batches)
+    trainer = pl.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, limit_train_batches=args.limit_train_batches)
 
 
     data_dir = args.data_dir
