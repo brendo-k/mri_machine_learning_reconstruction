@@ -266,35 +266,22 @@ class LOUPE(plReconModel):
             super().plot_images(under_k, estimate_k, k_space, sampling_mask, mode)
             probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
 
-            tensorboard = self.logger.experiment
-
             sense_maps = self.recon_model.model.sens_model(under_k, sampling_mask.expand_as(k_space))
             masked_k = self.recon_model.model.sens_model.mask(under_k, sampling_mask.expand_as(k_space))
             masked_k = masked_k[0, 0, [0], :, :].abs()/(masked_k[0, 0, [0], :, :].abs().max()/20)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
 
-            tensorboard.add_images(mode + '/sense_maps', sense_maps/sense_maps.max(), self.current_epoch)
-            tensorboard.add_image(mode + '/sense_mask', masked_k, self.current_epoch)
-                
             if probability.ndim == 2:
                 probability = einops.repeat(probability, 'c chan h -> c chan h w', w=probability.shape[1])
-            tensorboard.add_images(mode + '/probability', probability.unsqueeze(1), self.current_epoch)
-
-            if isinstance(self.loggers, list): 
-
-                wandb_logger = None
-                for logger in self.loggers: 
-                    if isinstance(logger, WandbLogger):
-                        wandb_logger = logger
-                if wandb_logger:
-                    assert isinstance(wandb_logger, WandbLogger)
-                    wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
-                    wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-                    wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
-                    cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
-                    for i in range(len(self.contrast_order)):
-                        contrast = self.contrast_order[i]
-                        self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)
+            
+            wandb_logger = self.logger
+            wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
+            wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
+            wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
+            cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
+            for i in range(len(self.contrast_order)):
+                contrast = self.contrast_order[i]
+                self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)
 
 
 
