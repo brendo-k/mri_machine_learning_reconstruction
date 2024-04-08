@@ -32,6 +32,7 @@ def main(args):
             num_workers=args.num_workers,
             norm_method=args.norm_method,
             R=args.R,
+            R_hat=args.R_hat,
             line_constrained=args.line_constrained,
             self_supervsied=args.self_supervised
             ) 
@@ -82,7 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--mask_method', type=str, default='all')
-    parser.add_argument('--R', type=int, default=6)
+    parser.add_argument('--R', type=float, default=6.0)
+    parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_train_batches', type=float, default=1.0)
     parser.add_argument('--segregated', action='store_true')

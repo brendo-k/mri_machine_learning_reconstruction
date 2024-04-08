@@ -12,7 +12,7 @@ class UndersampleDecorator(Dataset):
     def __init__(
         self, 
         dataset: KSpaceDataset, 
-        R: int = 4, 
+        R: float = 4, 
         line_constrained: bool = True, 
         poly_order: int = 8,
         acs_lines: int = 10,
