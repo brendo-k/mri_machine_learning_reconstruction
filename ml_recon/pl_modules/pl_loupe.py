@@ -109,7 +109,7 @@ class LOUPE(plReconModel):
 
     def norm_prob(self, probability):
         if self.learn_R:
-            cur_R = self.R_value * (self.R/self.R_value.mean())
+            cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
         else:
             cur_R = self.R_value
 
@@ -291,7 +291,7 @@ class LOUPE(plReconModel):
                     wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
                     wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
                     wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
-                    cur_R = self.R_value * (self.R/self.R_value.mean())
+                    cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
                     for i in range(len(self.contrast_order)):
                         contrast = self.contrast_order[i]
                         self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)

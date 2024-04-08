@@ -9,7 +9,8 @@ class UndersampledDataset(MRI_Loader):
             dataset_name: str,
             data_dir: str, 
             batch_size: int, 
-            R: int = 4,
+            R: float = 4,
+            R_hat: float = 2.0,
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),
             line_constrained: bool = True,
@@ -28,6 +29,7 @@ class UndersampledDataset(MRI_Loader):
         self.line_constrained = line_constrained
         self.segregated = segregated
         self.R = R
+        self.R_hat = R_hat
         self.self_supervised = self_supervsied
         
         if norm_method == 'img':
@@ -41,6 +43,7 @@ class UndersampledDataset(MRI_Loader):
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
                 R=self.R,
+                R_hat=self.R_hat,
                 line_constrained=self.line_constrained,
                 transforms=self.transforms,
                 segregated=self.segregated,
@@ -50,6 +53,7 @@ class UndersampledDataset(MRI_Loader):
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
                 R=self.R,
+                R_hat=self.R_hat,
                 line_constrained=self.line_constrained,
                 transforms=self.transforms,
                 segregated=self.segregated,
@@ -59,6 +63,7 @@ class UndersampledDataset(MRI_Loader):
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
                 R=self.R,
+                R_hat=self.R_hat,
                 line_constrained=self.line_constrained,
                 transforms=self.transforms,
                 segregated=self.segregated,
