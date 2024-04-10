@@ -78,7 +78,7 @@ class LOUPE(plReconModel):
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(k_space, 'train') 
+            self.plot_images(batch, 'train') 
         return loss
 
 
@@ -99,7 +99,7 @@ class LOUPE(plReconModel):
         self.log("val/ssim", ssim_val/img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(k_space, 'val') 
+            self.plot_images(batch, 'val') 
 
 
     def forward(self, batch): 
@@ -109,7 +109,7 @@ class LOUPE(plReconModel):
 
     def norm_prob(self, probability):
         if self.learn_R:
-            cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
+            cur_R = self.R_value * (1/self.R_value).sum() / (len(self.R_value)/self.R)
         else:
             cur_R = self.R_value
 
@@ -258,11 +258,12 @@ class LOUPE(plReconModel):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-2) 
         return [optimizer], [scheduler]
 
-    def plot_images(self, k_space, mode='train'):
+    def plot_images(self, batch, mode='train'):
+        k_space = batch['fs_k_space']
         with torch.no_grad():
             sampling_mask, under_k, estimate_k = self.pass_through_model(k_space)
 
-            super().plot_images(under_k, estimate_k, k_space, sampling_mask, mode)
+            super().plot_images(under_k, estimate_k, batch['target'], k_space, sampling_mask, mode)
             probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
 
             sense_maps = self.recon_model.model.sens_model(under_k, sampling_mask.expand_as(k_space))

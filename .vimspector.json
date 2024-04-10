@@ -189,6 +189,29 @@
                     "userUnhandled": ""
                 }
             }
+        },
+        "Debug ssl": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "train.py",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                    "--self_supervised"
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
         }
     }
 }

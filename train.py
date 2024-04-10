@@ -16,7 +16,11 @@ from functools import partial
 
 def main(args):
     wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
-    trainer = pl.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, limit_train_batches=args.limit_train_batches)
+    trainer = pl.Trainer(max_epochs=args.max_epochs, 
+                         logger=wandb_logger, 
+                         limit_train_batches=args.limit_batches,
+                         limit_val_batches=args.limit_batches,
+                         )
 
 
     data_dir = args.data_dir
@@ -65,7 +69,7 @@ def main(args):
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
     #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
-    wandb_logger.experiment.config.update(model.hparams)
+    #wandb_logger.experiment.config.update(model.hparams)
 
     print(model.hparams)
     trainer.fit(model=model, datamodule=data_module)
@@ -85,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--R', type=float, default=6.0)
     parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
-    parser.add_argument('--limit_train_batches', type=float, default=1.0)
+    parser.add_argument('--limit_batches', type=float, default=1.0)
     parser.add_argument('--segregated', action='store_true')
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
