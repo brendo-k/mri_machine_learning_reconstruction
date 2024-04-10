@@ -43,7 +43,7 @@ class pl_VarNet(plReconModel):
 
         estimate_target = self(batch)
 
-        loss = self.loss(batch['target'], estimate_target)
+        loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
 
@@ -56,7 +56,7 @@ class pl_VarNet(plReconModel):
     def validation_step(self, batch, batch_idx):
         estimate_target = self.forward(batch)
 
-        loss = self.loss(batch['target'], estimate_target)
+        loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
         self.log('val/val_loss', loss, on_epoch=True, logger=True)
         if batch_idx == 0: 
             self.plot_images(batch, 'val')
@@ -65,21 +65,21 @@ class pl_VarNet(plReconModel):
 
     def forward(self, data): 
         under_k, mask = data['input'], data['mask']
-        return self.model(under_k, mask)
+        estimate_k = self.model(under_k, mask)
+        return estimate_k
 
     # optimizer configureation -> using adam w/ lr of 1e-3
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-3) 
-        return [optimizer], [scheduler]
+        #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-3) 
+        return optimizer
 
     def plot_images(self, batch, mode='train'):
         #pass
         under_k = batch['input']
         with torch.no_grad():
             estimate_k = self(batch)
-            super().plot_images(under_k, estimate_k, batch['fs_k_space'], batch['mask'], mode) 
-            tensorboard = self.logger.experiment
+            super().plot_images(under_k, estimate_k, batch['target'], batch['fs_k_space'], batch['mask'], mode) 
             sampling_mask = under_k != 0
 
             sense_maps = self.model.sens_model(under_k, under_k != 0)
@@ -87,16 +87,6 @@ class pl_VarNet(plReconModel):
             masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(under_k))
             masked_k = masked_k[0, 0, [0], :, :].abs()/(masked_k[0, 0, [0], :, :].abs().max()/20)
 
-            tensorboard.add_images(mode + '/sense_maps', sense_maps/sense_maps.max(), self.current_epoch)
-            tensorboard.add_image(mode + '/masked_k', masked_k.clamp(0, 1), self.current_epoch)
-
-            if isinstance(self.loggers, list): 
-                wandb_logger = None
-                for logger in self.loggers:
-                    if isinstance(logger, WandbLogger):
-                        wandb_logger = logger
-
-                if wandb_logger:
-                    assert isinstance(wandb_logger, WandbLogger)
-                    wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-                    wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
+            wandb_logger = self.logger
+            wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
+            wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])

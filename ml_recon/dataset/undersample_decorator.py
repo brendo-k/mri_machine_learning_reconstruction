@@ -72,7 +72,8 @@ class UndersampleDecorator(Dataset):
                 'target': k_space, 
                 'fs_k_space': k_space,
                 'mask': mask_omega,
-                'omega_mask': mask_omega
+                'omega_mask': mask_omega,
+                'loss_mask': np.ones_like(mask_omega)
                 }
 
         if self.self_supervised:
@@ -95,7 +96,8 @@ class UndersampleDecorator(Dataset):
                     'input': doub_under, 
                     'target': target, 
                     'mask_lambda': mask_lambda,
-                    'mask': mask_lambda & mask_omega
+                    'mask': mask_lambda & mask_omega,
+                    'loss_mask': ~mask_lambda & mask_omega
                     }
             output.update(ssl_keys)
 
