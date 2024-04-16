@@ -55,7 +55,6 @@ def main(args):
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             R_hat=args.R_hat,
-            mask_method=args.mask_method, 
             learn_R=args.learn_R,
             warm_start=args.warm_start,
             self_supervised=args.self_supervised
@@ -82,7 +81,6 @@ if __name__ == '__main__':
     parser.add_argument('--line_constrained', action='store_true')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--mask_method', type=str, default='all')
     parser.add_argument('--R', type=float, default=6.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)

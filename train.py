@@ -62,11 +62,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--max_epochs', type=int, default=50)
-    parser.add_argument('--learn_sampling', action='store_true')
     parser.add_argument('--line_constrained', action='store_true')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--mask_method', type=str, default='all')
     parser.add_argument('--R', type=float, default=6.0)
     parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
@@ -76,10 +74,6 @@ if __name__ == '__main__':
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
-    parser.add_argument('--learn_self_supervised', action='store_true')
-    parser.add_argument('--fd_param', type=float, default=0)
-    parser.add_argument('--learn_R', action='store_true')
-    parser.add_argument('--warm_start', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     
     args = parser.parse_args()
