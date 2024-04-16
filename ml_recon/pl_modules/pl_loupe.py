@@ -20,7 +20,6 @@ class LOUPE(plReconModel):
             contrast_order, 
             center_region = 10,
             prob_method='loupe', 
-            mask_method='all',
             sigmoid_slope1 = 5,
             sigmoid_slope2 = 200,
             lr=1e-2,
@@ -34,7 +33,6 @@ class LOUPE(plReconModel):
         self.contrast_order = contrast_order
         self.R = R
         self.recon_model = recon_model
-        self.mask_method = mask_method
         self.lr = lr
         self.center_region = center_region
         self.learn_R = learn_R
