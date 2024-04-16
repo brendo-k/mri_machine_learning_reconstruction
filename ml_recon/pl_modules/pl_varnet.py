@@ -62,6 +62,11 @@ class pl_VarNet(plReconModel):
             self.plot_images(batch, 'val')
         return loss
 
+    def test_step(self, batch, batch_idx):
+        estimated_target = self.forward(batch)
+        estimated_target = estimated_target * (batch['input'] == 0) + batch['input']
+        super().test_step((estimated_target, batch['fs_k_space']), None)
+
 
     def forward(self, data): 
         under_k, mask = data['input'], data['mask']
