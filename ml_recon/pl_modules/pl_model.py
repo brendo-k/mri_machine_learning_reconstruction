@@ -20,15 +20,12 @@ class plReconModel(pl.LightningModule):
         self.contrast_order = contrast_order
 
     def test_step(self, batch, _):
-        batch['input'] = batch['fs_k_space'] * batch['omega_mask']
-        batch['mask'] = batch['omega_mask']
-
-        estimate_k = self(batch)
+        estimate_k, k_space = batch
 
         #loss = self.loss(estimate_k, k_space)
         ssim_loss = StructuralSimilarityIndexMeasure().to(self.device)
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
-        ground_truth_image = root_sum_of_squares(ifft_2d_img(batch['fs_k_space']), coil_dim=2) 
+        ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
         total_ssim = 0
         total_psnr = 0
         total_nmse = 0

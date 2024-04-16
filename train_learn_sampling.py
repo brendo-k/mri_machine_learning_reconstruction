@@ -35,15 +35,31 @@ def main(args):
             num_workers=args.num_workers,
             norm_method=args.norm_method,
             R=args.R,
-            R_hat=args.R_hat,
-            line_constrained=args.line_constrained,
-            self_supervsied=args.self_supervised
             ) 
 
     data_module.setup('train')
     
     backbone = partial(Unet, in_chan=8, out_chan=8, chans=18)
     model = pl_VarNet(backbone, contrast_order=data_module.contrast_order, lr = args.lr)
+
+    if args.line_constrained:
+        prob_method = 'line_loupe'
+    else:
+        prob_method = 'loupe'
+
+    model = LOUPE(
+            model, 
+            (4, ny, nx), 
+            R=args.R, 
+            prob_method=prob_method,
+            contrast_order=data_module.contrast_order,
+            lr = args.lr,
+            R_hat=args.R_hat,
+            mask_method=args.mask_method, 
+            learn_R=args.learn_R,
+            warm_start=args.warm_start,
+            self_supervised=args.self_supervised
+            )
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -68,15 +84,13 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--mask_method', type=str, default='all')
     parser.add_argument('--R', type=float, default=6.0)
-    parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--segregated', action='store_true')
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
-    parser.add_argument('--learn_self_supervised', action='store_true')
+    parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
     parser.add_argument('--learn_R', action='store_true')
     parser.add_argument('--warm_start', action='store_true')
