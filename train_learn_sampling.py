@@ -38,16 +38,12 @@ def main(args):
 
     data_module.setup('train')
     
-    backbone = partial(Unet, in_chan=2*len(args.contrasts), out_chan=2*len(args.contrasts), chans=18)
-    model = pl_VarNet(backbone, contrast_order=data_module.contrast_order, lr = args.lr)
-
     if args.line_constrained:
         prob_method = 'line_loupe'
     else:
         prob_method = 'loupe'
 
     model = LOUPE(
-            model, 
             (len(args.contrasts), ny, nx), 
             R=args.R, 
             prob_method=prob_method,
