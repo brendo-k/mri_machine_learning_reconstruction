@@ -7,10 +7,9 @@ from ml_recon.pl_modules.mri_module import MRI_Loader
 from ml_recon.models import Unet
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.cli import LightningCLI
 
 from functools import partial
 
@@ -20,7 +19,6 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
-                         fast_dev_run=True
                          )
 
 

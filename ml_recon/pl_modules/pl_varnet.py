@@ -3,15 +3,13 @@ import numpy as np
 from torch import optim
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.loggers.wandb import WandbLogger
-from torchmetrics import StructuralSimilarityIndexMeasure
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.losses import L1L2Loss
 from ml_recon.models.varnet_mc import VarNet_mc
-from ml_recon.utils import root_sum_of_squares, ifft_2d_img
-from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.pl_modules.pl_model import plReconModel
+from ml_recon.models import Unet
 
 from typing import Literal
 from functools import partial
@@ -20,16 +18,17 @@ from functools import partial
 class pl_VarNet(plReconModel):
     def __init__(
             self, 
-            backbone: partial,
             contrast_order,
             num_cascades: int = 5, 
             sense_chans: int = 8,
-            lr: float = 1e-3
+            lr: float = 1e-3,
+            chans = 18, 
             ):
 
         super().__init__(contrast_order)
 
         self.save_hyperparameters()
+        backbone = partial(Unet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
         self.model = VarNet_mc(
             backbone,
             num_cascades, 
@@ -60,6 +59,13 @@ class pl_VarNet(plReconModel):
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
         self.log('val/val_loss', loss, on_epoch=True, logger=True)
+
+        ssim_func = StructuralSimilarityIndexMeasure().to(self.device)
+        est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
+        targ_img = root_sum_of_squares(ifft_2d_img(batch['fs_k_space'], axes=[-1, -2]), coil_dim=1)
+        ssim = ssim_func(est_img, targ_img)
+
+        self.log('val/ssim', ssim, on_epoch=True, logger=True)
         if batch_idx == 0: 
             self.plot_images(batch, 'val')
         return loss
