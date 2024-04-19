@@ -20,7 +20,6 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
-                         fast_dev_run=True
                          )
 
 
@@ -44,8 +43,7 @@ def main(args):
 
     data_module.setup('train')
     
-    backbone = partial(Unet, in_chan=2*len(args.contrasts), out_chan=2*len(args.contrasts), chans=18)
-    model = pl_VarNet(backbone, contrast_order=data_module.contrast_order, lr = args.lr)
+    model = pl_VarNet(contrast_order=data_module.contrast_order, lr = args.lr)
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -54,6 +52,7 @@ def main(args):
 
     #wandb_logger.experiment.config.update(model.hparams)
 
+    print(data_module.hparams)
     print(model.hparams)
     trainer.fit(model=model, datamodule=data_module)
     trainer.test(model, datamodule=data_module)
