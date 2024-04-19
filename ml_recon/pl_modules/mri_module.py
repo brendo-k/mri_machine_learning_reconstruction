@@ -15,7 +15,8 @@ class MRI_Loader(pl.LightningDataModule):
             resolution: tuple[int, int] = (128, 128),
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             num_workers: int = 0,
-            batch_size: int = 4
+            batch_size: int = 4,
+            norm_method: str = 'k'
             ):
 
         super().__init__()
@@ -26,6 +27,11 @@ class MRI_Loader(pl.LightningDataModule):
         self.contrasts = contrasts
         self.num_workers = num_workers
 
+        if norm_method == 'k': 
+            self.transforms = normalize_k_max()
+        else: 
+            self.transforms = normalize_image_max()
+
         if dataset_name == 'brats': 
             self.dataset_class = BratsDataset
         elif dataset_name == 'fastmri':
@@ -33,7 +39,6 @@ class MRI_Loader(pl.LightningDataModule):
 
     def setup(self, stage):
         data_dir = os.listdir(self.data_dir)
-        print(self.contrasts)
 
         train_file = next((name for name in data_dir if 'train' in name))
         val_file = next((name for name in data_dir if 'val' in name))
@@ -46,6 +51,7 @@ class MRI_Loader(pl.LightningDataModule):
         self.train_dataset = self.dataset_class(train_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
         self.val_dataset = self.dataset_class(val_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
         self.test_dataset = self.dataset_class(test_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
+        self.contrast_order = self.train_dataset.contrast_order
 
     def train_dataloader(self):
         return DataLoader(
@@ -75,15 +81,21 @@ class MRI_Loader(pl.LightningDataModule):
 
 class normalize_image_max(object):
     def __call__(self, data):
-        target = data
+        target = data['fs_k_space']
         img = root_sum_of_squares(ifft_2d_img(target), coil_dim=1)
+        scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        return target/img.max()
+        data.update({
+            'fs_k_space': data['fs_k_space']/scaling_factor
+            })
+        return data
 
 class normalize_k_max(object):
     def __call__(self, data):
-        undersampled, target = data
-        k_max = target.abs().max()
-
-        return target/k_max
-
+        target = data['fs_k_space']
+        undersample_max = target.abs().amax((1, 2, 3), keepdim=True)
+        
+        data.update({
+            'fs_k_space': target/undersample_max
+            })
+        return data

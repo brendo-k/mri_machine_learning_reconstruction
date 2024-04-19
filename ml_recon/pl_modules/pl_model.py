@@ -4,7 +4,7 @@ import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
-from torchmetrics import StructuralSimilarityIndexMeasure
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 from ml_recon.utils.evaluate import nmse, ssim, psnr
@@ -33,12 +33,16 @@ class plReconModel(pl.LightningModule):
         estimated_image *= mask
         ground_truth_image *= mask
 
+        estimated_image = estimated_image/estimated_image.amax([-1, -2], keepdim=True)
+        ground_truth_image = ground_truth_image/ground_truth_image.amax([-1, -2], keepdim=True)
+
 
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
         for i in range(estimated_image.shape[0]):
             wandb_logger.log_image('test' + '/recon', np.split(estimated_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
             wandb_logger.log_image('test' + '/target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image('test' + '/test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
         for contrast in range(len(self.contrast_order)):
             batch_nmse = nmse(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])

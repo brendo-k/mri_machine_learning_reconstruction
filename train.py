@@ -20,6 +20,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         fast_dev_run=True
                          )
 
 
@@ -37,12 +38,13 @@ def main(args):
             R=args.R,
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
-            self_supervsied=args.self_supervised
+            self_supervsied=args.self_supervised,
+            contrasts=args.contrasts
             ) 
 
     data_module.setup('train')
     
-    backbone = partial(Unet, in_chan=8, out_chan=8, chans=18)
+    backbone = partial(Unet, in_chan=2*len(args.contrasts), out_chan=2*len(args.contrasts), chans=18)
     model = pl_VarNet(backbone, contrast_order=data_module.contrast_order, lr = args.lr)
 
     ## AUTOMATIC HYPERPARAMETER TUNING
@@ -75,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
+    parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     
     args = parser.parse_args()
 

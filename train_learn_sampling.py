@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet
 from ml_recon.pl_modules.pl_loupe import LOUPE
-from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
+from ml_recon.pl_modules.mri_module import MRI_Loader
 from ml_recon.models import Unet
 
 import pytorch_lightning as pl
@@ -20,6 +20,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         fast_dev_run=True
                          )
 
 
@@ -27,19 +28,19 @@ def main(args):
     nx = args.nx
     ny = args.ny
     
-    data_module = UndersampledDataset(
+    data_module = MRI_Loader(
             'brats', 
             data_dir, 
             batch_size=args.batch_size, 
             resolution=(ny, nx),
             num_workers=args.num_workers,
             norm_method=args.norm_method,
-            R=args.R,
+            contrasts=args.contrasts,
             ) 
 
     data_module.setup('train')
     
-    backbone = partial(Unet, in_chan=8, out_chan=8, chans=18)
+    backbone = partial(Unet, in_chan=2*len(args.contrasts), out_chan=2*len(args.contrasts), chans=18)
     model = pl_VarNet(backbone, contrast_order=data_module.contrast_order, lr = args.lr)
 
     if args.line_constrained:
@@ -49,7 +50,7 @@ def main(args):
 
     model = LOUPE(
             model, 
-            (4, ny, nx), 
+            (len(args.contrasts), ny, nx), 
             R=args.R, 
             prob_method=prob_method,
             contrast_order=data_module.contrast_order,
@@ -82,17 +83,18 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--R', type=float, default=6.0)
+    parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
-    parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
     parser.add_argument('--learn_R', action='store_true')
     parser.add_argument('--warm_start', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
+    parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     
     args = parser.parse_args()
 

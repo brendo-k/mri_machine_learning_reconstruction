@@ -42,6 +42,7 @@ class pl_VarNet(plReconModel):
     def training_step(self, batch, batch_idx):
 
         estimate_target = self(batch)
+        estimate_target = estimate_target * (batch['input'] == 0) + batch['input']
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
 
@@ -55,6 +56,7 @@ class pl_VarNet(plReconModel):
 
     def validation_step(self, batch, batch_idx):
         estimate_target = self.forward(batch)
+        estimate_target = estimate_target * (batch['input'] == 0) + batch['input']
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
         self.log('val/val_loss', loss, on_epoch=True, logger=True)
@@ -84,6 +86,7 @@ class pl_VarNet(plReconModel):
         under_k = batch['input']
         with torch.no_grad():
             estimate_k = self(batch)
+            estimate_k = estimate_k * (batch['input'] == 0) + batch['input']
             super().plot_images(under_k, estimate_k, batch['target'], batch['fs_k_space'], batch['mask'], mode) 
             sampling_mask = under_k != 0
 

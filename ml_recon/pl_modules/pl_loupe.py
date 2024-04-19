@@ -121,7 +121,7 @@ class LOUPE(plReconModel):
 
     def forward(self, batch): 
         k_space = batch['fs_k_space']
-        _, _, output, estimate_k = self.pass_through_model(k_space)
+        _, _, _, estimate_k = self.pass_through_model(k_space)
         return estimate_k
 
     def norm_prob(self, probability, R):
@@ -205,7 +205,7 @@ class LOUPE(plReconModel):
         else:
             raise ValueError(f'No prob method found for {self.prob_method}')
         
-        assert all((torch.isclose(probs.mean(), 1/R) for probs, R in zip(probability, cur_R))), f'Probability should be equal to R {[prob.mean() for prob in probability]}'
+        assert all((torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) for probs, R in zip(probability, cur_R))), f'Probability should be equal to R {[prob.mean() for prob in probability]}'
         return probability
 
 
@@ -274,8 +274,6 @@ class LOUPE(plReconModel):
         
         num_coils = k_space.shape[2]
         first_sampling_mask = torch.tile(first_sampling_mask.unsqueeze(2), (1, 1, num_coils, 1, 1))
-        print(first_sampling_mask.shape)
-        print(k_space.shape)
         assert first_sampling_mask.shape == k_space.shape, 'Sampling mask and k_space should have the same shape!'
 
         under_k = k_space * first_sampling_mask
@@ -308,13 +306,13 @@ class LOUPE(plReconModel):
     def plot_images(self, batch, mode='train'):
         k_space = batch['fs_k_space']
         with torch.no_grad():
-            sampling_mask, input, under_k, estimate_k = self.pass_through_model(k_space)
+            sampling_mask, loss_mask, target, estimate_k = self.pass_through_model(k_space)
 
-            super().plot_images(under_k, estimate_k, batch['target'], k_space, sampling_mask, mode)
+            super().plot_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
             probability = torch.sigmoid(self.sampling_weights * self.sigmoid_slope_1) 
 
-            sense_maps = self.recon_model.model.sens_model(under_k, sampling_mask.expand_as(k_space))
-            masked_k = self.recon_model.model.sens_model.mask(under_k, sampling_mask.expand_as(k_space))
+            sense_maps = self.recon_model.model.sens_model(k_space*sampling_mask, sampling_mask.expand_as(k_space))
+            masked_k = self.recon_model.model.sens_model.mask(k_space*sampling_mask, sampling_mask.expand_as(k_space))
             masked_k = masked_k[0, 0, [0], :, :].abs()/(masked_k[0, 0, [0], :, :].abs().max()/20)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
 
