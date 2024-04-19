@@ -24,7 +24,7 @@ class UndersampleDecorator(Dataset):
         super().__init__()
 
         self.dataset = dataset
-        self.contrasts = dataset[0].shape[0]
+        self.contrasts = dataset[0]['fs_k_space'].shape[0]
         self.contrast_order = dataset.contrast_order
         self.line_constrained = line_constrained
         self.segregated = segregated
@@ -59,6 +59,7 @@ class UndersampleDecorator(Dataset):
 
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
+        k_space = k_space['fs_k_space']
         
         under, mask_omega, new_prob = apply_undersampling(self.random_index + index, 
                                        self.omega_prob, 

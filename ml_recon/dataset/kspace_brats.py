@@ -82,11 +82,14 @@ class KSpaceBrats(KSpaceDataset):
     def __getitem__(self, index):
         volume_index, slice_index = self.get_vol_slice_index(index)
         data = self.get_data_from_indecies(volume_index, slice_index)
+        output = {
+                'fs_k_space': data
+                }
 
         if self.transforms:
-            data = self.transforms(data)
+            outpu = self.transforms(output)
 
-        return data
+        return output
 
     # get the volume index and slice index. This is done using the cumulative sum
     # of the number of slices.
@@ -113,3 +116,30 @@ class KSpaceBrats(KSpaceDataset):
             
 
         return data
+
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares
+import matplotlib.pyplot as plt
+import os
+import matplotlib
+if __name__ == '__main__':
+    
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/train/'
+    subset = data_dir.split('/')[-2]
+    dataset = KSpaceBrats(data_dir, nx=256, ny=256)
+
+    matplotlib.use('Agg')
+    try:
+        os.makedirs('Brats_' + subset)
+    except:
+        pass 
+    for i in range(len(dataset)):
+
+        image = ifft_2d_img(dataset[i])
+        volume_index, slice_index = dataset.get_vol_slice_index(i)
+        fn = dataset.file_list[volume_index]
+        contrast_order = dataset.contrast_order
+        for j in range(len(contrast_order)):
+            cur_image = root_sum_of_squares(image[j], coil_dim=0)
+            plt.imshow(cur_image, cmap='gray')
+            plt.savefig(os.path.join('Brats_' + subset, os.path.basename(fn) + '_' + str(slice_index) + '_' + contrast_order[j] + '.png'))
+            plt.close()

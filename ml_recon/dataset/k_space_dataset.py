@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 
+from typing import Dict
 from torch.utils.data import Dataset
 import torch
 
@@ -18,7 +19,7 @@ class KSpaceDataset(Dataset):
     def __len__(self):
         pass
 
-    def __getitem__(self, _) -> torch.Tensor:
+    def __getitem__(self, _) -> Dict[str, torch.Tensor]:
         pass
 
     @staticmethod
@@ -40,3 +41,4 @@ class KSpaceDataset(Dataset):
                 )
 
         return parser
+

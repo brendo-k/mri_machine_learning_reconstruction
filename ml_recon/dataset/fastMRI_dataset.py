@@ -28,6 +28,7 @@ class FastMRIDataset(KSpaceDataset):
             ny:int = 256,
             build_new_header: bool = False,
             transforms: Optional[Callable] = None,
+            contrasts = 't1'
             ):
 
         # call super constructor
@@ -64,9 +65,13 @@ class FastMRIDataset(KSpaceDataset):
         # add contrast dimension
         k_space = k_space.unsqueeze(0)
 
+        output = {
+                'fs_k_space': k_space
+                }
+
         if self.transforms:
-            k_space = self.transforms(k_space)
-        return k_space
+            output = self.transforms(output)
+        return output
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
