@@ -9,11 +9,11 @@ from ml_recon.dataset.undersample import scale_pdf, gen_pdf_bern, gen_pdf_column
 from ml_recon.pl_modules.pl_model import plReconModel
 from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
+from ml_recon.pl_modules.pl_varnet import pl_VarNet
 
 class LOUPE(plReconModel):
     def __init__(
             self, 
-            recon_model,
             image_size, 
             R: float, 
             R_hat: float, 
@@ -29,10 +29,10 @@ class LOUPE(plReconModel):
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
+        self.recon_model = pl_VarNet(contrast_order=contrast_order)
         self.image_size = image_size
         self.contrast_order = contrast_order
         self.R = R
-        self.recon_model = recon_model
         self.lr = lr
         self.center_region = center_region
         self.learn_R = learn_R
@@ -46,8 +46,9 @@ class LOUPE(plReconModel):
         if prob_method == 'loupe':
             if warm_start: 
                 init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region).astype(np.float32)
+                #init_prob = torch.ones(image_size[1], image_size[2], dtype=torch.float32) 
                 init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
-                init_prob = init_prob/(init_prob.max() + 1e-3)
+                init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
                 if self.self_supervised:
                     ssl_init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/R_hat, 8, center_region).astype(np.float32)
                     ssl_init_prob = torch.from_numpy(np.tile(ssl_init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
