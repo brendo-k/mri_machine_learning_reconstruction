@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import os
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models.unet import Unet
@@ -52,8 +53,12 @@ def main(args):
             R_hat=args.R_hat,
             learn_R=args.learn_R,
             warm_start=args.warm_start,
-            self_supervised=args.self_supervised
+            self_supervised=args.self_supervised,
+            R_seeding=args.R_seeding
             )
+
+    if args.checkpoint: 
+        model = LOUPE.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -89,6 +94,8 @@ if __name__ == '__main__':
     parser.add_argument('--warm_start', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
+    parser.add_argument('--R_seeding', type=float, nargs='+', default=[])
+    parser.add_argument('--checkpoint', type=str)
     
     args = parser.parse_args()
 
