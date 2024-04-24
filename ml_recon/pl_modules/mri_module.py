@@ -21,6 +21,7 @@ class MRI_Loader(pl.LightningDataModule):
 
         super().__init__()
 
+        self.save_hyperparameters()
         self.data_dir = data_dir 
         self.batch_size = batch_size
         self.resolution = resolution
@@ -48,9 +49,28 @@ class MRI_Loader(pl.LightningDataModule):
         val_dir = os.path.join(self.data_dir, val_file)
         test_dir = os.path.join(self.data_dir, test_file)
 
-        self.train_dataset = self.dataset_class(train_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
-        self.val_dataset = self.dataset_class(val_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
-        self.test_dataset = self.dataset_class(test_dir, nx=self.resolution[0], ny=self.resolution[1], contrasts=self.contrasts)
+        self.train_dataset = self.dataset_class(
+                train_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1],
+                contrasts=self.contrasts,
+                transforms=self.transforms
+                )
+        self.val_dataset = self.dataset_class(
+                val_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1],
+                contrasts=self.contrasts,
+                transforms=self.transforms
+                )
+        self.test_dataset = self.dataset_class(
+                test_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1], 
+                contrasts=self.contrasts,
+                transforms=self.transforms
+                )
+
         self.contrast_order = self.train_dataset.contrast_order
 
     def train_dataloader(self):

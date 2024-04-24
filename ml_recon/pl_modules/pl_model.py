@@ -29,7 +29,7 @@ class plReconModel(pl.LightningModule):
         total_ssim = 0
         total_psnr = 0
         total_nmse = 0
-        mask = ground_truth_image > 0.0015
+        mask = ground_truth_image > 0.005
         estimated_image *= mask
         ground_truth_image *= mask
 

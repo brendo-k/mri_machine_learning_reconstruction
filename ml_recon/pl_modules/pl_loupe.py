@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from pytorch_lightning.loggers.wandb import WandbLogger
 import einops
+from typing import List
 
 from ml_recon.losses import L1L2Loss
 from ml_recon.dataset.undersample import scale_pdf, gen_pdf_bern, gen_pdf_columns
@@ -17,18 +18,20 @@ class LOUPE(plReconModel):
             image_size, 
             R: float, 
             R_hat: float, 
-            contrast_order, 
-            center_region = 10,
-            prob_method='loupe', 
-            sigmoid_slope1 = 5,
-            sigmoid_slope2 = 200,
-            lr=1e-2,
+            contrast_order: List[str], 
+            center_region:int = 10,
+            prob_method:str = 'loupe', 
+            sigmoid_slope1:float = 5.0,
+            sigmoid_slope2:float = 200.0,
+            lr:float = 1e-2,
             warm_start:bool = False, 
-            learn_R = False,
-            self_supervised = False
+            learn_R:bool = False,
+            self_supervised:bool = False,
+            R_seeding: List[float] = []
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
+
         self.recon_model = pl_VarNet(contrast_order=contrast_order)
         self.image_size = image_size
         self.contrast_order = contrast_order
@@ -38,7 +41,6 @@ class LOUPE(plReconModel):
         self.learn_R = learn_R
         self.R_hat = R_hat
         self.self_supervised = self_supervised
-
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
         self.prob_method = prob_method
@@ -58,6 +60,7 @@ class LOUPE(plReconModel):
                 ssl_init_prob = torch.ones(image_size)*(1 - 2e-2) + 1e-2
 
             self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
+
             if self.self_supervised:
                 self.ssl_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
 
@@ -68,7 +71,12 @@ class LOUPE(plReconModel):
             self.sampling_weights = nn.Parameter(torch.rand(image_size))
 
         if self.learn_R: 
-            self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+            if R_seeding:
+                assert len(R_seeding) == self.image_size[0], "The number of R_values in R_seeding should equal the number of contrasts"
+                self.R_value = nn.Parameter(torch.tensor(R_seeding))
+            else:
+                self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+
         else: 
             self.R_value = torch.full((image_size[0],), float(self.R))
 
@@ -109,7 +117,7 @@ class LOUPE(plReconModel):
     def test_step(self, batch, batch_idx):
         k_space = batch['fs_k_space']
 
-        first_sampling_mask = self.get_mask(self.sampling_weights, k_space.shape[0], True)
+        first_sampling_mask = self.get_mask(self.sampling_weights, k_space.shape[0], deterministic=True, mask_center=True)
         first_sampling_mask = first_sampling_mask.unsqueeze(2)
         under_k = k_space * first_sampling_mask
 
@@ -125,31 +133,37 @@ class LOUPE(plReconModel):
         _, _, _, estimate_k = self.pass_through_model(k_space)
         return estimate_k
 
-    def norm_prob(self, probability, R):
+
+    def norm_prob(self, probability:List[torch.Tensor], R, center_region=10, mask_center=False):
+        image_shape = probability[0].shape
         if self.learn_R:
-            cur_R = R * (1/self.R_value).sum() / (len(self.R_value)/self.R)
+            cur_R = R * (1/R).sum() / (len(R)/self.R)
         else:
             cur_R = R
 
         if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
-            center = [self.image_size[1]//2, self.image_size[2]//2]
+            center = [image_shape[0]//2, image_shape[1]//2]
 
-            center_bb_x = slice(center[0]-self.center_region//2,center[0]+self.center_region//2)
-            center_bb_y = slice(center[1]-self.center_region//2,center[1]+self.center_region//2)
+            center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
+            center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
             
             probability_sum = []
 
             # create acs mask of zeros for acs box and zeros elsewhere
-            center_mask = torch.ones(self.image_size[1], self.image_size[2], device=self.device)
-            center_mask[center_bb_y, center_bb_x] = 0
+            center_mask = torch.ones(image_shape, device=probability[0].device)
+            if mask_center:
+                center_mask[center_bb_y, center_bb_x] = 0
+
             for i in range(len(probability)):
                 probability[i] = probability[i] * center_mask
                 probability_sum.append(torch.sum(probability[i], dim=[-1, -2]))
 
             
             for i in range(len(probability_sum)):
-                probability_total = self.image_size[-1] * self.image_size[-2]/ cur_R[i]
-                probability_total = probability_total - self.center_region ** 2
+                probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
+                if mask_center:
+                    probability_total -= center_region ** 2
+
                 if probability_sum[i] > probability_total:
                     scaling_factor = probability_total / probability_sum[i]
 
@@ -158,34 +172,42 @@ class LOUPE(plReconModel):
 
                     probability[i] = (probability[i] * scaling_factor)
                 else:
-                    inverse_total = self.image_size[1]*self.image_size[2]*(1 - 1/cur_R[i])
-                    inverse_sum = (self.image_size[1]*self.image_size[2]) - probability_sum[i] - self.center_region**2
+                    inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
+                    inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
+                    if mask_center:
+                        inverse_sum -= center_region**2
                     scaling_factor = inverse_total / inverse_sum
 
                     assert scaling_factor <= 1 and scaling_factor >= 0
                     assert not torch.isnan(scaling_factor)
 
                     inv_prob = (1 - probability[i])*scaling_factor
+                    probability[i] = 1 - inv_prob
            
             # acs box is now ones and everything else is zeros
-            for i in range(len(probability)):
-                probability[i][center_bb_y, center_bb_x] = 1
+            if mask_center:
+                for i in range(len(probability)):
+                    probability[i][center_bb_y, center_bb_x] = 1
 
         elif self.prob_method == 'line_loupe':
-            center = self.image_size[2]//2
+            center = image_shape[1]//2
             center_bb_x = [center-self.center_region//2,center+self.center_region//2]
 
             probability_sum = []
             center_mask = torch.ones(self.image_size[2], device=self.device)
-            center_mask[center_bb_x[0]:center_bb_x[1]] = 0
+            if mask_center:
+                center_mask[center_bb_x[0]:center_bb_x[1]] = 0
+
             for i in range(len(probability)):
                 probability[i] = probability[i] * center_mask
                 probability_sum.append(torch.sum(probability[i], dim=[-1]) - probability[i][center_bb_x[0]:center_bb_x[1]].sum())
 
 
             for i in range(len(probability_sum)):
-                probability_total = self.image_size[2] / cur_R[i]
-                probability_total -= self.center_region
+                probability_total = image_shape[1] / cur_R[i]
+                if mask_center:
+                    probability_total -= center_region
+
                 # if probability sum is greater than total scaling factor will 
                 # be less than 1 so we can multiply
                 if probability_sum[i] > probability_total: 
@@ -194,8 +216,10 @@ class LOUPE(plReconModel):
                 else:
                 # Scaling factor will be greater than 1 so we need to go into the 
                 # inverse of probs
-                    inverse_total = self.image_size[2]*(1 - 1/cur_R[i])
-                    inverse_sum = self.image_size[2] - probability_sum[i] - self.center_region
+                    inverse_total = image_shape[1]*(1 - 1/cur_R[i])
+                    inverse_sum = image_shape[1] - probability_sum[i] 
+                    if mask_center:
+                        inverse_sum -= center_region
                     scaling_factor = inverse_total / inverse_sum
                     inv_prob = (1 - probability[i])*scaling_factor
                     probability[i] = 1 - inv_prob
@@ -210,7 +234,7 @@ class LOUPE(plReconModel):
         return probability
 
 
-    def get_mask(self, sampling_weights, batch_size, deterministic=False):
+    def get_mask(self, sampling_weights, batch_size, mask_center=False, deterministic=False):
         # Calculate probability and normalize
 
         assert not torch.isnan(sampling_weights).any() 
@@ -223,20 +247,22 @@ class LOUPE(plReconModel):
         else:
             raise TypeError('prob_method should be loupe or gumbel')
 
-        norm_probability = self.norm_prob(probability, self.R_value)
+        norm_probability = self.norm_prob(probability, self.R_value, mask_center=mask_center)
         norm_probability = torch.stack(norm_probability, dim=0)
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
-        # make sure acs box is ones
-        center_x, center_y = norm_probability.shape[1]//2, norm_probability.shape[2]//2
-        acs_x = slice(center_x-self.center_region//2, center_x+self.center_region//2)
-        acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
-        acs_box = norm_probability[:, acs_y, acs_x]
-        torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
+
+        if mask_center:
+            # make sure acs box is ones
+            center_x, center_y = norm_probability.shape[1]//2, norm_probability.shape[2]//2
+            acs_x = slice(center_x-self.center_region//2, center_x+self.center_region//2)
+            acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
+            acs_box = norm_probability[:, acs_y, acs_x]
+            torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
     
-        # ensure acs line probabilities are really large so there is no change that they aren't sampled
-        norm_probability[:, acs_y, acs_x] = norm_probability[:, acs_y, acs_x] * 10
+            # ensure acs line probabilities are really large so there is no change that they aren't sampled
+            norm_probability[:, acs_y, acs_x] = norm_probability[:, acs_y, acs_x] * 10
 
         if self.prob_method == 'loupe':
             activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
@@ -270,7 +296,7 @@ class LOUPE(plReconModel):
     def pass_through_model(self, k_space, deterministic=False):
         # Calculate probability and normalize
         
-        first_sampling_mask = self.get_mask(self.sampling_weights, k_space.shape[0], deterministic)
+        first_sampling_mask = self.get_mask(self.sampling_weights, k_space.shape[0], deterministic=False, mask_center=True)
         # Apply the sampling mask to k_space
         
         num_coils = k_space.shape[2]
@@ -280,7 +306,7 @@ class LOUPE(plReconModel):
         under_k = k_space * first_sampling_mask
 
         if self.self_supervised: 
-            ssl_sampling_mask = self.get_mask(self.ssl_weights, k_space.shape[0], deterministic)
+            ssl_sampling_mask = self.get_mask(self.ssl_weights, k_space.shape[0], deterministic=False, mask_center=False)
             ssl_sampling_mask = torch.tile(ssl_sampling_mask.unsqueeze(2), (1, 1, num_coils, 1, 1))
             assert ssl_sampling_mask.shape == k_space.shape, 'Sampling mask and k_space should have the same shape!'
 
