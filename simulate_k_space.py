@@ -32,7 +32,7 @@ def process_file(file, out_path, seed):
         if i % 3 == 0:
             cur_images = SimulatedBrats.resample(images[..., i], 256, 256)
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed+i, same_phase=False)
+            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed+i, same_phase=False, center_region=20, noise_std=0.03)
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
 
@@ -62,7 +62,7 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
+    save_dir = '/home/kadotab/scratch/128x128_0.2_20/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
