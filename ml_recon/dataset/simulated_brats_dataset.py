@@ -155,13 +155,13 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed, same_phase=False):
+    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.03):
         #image [Contrast height width]
         image_w_sense = SimulatedBrats.apply_sensetivities(image)
         #image_w_sense [Contrast coil height width]
-        image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase)
+        image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase, center_region=center_region)
         k_space = fft_2d_img(image_w_phase)
-        k_space = SimulatedBrats.apply_noise(k_space, seed)
+        k_space = SimulatedBrats.apply_noise(k_space, seed, noise_std)
         return k_space
 
     @staticmethod
@@ -184,7 +184,7 @@ class SimulatedBrats(KSpaceDataset):
         return image_sense      
 
     @staticmethod
-    def generate_and_apply_phase(data, seed, center_region=8, same_phase=False):
+    def generate_and_apply_phase(data, seed, center_region=20, same_phase=False):
         if same_phase: 
             nc = 1
         else:
@@ -222,9 +222,9 @@ class SimulatedBrats(KSpaceDataset):
 
 
     @staticmethod
-    def apply_noise(k_space, seed):
+    def apply_noise(k_space, seed, noise_std):
         rng = np.random.default_rng(seed)
-        noise_scale = 0.05
+        noise_scale = noise_std
         noise = rng.normal(scale=noise_scale, size=k_space.shape) + 1j * rng.normal(scale=noise_scale, size=k_space.shape)
         k_space += noise
         return k_space
@@ -249,47 +249,23 @@ class SimulatedBrats(KSpaceDataset):
 
 import matplotlib.pyplot as plt
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img, image_slices
+import argparse
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--index', type=int, default=0)
+    args = parser.parse_args()
     
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/val'
-    dataset = SimulatedBrats(data_dir)
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/test/'
+    dataset = SimulatedBrats(data_dir, nx=128, ny=128)
 
+    k_space = dataset[args.index]
+    volume_index, slice_index = dataset.get_vol_slice_index(20)
+    data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
 
-    #k_space = dataset[20]
-    #volume_index, slice_index = dataset.get_vol_slice_index(20)
-    #data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
-    #images = dataset.resample(data, 256, 256)
-    #images = np.transpose(images, (0, 2, 1))
-    #images = torch.from_numpy(images)
+    fig, ax = plt.subplots(2,2)
+    
+    print(k_space.shape)
+    for i in range(k_space.shape[0]):
+        ax[i%2, i//2].imshow(root_sum_of_squares(ifft_2d_img(k_space[i]), coil_dim=0), cmap='gray')
 
-
-    #fig, ax = plt.subplots(1, 3)
-
-    #k_space_image = root_sum_of_squares(ifft_2d_img(k_space[0]), coil_dim=0)
-    #ax[0].imshow(images[0], cmap='gray')
-    #ax[1].imshow(k_space_image, cmap='gray')
-    #ax[2].imshow(images[0] - k_space_image)
-    #plt.show()
-
-    #print(k_space.shape)
-    #cropped_k = k_space[0, :, 64:64+128, 64:64+128]
-    #print(cropped_k.shape)
-    #plt.imshow(root_sum_of_squares(ifft_2d_img(cropped_k), coil_dim=0))
-    #plt.show()
-
-
-    phase3 = SimulatedBrats.build_phase(3, 256, 256, 4, same_phase=False, seed=None)
-    phase3_same = SimulatedBrats.build_phase(3, 256, 256, 4, same_phase=False, seed=None)
-
-    fig, ax = plt.subplots(2, 2)
-    ax[0, 0].imshow(phase3[0])
-    ax[1, 0].imshow(phase3[1])
-    ax[0, 1].imshow(phase3[2])
-    ax[1, 1].imshow(phase3[3])
-
-    fig, ax = plt.subplots(2, 2)
-    ax[0, 0].imshow(phase3_same[0])
-    ax[1, 0].imshow(phase3_same[1])
-    ax[0, 1].imshow(phase3_same[2])
-    ax[1, 1].imshow(phase3_same[3])
     plt.show()

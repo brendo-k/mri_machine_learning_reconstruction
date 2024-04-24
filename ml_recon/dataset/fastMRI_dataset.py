@@ -6,6 +6,7 @@ import torchvision.transforms.functional as F
 import torch
 import h5py
 from argparse import ArgumentParser
+from typing import List
 
 from ml_recon.utils.read_headers import make_header
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
@@ -28,7 +29,7 @@ class FastMRIDataset(KSpaceDataset):
             ny:int = 256,
             build_new_header: bool = False,
             transforms: Optional[Callable] = None,
-            contrasts = 't1'
+            contrasts: List[str] = ['t1']
             ):
 
         # call super constructor
