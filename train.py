@@ -20,6 +20,8 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         devices="auto", 
+                         strategy="auto"
                          )
 
 
@@ -43,7 +45,7 @@ def main(args):
 
     data_module.setup('train')
     
-    model = pl_VarNet(contrast_order=data_module.contrast_order, lr = args.lr)
+    model = pl_VarNet(contrast_order=data_module.contrast_order, lr = args.lr, num_cascades=args.cascades, chans=args.chans)
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -68,15 +70,15 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--R', type=float, default=6.0)
     parser.add_argument('--R_hat', type=float, default=2.0)
-    parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--segregated', action='store_true')
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
+    parser.add_argument('--chans', type=int, default=32)
+    parser.add_argument('--cascades', type=int, default=6)
     
     args = parser.parse_args()
 
