@@ -87,7 +87,7 @@ class KSpaceBrats(KSpaceDataset):
                 }
 
         if self.transforms:
-            outpu = self.transforms(output)
+            output = self.transforms(output)
 
         return output
 
