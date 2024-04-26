@@ -213,7 +213,9 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
                 prob_map[i, ...] = 1 - (1 - prob_map[i, ...])*scaling_factor
 
         prob_map[:, center_y_slice, center_x_slice] = 1
-        prob_map = np.squeeze(prob_map)
+
+        if input_prob.ndim==2:
+            prob_map = np.squeeze(prob_map)
 
     if line_constrained:
         nx = prob_map.shape[-1]
@@ -241,7 +243,8 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
                 prob_map[i, ...] = 1 - (1 - prob_map[i, ...]) * scaling_factor
 
         prob_map[..., center_x_slice] = 1
-        prob_map = np.squeeze(prob_map)
+        if input_prob.ndim == 2:
+            prob_map = np.squeeze(prob_map)
 
 
     return prob_map
