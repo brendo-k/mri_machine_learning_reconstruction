@@ -56,6 +56,7 @@ class MRI_Loader(pl.LightningDataModule):
                 contrasts=self.contrasts,
                 transforms=self.transforms
                 )
+
         self.val_dataset = self.dataset_class(
                 val_dir, 
                 nx=self.resolution[0], 
@@ -63,6 +64,7 @@ class MRI_Loader(pl.LightningDataModule):
                 contrasts=self.contrasts,
                 transforms=self.transforms
                 )
+
         self.test_dataset = self.dataset_class(
                 test_dir, 
                 nx=self.resolution[0], 
