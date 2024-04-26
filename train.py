@@ -71,14 +71,14 @@ if __name__ == '__main__':
     parser.add_argument('--R', type=float, default=6.0)
     parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--nx', type=int, default=128)
-    parser.add_argument('--ny', type=int, default=128)
+    parser.add_argument('--nx', type=int, default=256)
+    parser.add_argument('--ny', type=int, default=256)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--chans', type=int, default=32)
-    parser.add_argument('--cascades', type=int, default=6)
+    parser.add_argument('--cascades', type=int, default=5)
     
     args = parser.parse_args()
 

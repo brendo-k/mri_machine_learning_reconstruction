@@ -1,6 +1,9 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.mri_module import MRI_Loader
+from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+import os
 
 
 class UndersampledDataset(MRI_Loader):
@@ -23,6 +26,11 @@ class UndersampledDataset(MRI_Loader):
         super().__init__(dataset_name, data_dir, resolution, contrasts, batch_size=batch_size, num_workers=num_workers)
         self.save_hyperparameters()
 
+        if dataset_name == 'brats': 
+            self.dataset_class = BratsDataset
+        elif dataset_name == 'fastmri':
+            self.dataset_class = FastMRIDataset
+
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.resolution = resolution
@@ -39,6 +47,36 @@ class UndersampledDataset(MRI_Loader):
 
     def setup(self, stage):
         super().setup(stage)
+        data_dir = os.listdir(self.data_dir)
+
+        train_file = next((name for name in data_dir if 'train' in name))
+        val_file = next((name for name in data_dir if 'val' in name))
+        test_file = next((name for name in data_dir if 'test' in name))
+
+        train_dir = os.path.join(self.data_dir, train_file)
+        val_dir = os.path.join(self.data_dir, val_file)
+        test_dir = os.path.join(self.data_dir, test_file)
+
+        self.train_dataset = self.dataset_class(
+                train_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1],
+                contrasts=self.contrasts,
+                )
+
+        self.val_dataset = self.dataset_class(
+                val_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1],
+                contrasts=self.contrasts,
+                )
+
+        self.test_dataset = self.dataset_class(
+                test_dir, 
+                nx=self.resolution[0], 
+                ny=self.resolution[1], 
+                contrasts=self.contrasts,
+                )
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
