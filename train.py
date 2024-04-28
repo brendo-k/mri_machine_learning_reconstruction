@@ -30,7 +30,7 @@ def main(args):
     ny = args.ny
     
     data_module = UndersampledDataset(
-            'brats', 
+            args.dataset_name, 
             data_dir, 
             batch_size=args.batch_size, 
             resolution=(ny, nx),
@@ -79,6 +79,7 @@ if __name__ == '__main__':
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--chans', type=int, default=32)
     parser.add_argument('--cascades', type=int, default=5)
+    parser.add_argument('--dataset_name', type=str, default='brats')
     
     args = parser.parse_args()
 

@@ -67,9 +67,14 @@ class M4Raw(KSpaceDataset):
         k_space = self.get_data_from_file(index)
         k_space = self.resample_or_pad(k_space)
 
+        output = {
+                'fs_k_space': k_space
+                }
+
         if self.transforms:
-            k_space = self.transforms(k_space)
-        return k_space
+            output = self.transforms(output)
+
+        return output
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)

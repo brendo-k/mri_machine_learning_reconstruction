@@ -2,6 +2,7 @@ from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.mri_module import MRI_Loader
 from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.m4raw_dataset import M4Raw
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
 import os
 
@@ -30,6 +31,8 @@ class UndersampledDataset(MRI_Loader):
             self.dataset_class = BratsDataset
         elif dataset_name == 'fastmri':
             self.dataset_class = FastMRIDataset
+        elif dataset_name == 'm4raw':
+            self.dataset_class = M4Raw
 
         self.data_dir = data_dir
         self.batch_size = batch_size
