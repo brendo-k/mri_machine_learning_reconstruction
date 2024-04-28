@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.m4raw_dataset import M4Raw
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 
@@ -37,6 +38,8 @@ class MRI_Loader(pl.LightningDataModule):
             self.dataset_class = BratsDataset
         elif dataset_name == 'fastmri':
             self.dataset_class = FastMRIDataset
+        elif dataset_name == 'm4raw':
+            self.dataset_class = M4Raw
 
     def setup(self, stage):
         data_dir = os.listdir(self.data_dir)
