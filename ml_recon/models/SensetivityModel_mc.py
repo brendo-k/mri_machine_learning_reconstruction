@@ -74,19 +74,22 @@ class SensetivityModel_mc(nn.Module):
         center_y = center_mask.shape[-2] // 2
         
         # height doesn't matter (since column wise sampling) 
-        squeezed_mask = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
-        squeezed_mask = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
+        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
+        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
         # Get the first zero index starting from the center. This gives us "left"
         # and "right" sides of ACS
-        left = torch.argmin(squeezed_mask[..., :center_x].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask[..., center_x:], dim=-1)
-        top = torch.argmin(squeezed_mask[..., :center_y].flip(-1), dim=-1)
-        bottom = torch.argmin(squeezed_mask[..., center_y:], dim=-1)
+        left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
+        right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
+        
+        top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
+        bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
 
         assert (left != 0).any(), 'Left mask bounds should be more than 1!'
         assert (right != 0).any(), 'Right mask bounds should be more than 1!'
-        assert (top != 0).any(), 'Left mask bounds should be more than 1!'
-        assert (bottom != 0).any(), 'Right mask bounds should be more than 1!'
+
+        if (squeezed_mask_vert == 1).all():
+            top = torch.full(top.shape, center_y)
+            bottom = torch.full(top.shape, center_y)
 
         # force symmetric left and right acs boundries
         low_freq_x = torch.min(left, right)
