@@ -202,7 +202,8 @@
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
                 "args": [
-                    "--self_supervised"
+                    "--self_supervised", 
+                    "--line_constrained"
                 ]
             },
             "breakpoints": {
