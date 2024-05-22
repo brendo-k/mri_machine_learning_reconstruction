@@ -54,7 +54,8 @@ def main(args):
             learn_R=args.learn_R,
             warm_start=args.warm_start,
             self_supervised=args.self_supervised,
-            R_seeding=args.R_seeding
+            R_seeding=args.R_seeding,
+            R_freeze=args.R_freeze
             )
 
     if args.checkpoint: 
@@ -95,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--R_seeding', type=float, nargs='+', default=[])
+    parser.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     parser.add_argument('--checkpoint', type=str)
     
     args = parser.parse_args()

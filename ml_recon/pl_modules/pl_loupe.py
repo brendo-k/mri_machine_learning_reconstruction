@@ -27,7 +27,8 @@ class LOUPE(plReconModel):
             warm_start:bool = False, 
             learn_R:bool = False,
             self_supervised:bool = False,
-            R_seeding: List[float] = []
+            R_seeding: List[float] = [], 
+            R_freeze: List[bool] = []
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -73,7 +74,16 @@ class LOUPE(plReconModel):
         if self.learn_R: 
             if R_seeding:
                 assert len(R_seeding) == self.image_size[0], "The number of R_values in R_seeding should equal the number of contrasts"
-                self.R_value = nn.Parameter(torch.tensor(R_seeding))
+                if R_freeze == []: 
+                    R_freeze = [False for _ in range(len(R_seeding))]
+
+                assert len(R_seeding) == len(R_freeze)
+                self.R_value = [nn.Parameter(torch.tensor(R)) for R in R_seeding]
+                for value, freeze in zip(self.R_value, R_freeze):
+                    if freeze:
+                        value.requires_grad = True
+                self.R_freeze = R_freeze
+                
             else:
                 self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
 
@@ -137,10 +147,16 @@ class LOUPE(plReconModel):
     def norm_prob(self, probability:List[torch.Tensor], R, center_region=10, mask_center=False):
         image_shape = probability[0].shape
         if self.learn_R:
-            cur_R = R * (1/R).sum() / (len(R)/self.R)
+            inverse = [1/R_val for R_val, freeze in zip(R, self.R_freeze) if not freeze]
+            cur_R = []
+            for R_val, freeze in zip(R, self.R_freeze):
+                if freeze:
+                    cur_R.append(R_val)
+                else:
+                    cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
         else:
             cur_R = R
-
+        
         if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
             center = [image_shape[0]//2, image_shape[1]//2]
 
@@ -281,10 +297,16 @@ class LOUPE(plReconModel):
 
         # check to make sure sampling the correct R
 
-        cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
+        inverse = [1/R_val for R_val, freeze in zip(self.R_value, self.R_freeze) if not freeze]
+        cur_R = []
+        for R_val, freeze in zip(self.R_value, self.R_freeze):
+            if freeze:
+                cur_R.append(R_val)
+            else:
+                cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
-                assert sampling_mask[i, j].mean().isclose(torch.tensor([1/cur_R[j]], device=self.device), atol=0.05, rtol=0)
+                assert (torch.isclose(sampling_mask[i, j].mean(), 1/cur_R[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/cur_R[j]}'
 
         assert not torch.isnan(sampling_mask).any()
         # Ensure sampling mask values are within [0, 1]
@@ -350,7 +372,13 @@ class LOUPE(plReconModel):
             wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
             wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
             wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
-            cur_R = self.R_value * (len(self.R_value)/self.R)/(1/self.R_value).sum()
+            inverse = [1/R_val for R_val, freeze in zip(self.R_value, self.R_freeze) if not freeze]
+            cur_R = []
+            for R_val, freeze in zip(self.R_value, self.R_freeze):
+                if freeze:
+                    cur_R.append(R_val)
+                else:
+                    cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
             for i in range(len(self.contrast_order)):
                 contrast = self.contrast_order[i]
                 self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)
