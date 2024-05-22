@@ -73,19 +73,24 @@ class SensetivityModel_mc(nn.Module):
         center_x = center_mask.shape[-1] // 2
         center_y = center_mask.shape[-2] // 2
         
-        # height doesn't matter (since column wise sampling) 
+        # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
         squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
         squeezed_mask_vert = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
-        # Get the first zero index starting from the center. This gives us "left"
-        # and "right" sides of ACS
+
+        assert (squeeze_mask_hor == 1).any(dim=-1), "The squeeze mask is all zero! Can't estimate coil sensetivities"
+        assert (squeeze_mask_vert == 1).any(dim=-1), "The squeeze mask is all zero! Can't estimate coil sensetivities"
+        # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
         left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
         right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
-        
         top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
         bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
 
-        assert (left != 0).any(), 'Left mask bounds should be more than 1!'
-        assert (right != 0).any(), 'Right mask bounds should be more than 1!'
+        if (squeezed_mask_hor == 1).all():
+            left = torch.full(top.shape, 5)
+            right = torch.full(top.shape, 5)
+
+        assert (left != 0).any(), 'Left mask bounds should have at least one 0'
+        assert (right != 0).any(), 'Right mask bounds should have at least one 0!'
 
         if (squeezed_mask_vert == 1).all():
             top = torch.full(top.shape, center_y)
