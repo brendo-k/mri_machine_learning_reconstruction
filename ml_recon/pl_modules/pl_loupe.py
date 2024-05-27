@@ -57,12 +57,15 @@ class LOUPE(plReconModel):
                 for value, freeze in zip(self.R_value, R_freeze):
                     if freeze:
                         value.requires_grad = True
-                self.R_freeze = R_freeze
-                
             else:
                 self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+                R_freeze = [False for _ in range(len(contrast_order))]
         else: 
             self.R_value = torch.full((image_size[0],), float(self.R))
+            R_freeze = [False for _ in range(len(contrast_order))]
+        self.R_freeze = R_freeze
+
+            
 
 
         if prob_method == 'loupe':
