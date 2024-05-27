@@ -355,8 +355,9 @@ class LOUPE(plReconModel):
             sampling_mask, loss_mask, target, estimate_k = self.pass_through_model(k_space)
 
             super().plot_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
-            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-            probability = self.norm_prob(probability, self.R_value, mask_center=mask_center)
+            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
+            probability = self.norm_prob(probability, self.R_value, mask_center=True)
+            probability = torch.stack(probability, dim=0)
 
             sense_maps = self.recon_model.model.sens_model(k_space*sampling_mask, sampling_mask.expand_as(k_space))
             masked_k = self.recon_model.model.sens_model.mask(k_space*sampling_mask, sampling_mask.expand_as(k_space))
