@@ -78,8 +78,8 @@ class LOUPE(plReconModel):
                     ssl_init_prob = torch.from_numpy(np.tile(ssl_init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
                     ssl_init_prob = ssl_init_prob/(ssl_init_prob.max() + 1e-3)
             else:
-                init_prob = torch.zeros(image_size)
-                ssl_init_prob = torch.zeros(image_size)
+                init_prob = torch.zeros(image_size) + 0.5
+                ssl_init_prob = torch.zeros(image_size) + 0.5
 
             self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
 
@@ -304,6 +304,7 @@ class LOUPE(plReconModel):
                 cur_R.append(R_val)
             else:
                 cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
+
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
                 assert (torch.isclose(sampling_mask[i, j].mean(), 1/cur_R[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/cur_R[j]}'
