@@ -373,8 +373,6 @@ class LOUPE(plReconModel):
             
             wandb_logger = self.logger
             wandb_logger.log_image(mode + '/probability', np.split(probability.cpu().numpy(), probability.shape[0], 0))
-            wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-            wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
             inverse = [1/R_val for R_val, freeze in zip(self.R_value, self.R_freeze) if not freeze]
             cur_R = []
             for R_val, freeze in zip(self.R_value, self.R_freeze):

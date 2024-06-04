@@ -87,8 +87,5 @@ class plReconModel(pl.LightningModule):
             contrasts = estimated_image.shape[0]
             wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
             wandb_logger.log_image(mode + '/fully_sampled', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/target', np.split(target.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/k', [k_space_scaled[0, 0, [0]].clamp(0, 1).cpu().numpy()])
-            wandb_logger.log_image(mode + '/under_k', [under_k[0, 0, [0]].clamp(0, 1).cpu().numpy()])
             wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
             wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))
