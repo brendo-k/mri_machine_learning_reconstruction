@@ -1,21 +1,18 @@
 from argparse import ArgumentParser
 import os
 
-from ml_recon.pl_modules.pl_varnet import pl_VarNet
-from ml_recon.models.unet import Unet
 from ml_recon.pl_modules.pl_loupe import LOUPE
-from ml_recon.pl_modules.mri_module import MRI_Loader
-from ml_recon.models import Unet
+from ml_recon.pl_modules.MRILoader import MRI_Loader
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
 from pytorch_lightning.cli import LightningCLI
 
-from functools import partial
 
 def main(args):
-    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
+        
+    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True, name=args.run_name)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
@@ -28,7 +25,7 @@ def main(args):
     ny = args.ny
     
     data_module = MRI_Loader(
-            'brats', 
+            'fastMRI', 
             data_dir, 
             batch_size=args.batch_size, 
             resolution=(ny, nx),
@@ -86,8 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--nx', type=int, default=128)
-    parser.add_argument('--ny', type=int, default=128)
+    parser.add_argument('--nx', type=int, default=256)
+    parser.add_argument('--ny', type=int, default=256)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
@@ -98,6 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('--R_seeding', type=float, nargs='+', default=[])
     parser.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     parser.add_argument('--checkpoint', type=str)
+    parser.add_argument('--run_name', type=str)
+
     
     args = parser.parse_args()
 

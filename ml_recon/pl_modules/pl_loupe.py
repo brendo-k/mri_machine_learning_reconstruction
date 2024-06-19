@@ -65,8 +65,6 @@ class LOUPE(plReconModel):
             R_freeze = [False for _ in range(len(contrast_order))]
         self.R_freeze = R_freeze
 
-            
-
 
         if prob_method == 'loupe':
             if warm_start: 

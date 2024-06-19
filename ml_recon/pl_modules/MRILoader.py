@@ -2,13 +2,19 @@ import os
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.m4raw_dataset import M4Raw
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 
 class MRI_Loader(pl.LightningDataModule):
+    """
+    MRI Loader for multiple datasets
+
+    A undersampled dataset loader for brats, fastmri, and m4raw. This is used in 
+    pytorch lightning modules.
+    """
+
     def __init__(
             self, 
             dataset_name: str, 
@@ -34,6 +40,7 @@ class MRI_Loader(pl.LightningDataModule):
         else: 
             self.transforms = normalize_image_max()
 
+        dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
             self.dataset_class = BratsDataset
         elif dataset_name == 'fastmri':

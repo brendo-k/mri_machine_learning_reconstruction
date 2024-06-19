@@ -27,7 +27,6 @@ class FastMRIDataset(KSpaceDataset):
             data_dir: Union[str, os.PathLike],
             nx:int = 256,
             ny:int = 256,
-            build_new_header: bool = False,
             transforms: Optional[Callable] = None,
             contrasts: List[str] = ['t1']
             ):
@@ -36,19 +35,20 @@ class FastMRIDataset(KSpaceDataset):
         super().__init__(nx=nx, ny=ny)
 
         self.transforms = transforms
-        self.contrast_order = 't1'
+        self.contrast_order = ['t1']
 
-        header_file = os.path.join(data_dir, 'header.json')
-        if not os.path.isfile(header_file) or build_new_header:
-            print(f'Making header in {data_dir}')
-            volume_list = make_header(data_dir, output=header_file)
-        else:    
-            with open(header_file, 'r') as f:
-                print('Header file found!')
-                volume_list = json.load(f)
-        
-        slices = np.array([volume['slices'] for volume in volume_list])
-        self.file_names = np.array([volume['file_name'] for volume in volume_list])
+        files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+        files.sort()
+
+        slices = []
+        self.file_names = []
+        for file in files:
+            full_path = os.path.join(data_dir, file)
+            with h5py.File(full_path) as fr:
+                # loop through all the slices
+                slices.append(fr['kspace'].shape[0])
+                self.file_names.append(full_path)
+            
         self.slice_cumulative_sum = np.cumsum(slices)
         self.length = self.slice_cumulative_sum[-1]
 
@@ -80,6 +80,7 @@ class FastMRIDataset(KSpaceDataset):
         file_name = self.file_names[volume_index]
         with h5py.File(file_name) as fr:
             k_space = torch.as_tensor(fr['kspace'][slice_index])
+
         return k_space 
 
     def resample_or_pad(self, k_space, reduce_fov=True):
