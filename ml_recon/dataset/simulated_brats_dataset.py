@@ -165,7 +165,11 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=12):
+    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=8):
+        #simulate some random motion
+        rng = np.random.default_rng()
+        x_shift, y_shift = rng.integers(-10, 10), rng.integers(-10, 10)
+        image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
         #image [Contrast height width]
         image_w_sense = SimulatedBrats.apply_sensetivities(image, coil_size)
         #image_w_sense [Contrast coil height width]
