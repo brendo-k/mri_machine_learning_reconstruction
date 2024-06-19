@@ -1,19 +1,21 @@
 from argparse import ArgumentParser
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
-from ml_recon.models.unet import Unet
-from ml_recon.pl_modules.pl_loupe import LOUPE
 from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
-from ml_recon.models import Unet
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.tuner.tuning import Tuner
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
-from functools import partial
 
+"""
+Training code for multicontrast dataset
+
+This code takes a multi--contrast datset and trains a VarNet architceture
+
+Examples:
+    # Basic training
+    train.py --num_workers 3 --max_epochs 50 --contrasts t1 t2 flair
+"""
 def main(args):
     wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 

@@ -5,6 +5,7 @@ from typing import Callable, Optional, Union, Collection
 from argparse import ArgumentParser
 
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import rotate
 import torch
 import numpy as np
 
@@ -12,6 +13,7 @@ import nibabel as nib
 
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
+from ml_recon.utils.espirit import espirit
 
 class SimulatedBrats(KSpaceDataset):
     """
@@ -27,7 +29,9 @@ class SimulatedBrats(KSpaceDataset):
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
             extension: str = "nii.gz",
-            deterministic: bool = False
+            deterministic: bool = False,
+            center_region_phase: int = 20, 
+            noise_std: float = 0.001
             ):
         assert contrasts, 'Contrast list should not be empty!'
 
@@ -36,6 +40,8 @@ class SimulatedBrats(KSpaceDataset):
         self.transforms = transforms
         self.contrasts = np.array([contrast.lower() for contrast in contrasts])
         self.extension = extension
+        self.center_region_phase = center_region_phase
+        self.noise_std = noise_std
 
         sample_dir = os.listdir(data_dir)
         sample_dir.sort()
@@ -77,7 +83,10 @@ class SimulatedBrats(KSpaceDataset):
         data, _ = self.get_data_from_indecies(volume_index, slice_index)
         images = self.resample(data, self.nx, self.ny)
         images = np.transpose(images, (0, 2, 1))
-        data = SimulatedBrats.simulate_k_space(images, index + self.seed)
+        random_index = index + self.seed
+        data = SimulatedBrats.simulate_k_space(images, random_index,
+                                               center_region=self.center_region_phase, 
+                                               noise_std=self.noise_std)
         data = torch.from_numpy(data)
 
         if self.transforms:
@@ -148,6 +157,7 @@ class SimulatedBrats(KSpaceDataset):
 
                 slice = image[:, :, slice_index]
                 slice = (slice - np.min(slice)) / (np.max(slice) - np.min(slice))
+                slice = rotate(slice, 45, reshape=False)
                 data.append(slice)
                 modality_label.append(modality)
     
@@ -155,9 +165,9 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.03):
+    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=12):
         #image [Contrast height width]
-        image_w_sense = SimulatedBrats.apply_sensetivities(image)
+        image_w_sense = SimulatedBrats.apply_sensetivities(image, coil_size)
         #image_w_sense [Contrast coil height width]
         image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase, center_region=center_region)
         k_space = fft_2d_img(image_w_phase)
@@ -165,8 +175,9 @@ class SimulatedBrats(KSpaceDataset):
         return k_space
 
     @staticmethod
-    def apply_sensetivities(image):
-        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed.npy')
+    def apply_sensetivities(image, coil_size):
+        coil_size = str(coil_size)
+        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_' + coil_size + '.npy')
         #sense_map = np.squeeze(sense_map)
         sense_map = np.transpose(sense_map, (0, 2, 1))
         sense_map = sense_map[:, 25:-26, 25:-25]
@@ -256,7 +267,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/test/'
-    dataset = SimulatedBrats(data_dir, nx=128, ny=128)
+    dataset = SimulatedBrats(data_dir, nx=128, ny=128, center_region_phase=0)
 
     k_space = dataset[args.index]
     volume_index, slice_index = dataset.get_vol_slice_index(20)
@@ -267,5 +278,20 @@ if __name__ == '__main__':
     print(k_space.shape)
     for i in range(k_space.shape[0]):
         ax[i%2, i//2].imshow(root_sum_of_squares(ifft_2d_img(k_space[i]), coil_dim=0), cmap='gray')
+
+    k_space = k_space.numpy()
+    k_space = np.transpose(k_space, (0, 2, 3, 1)) # move coil dimension to last
+
+    maps = espirit(k_space[[0], :, :, :], 8, 30, 0.01, 0.9)
+    maps = maps[0, :, :, :, 0]
+
+    imgs = ifft_2d_img(k_space, axes=(1, 2))
+
+    combined_imgs = 1/(np.sum(np.conj(maps) * maps, axis=-1) + 1e-6) * np.sum(np.conj(maps) * imgs, axis=-1)
+
+    fig, ax = plt.subplots(2,2)
+    
+    for i in range(combined_imgs.shape[0]):
+        ax[i%2, i//2].imshow(np.angle(combined_imgs[i]), cmap='gray')
 
     plt.show()

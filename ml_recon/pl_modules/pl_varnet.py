@@ -10,6 +10,7 @@ from ml_recon.losses import L1L2Loss
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.pl_modules.pl_model import plReconModel
 from ml_recon.models import Unet
+from ml_recon.models import ResNet
 
 from typing import Literal
 from functools import partial
@@ -19,6 +20,7 @@ class pl_VarNet(plReconModel):
     def __init__(
             self, 
             contrast_order,
+            model_name: str = 'unet',
             num_cascades: int = 5, 
             sense_chans: int = 8,
             lr: float = 1e-3,
@@ -28,7 +30,13 @@ class pl_VarNet(plReconModel):
         super().__init__(contrast_order)
 
         self.save_hyperparameters()
-        backbone = partial(Unet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
+        if model_name == 'unet':
+            backbone = partial(Unet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
+        elif model_name == 'resnet':
+            backbone = partial(ResNet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
+        else:
+            raise ValueError(f'{model_name} not found!')
+
         self.model = VarNet_mc(
             backbone,
             num_cascades, 

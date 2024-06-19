@@ -6,9 +6,9 @@ import os
 import multiprocessing
 from functools import partial
 from itertools import repeat
+from scipy.ndimage import rotate
 
-IMAGE_SIZE = (128, 128)
-
+IMAGE_SIZE = (256, 256)
 
 # Define a function to process a single file
 def process_file(file, out_path, seed):
@@ -26,7 +26,7 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 12, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, 4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -35,7 +35,11 @@ def process_file(file, out_path, seed):
         if i % 3 == 0:
             cur_images = SimulatedBrats.resample(images[..., i], IMAGE_SIZE[0], IMAGE_SIZE[1])
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(cur_images, seed+i, same_phase=False, center_region=8, noise_std=0.01)
+            cur_images = rotate(cur_images, 45, axes=(-1, -2), reshape=False)
+            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(
+                                        cur_images, seed+i, same_phase=False, 
+                                        center_region=10, noise_std=0.001, coil_size=4
+                                        )
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
 
@@ -65,7 +69,7 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/scratch/128x128_0.2_20/'
+    save_dir = '/home/kadotab/scratch/rotated/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
