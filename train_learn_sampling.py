@@ -25,7 +25,7 @@ def main(args):
     ny = args.ny
     
     data_module = MRI_Loader(
-            'fastMRI', 
+            args.dataset, 
             data_dir, 
             batch_size=args.batch_size, 
             resolution=(ny, nx),
@@ -83,8 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--R_hat', type=float, default=2.0)
     parser.add_argument('--lambda_param', type=float, default=0.)
     parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--nx', type=int, default=256)
-    parser.add_argument('--ny', type=int, default=256)
+    parser.add_argument('--nx', type=int, default=128)
+    parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
@@ -96,6 +96,8 @@ if __name__ == '__main__':
     parser.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     parser.add_argument('--checkpoint', type=str)
     parser.add_argument('--run_name', type=str)
+    parser.add_argument('--project', type=str, default='MRI Reconstruction')
+    parser.add_argument('--dataset', type=str, default='brats')
 
     
     args = parser.parse_args()
