@@ -1,6 +1,6 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.pl_modules.mri_module import MRI_Loader
+from ml_recon.pl_modules.MRILoader import MRI_Loader
 from ml_recon.dataset.Brats_dataset import BratsDataset
 from ml_recon.dataset.m4raw_dataset import M4Raw
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset

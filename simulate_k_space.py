@@ -8,7 +8,7 @@ from functools import partial
 from itertools import repeat
 from scipy.ndimage import rotate
 
-IMAGE_SIZE = (256, 256)
+IMAGE_SIZE = (240, 240)
 
 # Define a function to process a single file
 def process_file(file, out_path, seed):
@@ -34,6 +34,7 @@ def process_file(file, out_path, seed):
             break
         if i % 3 == 0:
             #cur_images = SimulatedBrats.resample(images[..., i], IMAGE_SIZE[0], IMAGE_SIZE[1])
+            cur_images = images[..., i]
             cur_images = np.transpose(cur_images, (0, 2, 1))
             k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(
                                         cur_images, seed+i, same_phase=False, 
@@ -68,7 +69,7 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
+    save_dir = '/home/kadotab/scratch/no_sense_no_resample/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
