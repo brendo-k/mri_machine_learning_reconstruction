@@ -17,7 +17,7 @@ Examples:
     train.py --num_workers 3 --max_epochs 50 --contrasts t1 t2 flair
 """
 def main(args):
-    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True)
+    wandb_logger = WandbLogger(project='SSL Characterization', name=args.run_name, log_model=True)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
@@ -47,7 +47,13 @@ def main(args):
 
     data_module.setup('train')
     
-    model = pl_VarNet(contrast_order=data_module.contrast_order, lr = args.lr, num_cascades=args.cascades, chans=args.chans)
+    model = pl_VarNet(
+            model_name=args.model, 
+            contrast_order=data_module.contrast_order,
+            lr = args.lr, 
+            num_cascades=args.cascades, 
+            chans=args.chans
+            )
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -61,11 +67,11 @@ def main(args):
     trainer.fit(model=model, datamodule=data_module)
     trainer.test(model, datamodule=data_module)
 
-
 if __name__ == '__main__': 
     parser = ArgumentParser()
 
     parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--model', type=str, default='unet')
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--line_constrained', action='store_true')
     parser.add_argument('--batch_size', type=int, default=16)
@@ -82,6 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('--chans', type=int, default=32)
     parser.add_argument('--cascades', type=int, default=5)
     parser.add_argument('--dataset_name', type=str, default='brats')
+    parser.add_argument('--run_name', type=str)
     
     args = parser.parse_args()
 

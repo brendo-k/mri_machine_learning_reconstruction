@@ -183,6 +183,22 @@ def get_mask_from_segregated_sampling(prob_map, rng, line_constrained):
 
 
 def scale_pdf(input_prob, R, center_square, line_constrained=False):
+    """
+    This function takes an input pdf and an R value and scales the pdf to have 
+    a mean sampling probability to be R. It functions by lowering the number of
+    sampled locations if the input probability is over R and lowering the inverse
+    (number of zeros) if the input probability is less that R.
+
+    Args:
+        input_prob (np.array): input probability
+        R (float): target R value
+        center_square (int): center region to be kept fully sampled
+        line_constrained (bool): flag for line constrained or 2d sampling
+
+    Returns:
+        (np.array) scaled pdf
+    """
+
     prob_map = input_prob.copy() 
     if not line_constrained:
         shape = prob_map.shape

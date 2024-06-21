@@ -69,7 +69,7 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/scratch/no_sense_no_resample/'
+    save_dir = '/scratch/kadotab/no_resample/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
