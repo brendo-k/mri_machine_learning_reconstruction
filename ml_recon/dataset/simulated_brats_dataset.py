@@ -206,7 +206,7 @@ class SimulatedBrats(KSpaceDataset):
         else:
             nc = data.shape[0]
 
-        phase = SimulatedBrats.build_phase(center_region, data.shape[2], data.shape[3], nc, same_phase=same_phase, seed=seed)
+        phase = SimulatedBrats.build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
 
