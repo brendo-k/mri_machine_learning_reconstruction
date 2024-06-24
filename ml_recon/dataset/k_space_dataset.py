@@ -10,10 +10,10 @@ class KSpaceDataset(Dataset):
     here is a temporary one. It also can't enforce that the data is in k-space.
     Not sure how to do that either...
     """
-    def __init__(self, nx, ny):
+    def __init__(self, nx: int, ny: int):
         super().__init__()
-        self.nx = nx
-        self.ny = ny
+        self.nx: int = nx
+        self.ny: int = ny
         self.contrast_order = []
 
     def __len__(self):

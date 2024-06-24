@@ -5,6 +5,7 @@ from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.tuner.tuning import Tuner
 
 
 """

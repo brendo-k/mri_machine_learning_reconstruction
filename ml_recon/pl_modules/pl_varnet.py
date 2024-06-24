@@ -11,6 +11,9 @@ from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.pl_modules.pl_model import plReconModel
 from ml_recon.models import Unet
 from ml_recon.models import ResNet
+from ml_recon.models import UnetR
+from ml_recon.models import SingleEncoderJointDecoder
+from monai.networks.nets.swin_unetr import SwinUNETR
 
 from typing import Literal
 from functools import partial
@@ -33,7 +36,32 @@ class pl_VarNet(plReconModel):
         if model_name == 'unet':
             backbone = partial(Unet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
         elif model_name == 'resnet':
-            backbone = partial(ResNet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
+            backbone = partial(ResNet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans, itterations=15)
+        elif model_name == 'se_jd':
+            backbone = partial(SingleEncoderJointDecoder,
+                               in_chan=2*len(contrast_order),
+                               encoder_chan=36, 
+                               encoder_depth=4, 
+                               decoder_chan=chans, 
+                               decoder_depth=4
+                               )
+        elif model_name == 'unetr':
+            backbone = partial(
+                    UnetR, 
+                    in_chan=2*len(contrast_order), 
+                    out_chan=2*len(contrast_order), 
+                    hidden_size=chans,
+                    img_size=128
+                    )
+        elif model_name == 'swin_unetr':
+            backbone = partial(
+                    SwinUNETR, 
+                    in_channels=2*len(contrast_order), 
+                    out_channels=2*len(contrast_order), 
+                    feature_size=chans, 
+                    img_size=128,
+                    spatial_dims=2
+                    )
         else:
             raise ValueError(f'{model_name} not found!')
 
