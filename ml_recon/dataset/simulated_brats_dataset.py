@@ -5,7 +5,6 @@ from typing import Callable, Optional, Union, Collection
 from argparse import ArgumentParser
 
 from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage import rotate
 import torch
 import numpy as np
 
@@ -80,8 +79,8 @@ class SimulatedBrats(KSpaceDataset):
 
     def __getitem__(self, index):
         volume_index, slice_index = self.get_vol_slice_index(index)
-        data, _ = self.get_data_from_indecies(volume_index, slice_index)
-        images = self.resample(data, self.nx, self.ny)
+        images, _ = self.get_data_from_indecies(volume_index, slice_index)
+
         images = np.transpose(images, (0, 2, 1))
         random_index = index + self.seed
         data = SimulatedBrats.simulate_k_space(images, random_index,
@@ -157,7 +156,6 @@ class SimulatedBrats(KSpaceDataset):
 
                 slice = image[:, :, slice_index]
                 slice = (slice - np.min(slice)) / (np.max(slice) - np.min(slice))
-                slice = rotate(slice, 45, reshape=False)
                 data.append(slice)
                 modality_label.append(modality)
     
@@ -165,14 +163,13 @@ class SimulatedBrats(KSpaceDataset):
         return data, modality_label
 
     @staticmethod
-    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=8):
+    def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=12):
         #simulate some random motion
         rng = np.random.default_rng()
         x_shift, y_shift = rng.integers(-10, 10), rng.integers(-10, 10)
         image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
         #image [Contrast height width]
-        #image_w_sense = SimulatedBrats.apply_sensetivities(image, coil_size)
-        image_w_sense = image
+        image_w_sense = SimulatedBrats.apply_sensetivities(image, coil_size)
         #image_w_sense [Contrast coil height width]
         image_w_phase = SimulatedBrats.generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase, center_region=center_region)
         k_space = fft_2d_img(image_w_phase)
@@ -182,8 +179,12 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def apply_sensetivities(image, coil_size):
         coil_size = str(coil_size)
+
+        if coil_size == '1':
+            image = np.expand_dims(image, 1)
+            return image
+
         sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_' + coil_size + '.npy')
-        #sense_map = np.squeeze(sense_map)
         sense_map = np.transpose(sense_map, (0, 2, 1))
         sense_map = sense_map[:, 25:-26, 25:-25]
 
@@ -206,9 +207,20 @@ class SimulatedBrats(KSpaceDataset):
         else:
             nc = data.shape[0]
 
-        phase = SimulatedBrats.build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
+        #phase = SimulatedBrats.build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
+        phase = SimulatedBrats.build_phase_from_same_dist(data)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
+
+    @staticmethod
+    def build_phase_from_same_dist(data): 
+        rng = np.random.default_rng()
+        coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
+        k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1)) 
+        phase_images = fft_2d_img(np.abs(k_space) * coeffs)
+        phase = np.angle(phase_images)
+
+        return phase
 
 
     @staticmethod
@@ -249,16 +261,16 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def resample(data, resample_height, resample_width):
         contrasts, height, width = data.shape
+        interp_data = np.zeros((contrasts, resample_height, resample_width))
         y = np.arange(0, height)
         x = np.arange(0, width)
-        c = np.arange(0, contrasts)
 
         yi = np.linspace(0, height - 1, resample_height)
         xi = np.linspace(0, width - 1, resample_width)
-        (ci, yi, xi) = np.meshgrid(c, yi, xi, indexing='ij')
-        interpolator = RegularGridInterpolator((c, y, x), data, method='nearest')
-        data = interpolator((ci.flatten(), yi.flatten(), xi.flatten()))
-        interp_data = np.reshape(data, (contrasts, resample_height, resample_width))
+        (yi, xi) = np.meshgrid(yi, xi, indexing='ij')
+        for i in range(data.shape[0]):
+            interpolator = RegularGridInterpolator((y, x), data[i, :, :])
+            interp_data[i, :, :] = interpolator((yi, xi))
         
         return interp_data
 
@@ -272,17 +284,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/test/'
-    dataset = SimulatedBrats(data_dir, nx=128, ny=128, center_region_phase=0)
+    dataset = SimulatedBrats(data_dir, nx=128, ny=128, center_region_phase=20, noise_std=0.0001)
 
     k_space = dataset[args.index]
-    volume_index, slice_index = dataset.get_vol_slice_index(20)
-    data, _ = dataset.get_data_from_indecies(volume_index, slice_index)
 
-    fig, ax = plt.subplots(2,2)
+    fig, ax = plt.subplots(2, 2)
     
-    print(k_space.shape)
     for i in range(k_space.shape[0]):
         ax[i%2, i//2].imshow(root_sum_of_squares(ifft_2d_img(k_space[i]), coil_dim=0), cmap='gray')
+    plt.show()
+
 
     k_space = k_space.numpy()
     k_space = np.transpose(k_space, (0, 2, 3, 1)) # move coil dimension to last
@@ -295,7 +306,7 @@ if __name__ == '__main__':
     combined_imgs = 1/(np.sum(np.conj(maps) * maps, axis=-1) + 1e-6) * np.sum(np.conj(maps) * imgs, axis=-1)
 
     fig, ax = plt.subplots(2,2)
-    
+     
     for i in range(combined_imgs.shape[0]):
         ax[i%2, i//2].imshow(np.angle(combined_imgs[i]), cmap='gray')
 

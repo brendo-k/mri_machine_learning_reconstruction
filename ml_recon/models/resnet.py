@@ -16,7 +16,7 @@ class residual_block(nn.Module):
         return self.res_block(x) * self.scaling + x
 
 class ResNet(nn.Module):
-    def __init__(self, itterations, in_chan=2, out_chan=2, chans=32, scaling=0.1) -> None:
+    def __init__(self, itterations=10, in_chan=2, out_chan=2, chans=32, scaling=0.1) -> None:
         super().__init__()
 
         self.cascade = nn.Sequential()

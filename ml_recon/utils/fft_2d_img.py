@@ -20,7 +20,6 @@ def ifft_2d_img(data: Union[torch.Tensor, npt.NDArray[np.complex_]], axes=[-1, -
     return data
 
 def fft_2d_img(data: Union[torch.Tensor, np.ndarray], axes=[-1, -2]):
-    assert isinstance(data, torch.Tensor) or isinstance(data, np.ndarray), 'data should be a numpy array or pytorch tensor'
     if isinstance(data, torch.Tensor):
         data = torch.fft.ifftshift(data, dim=axes)
         data = torch.fft.fft2(data, dim=axes, norm='ortho')
