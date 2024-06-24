@@ -4,11 +4,11 @@ import nibabel as nib
 import h5py
 import os
 import multiprocessing
-from functools import partial
 from itertools import repeat
-from scipy.ndimage import rotate
+from ml_recon.utils import fft_2d_img, ifft_2d_img
 
-IMAGE_SIZE = (240, 240)
+IMAGE_SIZE = (120, 120)
+COIL_SIZE = 12
 
 # Define a function to process a single file
 def process_file(file, out_path, seed):
@@ -26,7 +26,7 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, COIL_SIZE, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -35,10 +35,17 @@ def process_file(file, out_path, seed):
         if i % 3 == 0:
             #cur_images = SimulatedBrats.resample(images[..., i], IMAGE_SIZE[0], IMAGE_SIZE[1])
             cur_images = images[..., i]
+            cur_images = fft_2d_img(cur_images)
+            _, y, x = cur_images.shape 
+            y_start = y//2 - IMAGE_SIZE[0]//2
+            x_start = x//2 - IMAGE_SIZE[1]//2
+            cur_images = cur_images[:, y_start:y_start + IMAGE_SIZE[0], x_start:x_start + IMAGE_SIZE[1]]
+            cur_images = ifft_2d_img(cur_images)
+
             cur_images = np.transpose(cur_images, (0, 2, 1))
             k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(
                                         cur_images, seed+i, same_phase=False, 
-                                        center_region=10, noise_std=0.001, coil_size=4
+                                        center_region=20, noise_std=0.0001, coil_size=COIL_SIZE
                                         )
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
@@ -69,7 +76,7 @@ def process_file(file, out_path, seed):
 
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/scratch/kadotab/no_resample/'
+    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes
