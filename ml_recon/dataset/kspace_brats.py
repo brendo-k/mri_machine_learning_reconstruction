@@ -4,6 +4,7 @@ import time
 import h5py
 from typing import Callable, Optional, Union, Collection
 from argparse import ArgumentParser
+from torchvision.transforms.functional import center_crop
 
 from scipy.interpolate import interpn
 import torch
@@ -109,11 +110,7 @@ class KSpaceBrats(KSpaceDataset):
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
             data = torch.as_tensor(fr['k_space'][slice_index, self.contrast_order_indexes])
-            x_start = data.shape[-2]//2 - self.nx//2
-            y_start = data.shape[-1]//2 - self.ny//2
-
-            data = data[:, :, x_start:x_start + self.nx, y_start:y_start + self.ny]
-            
+            data = center_crop(data, (self.ny, self.nx))
 
         return data
 

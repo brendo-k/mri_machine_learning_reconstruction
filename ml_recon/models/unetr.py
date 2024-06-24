@@ -3,17 +3,16 @@ import torch.nn as nn
 from argparse import ArgumentParser
 
 class UnetR(nn.Module):
-    def __init__(self, in_chan, out_chan, img_size, mlp_dim, hidden_size, num_heads, feature_size):
+    def __init__(self, in_chan, out_chan, img_size, feature_size=16, hidden_size=256):
         super().__init__()
         self.network = unetr.UNETR(
                 in_chan, 
                 out_chan, 
                 img_size, 
                 feature_size=feature_size, 
-                num_heads=num_heads, 
+                spatial_dims=2,
                 hidden_size=hidden_size, 
-                mlp_dim=mlp_dim, 
-                spatial_dims=2
+                num_heads=6
                 )
 
     def forward(self, x):
