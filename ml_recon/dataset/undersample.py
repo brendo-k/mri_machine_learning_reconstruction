@@ -265,4 +265,8 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
 
     return prob_map
 
-
+import matplotlib.pyplot as plt
+if __name__ == '__main__': 
+   pdf = gen_pdf_columns(256, 256, 1/8, 8, 10) 
+   plt.imshow(pdf)
+   plt.show()

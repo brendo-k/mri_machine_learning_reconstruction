@@ -5,9 +5,12 @@ import h5py
 import os
 import multiprocessing
 from itertools import repeat
-from ml_recon.utils import fft_2d_img, ifft_2d_img
+from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
+import matplotlib.pyplot as plt
+from torchvision.transforms.functional import center_crop
+import torch
 
-IMAGE_SIZE = (120, 120)
+IMAGE_SIZE = (128, 128)
 COIL_SIZE = 12
 
 # Define a function to process a single file
@@ -67,11 +70,8 @@ def process_file(file, out_path, seed):
         print(e)
 
 
-    #np.save(file=os.path.join(out_path, patient_name, patient_name), arr=k_space)
-    with open(os.path.join(out_path, patient_name, 'labels'), 'w') as f:
-        f.write(','.join(modality_name))
-
     print(f'Done file {os.path.join(out_path, patient_name, patient_name + ".h5")}')
+    return k_space
 
 
 if __name__ == '__main__':
@@ -95,4 +95,11 @@ if __name__ == '__main__':
         #for file in files:
         #    process_file(file, os.path.join(save_dir, split), np.random.randint(0, 1_000_000_000))
 
+        #k_space = process_file(files[0], os.path.join(save_dir, split), seeds[0])
+        #fig, ax = plt.subplots(2, 2)
+        #ax[0, 0].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 0, :, :, :]), 128)), coil_dim = 0))
+        #ax[1, 0].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 1, :, :, :]), 128)), coil_dim = 0))
+        #ax[0, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 2, :, :, :]), 128)), coil_dim = 0))
+        #ax[1, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 3, :, :, :]), 128)), coil_dim = 0))
+        #plt.show()
         pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split)), seeds))
