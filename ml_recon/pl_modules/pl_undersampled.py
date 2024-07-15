@@ -100,7 +100,8 @@ class UndersampledDataset(MRI_Loader):
                 segregated=self.segregated,
                 self_supervised=self.self_supervised
                 )
-
+        
+        # Test dataset should not be false because we want to see how well ssl training did
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
                 R=self.R,
@@ -108,7 +109,7 @@ class UndersampledDataset(MRI_Loader):
                 line_constrained=self.line_constrained,
                 transforms=self.transforms,
                 segregated=self.segregated,
-                self_supervised=self.self_supervised
+                self_supervised=False
                 )
 
         self.contrast_order = self.train_dataset.contrast_order

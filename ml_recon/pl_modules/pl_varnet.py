@@ -40,7 +40,7 @@ class pl_VarNet(plReconModel):
         elif model_name == 'se_jd':
             backbone = partial(SingleEncoderJointDecoder,
                                in_chan=2*len(contrast_order),
-                               encoder_chan=36, 
+                               encoder_chan=16, 
                                encoder_depth=4, 
                                decoder_chan=chans, 
                                decoder_depth=4
