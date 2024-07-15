@@ -12,7 +12,7 @@ from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 
-class LOUPE(plReconModel):
+class LearnedSSLLightning(plReconModel):
     def __init__(
             self, 
             image_size, 
@@ -46,24 +46,11 @@ class LOUPE(plReconModel):
         self.sigmoid_slope_2 = sigmoid_slope2
         self.prob_method = prob_method
 
-        if self.learn_R: 
-            if R_seeding:
-                assert len(R_seeding) == self.image_size[0], "The number of R_values in R_seeding should equal the number of contrasts"
-                if R_freeze == []: 
-                    R_freeze = [False for _ in range(len(R_seeding))]
+        self.R_value = torch.full((image_size[0],), float(self.R))
+        self.R_freeze = [False for _ in range(len(contrast_order))]
 
-                assert len(R_seeding) == len(R_freeze)
-                self.R_value = [nn.Parameter(torch.tensor(R)) for R in R_seeding]
-                for value, freeze in zip(self.R_value, R_freeze):
-                    if freeze:
-                        value.requires_grad = True
-            else:
-                self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
-                R_freeze = [False for _ in range(len(contrast_order))]
-        else: 
-            self.R_value = torch.full((image_size[0],), float(self.R))
-            R_freeze = [False for _ in range(len(contrast_order))]
-        self.R_freeze = R_freeze
+        if self.learn_R: 
+            self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
 
 
         if prob_method == 'loupe':
@@ -71,35 +58,36 @@ class LOUPE(plReconModel):
                 init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region).astype(np.float32)
                 init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
                 init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
-                if self.self_supervised:
-                    ssl_init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/R_hat, 8, center_region).astype(np.float32)
-                    ssl_init_prob = torch.from_numpy(np.tile(ssl_init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
-                    ssl_init_prob = ssl_init_prob/(ssl_init_prob.max() + 1e-3)
             else:
                 init_prob = torch.zeros(image_size) + 0.5
-                ssl_init_prob = torch.zeros(image_size) + 0.5
-
             self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
 
-            if self.self_supervised:
-                self.ssl_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
         elif prob_method == 'line_loupe':
             O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k)
 
-
-
     def training_step(self, batch, batch_idx):
-        k_space = batch['fs_k_space']
+        undersampled = batch['input']
+        initial_mask = undersampled != 0
+        batch, contrast, coil, h, w = undersampled.shape
         
-        sampling_mask, loss_mask, target, estimate_k = self.pass_through_model(k_space)
+        first_sampling_mask = self.get_mask(self.sampling_weights, batch, deterministic=True, mask_center=True)
+        inverse_mask = ~first_sampling_mask
 
-        loss = L1L2Loss(torch.view_as_real(target), torch.view_as_real(estimate_k*loss_mask)) 
-        self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        mask1 = initial_mask * first_sampling_mask
+        mask2 = initial_mask * inverse_mask
+        mask2[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
+
+        estimate1 = self.recon_model(undersampled*mask1, mask1)
+        estimate2 = self.recon_model(undersampled*mask2, mask2)
+
+        loss1 = L1L2Loss(torch.view_as_real(undersampled*mask2), torch.view_as_real(estimate1)) 
+        loss2 = L1L2Loss(torch.view_as_real(undersampled*mask1), torch.view_as_real(estimate2)) 
+        self.log("train/train_loss", loss1 + loss2, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             self.plot_images(batch, 'train') 
-        return loss
+        return loss1 + loss2
 
 
 
@@ -122,6 +110,7 @@ class LOUPE(plReconModel):
         if batch_idx == 0:
             self.plot_images(batch, 'val') 
 
+
     def test_step(self, batch, batch_idx):
         k_space = batch['fs_k_space']
 
@@ -141,21 +130,25 @@ class LOUPE(plReconModel):
         _, _, _, estimate_k = self.pass_through_model(k_space)
         return estimate_k
 
-
-    def norm_prob(self, probability:List[torch.Tensor], R, center_region=10, mask_center=False):
-        image_shape = probability[0].shape
+    # takes an array of R values and normalizes it to the desired R value
+    def norm_R(self, R):
         if self.learn_R:
             inverse = [1/R_val for R_val, freeze in zip(R, self.R_freeze) if not freeze]
             cur_R = []
             for R_val, freeze in zip(R, self.R_freeze):
-                if freeze:
-                    cur_R.append(R_val)
-                else:
-                    cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
-        else:
+                # normalize R_value unless it is forzen
+                if not freeze:
+                    R_val = (R_val * sum(inverse) / (len(inverse)/self.R))
+                cur_R.append(R_val)
+        else: 
             cur_R = R
-        
-        if self.prob_method == 'loupe' or self.prob_method == 'gumbel':
+                
+        return cur_R
+
+
+    def norm_prob(self, probability:List[torch.Tensor], cur_R, center_region=10, mask_center=False):
+        image_shape = probability[0].shape
+        if self.prob_method == 'loupe':
             center = [image_shape[0]//2, image_shape[1]//2]
 
             center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
@@ -256,12 +249,11 @@ class LOUPE(plReconModel):
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
             assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
             assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
-        elif self.prob_method == 'gumbel': 
-            probability = sampling_weights
         else:
             raise TypeError('prob_method should be loupe or gumbel')
-
-        norm_probability = self.norm_prob(probability, self.R_value, mask_center=mask_center)
+        
+        R_value = self.norm_R(self.R_value)
+        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
         norm_probability = torch.stack(norm_probability, dim=0)
         
         # make sure nothing is nan 
@@ -280,8 +272,6 @@ class LOUPE(plReconModel):
 
         if self.prob_method == 'loupe':
             activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
-        elif self.prob_method == 'gumbel':
-            activation = torch.log(norm_probability) + self.sample_gumbel((batch_size,) + self.image_size)
         elif self.prob_method == 'line_loupe':
             activation = norm_probability - torch.rand((batch_size, self.image_size[0], self.image_size[2]), device=self.device)
             activation = einops.repeat(activation, 'b c w -> b c h w', h=self.image_size[-1])
@@ -358,7 +348,8 @@ class LOUPE(plReconModel):
 
             super().plot_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
-            probability = self.norm_prob(probability, self.R_value, mask_center=True)
+            R_value = self.norm_R(self.R_value)
+            probability = self.norm_prob(probability, R_value, mask_center=True)
             probability = torch.stack(probability, dim=0)
 
             sense_maps = self.recon_model.model.sens_model(k_space*sampling_mask, sampling_mask.expand_as(k_space))
@@ -381,8 +372,3 @@ class LOUPE(plReconModel):
             for i in range(len(self.contrast_order)):
                 contrast = self.contrast_order[i]
                 self.log(mode + "/R_Value_" + contrast, cur_R[i], on_step=False, on_epoch=True, logger=True)
-
-
-    def sample_gumbel(self, size, eps=1e-20): 
-        U = torch.rand(size, device=self.device)
-        return -torch.log(-torch.log(U + eps) + eps)
