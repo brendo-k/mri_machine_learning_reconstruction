@@ -52,7 +52,8 @@ def main(args):
             warm_start=args.warm_start,
             self_supervised=args.self_supervised,
             R_seeding=args.R_seeding,
-            R_freeze=args.R_freeze
+            R_freeze=args.R_freeze, 
+            chans=args.chans
             )
 
     if args.checkpoint: 
@@ -98,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
     parser.add_argument('--dataset', type=str, default='brats')
+    parser.add_argument('--chans', type=int, default=32)
 
     
     args = parser.parse_args()

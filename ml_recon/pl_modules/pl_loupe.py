@@ -28,12 +28,13 @@ class LOUPE(plReconModel):
             learn_R:bool = False,
             self_supervised:bool = False,
             R_seeding: List[float] = [], 
-            R_freeze: List[bool] = []
+            R_freeze: List[bool] = [],
+            chans: int = 32
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
 
-        self.recon_model = pl_VarNet(contrast_order=contrast_order)
+        self.recon_model = pl_VarNet(contrast_order=contrast_order, chans=chans)
         self.image_size = image_size
         self.contrast_order = contrast_order
         self.R = R
