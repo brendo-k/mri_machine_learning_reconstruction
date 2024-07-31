@@ -1,8 +1,9 @@
 from argparse import ArgumentParser
 import os
 
-from ml_recon.pl_modules.pl_loupe import LOUPE
+from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 from ml_recon.pl_modules.MRILoader import MRI_Loader
+from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -17,7 +18,6 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
-                         fast_dev_run=True
                          )
 
 
@@ -25,7 +25,7 @@ def main(args):
     nx = args.nx
     ny = args.ny
     
-    data_module = MRI_Loader(
+    data_module = UndersampledDataset(
             args.dataset, 
             data_dir, 
             batch_size=args.batch_size, 
@@ -33,6 +33,7 @@ def main(args):
             num_workers=args.num_workers,
             norm_method=args.norm_method,
             contrasts=args.contrasts,
+            line_constrained=False
             ) 
 
     data_module.setup('train')
@@ -42,23 +43,20 @@ def main(args):
     else:
         prob_method = 'loupe'
 
-    model = LOUPE(
+    model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
-            R=args.R, 
+            learned_R=args.R, 
             prob_method=prob_method,
             contrast_order=data_module.contrast_order,
             lr = args.lr,
-            R_hat=args.R_hat,
             learn_R=args.learn_R,
             warm_start=args.warm_start,
             self_supervised=args.self_supervised,
-            R_seeding=args.R_seeding,
-            R_freeze=args.R_freeze, 
-            chans=args.chans
+            ssim_scaling=args.ssim_scaling
             )
 
     if args.checkpoint: 
-        model = LOUPE.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))
+        model = LearnedSSLLightning.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -101,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
     parser.add_argument('--dataset', type=str, default='brats')
     parser.add_argument('--chans', type=int, default=32)
+    parser.add_argument('--ssim_scaling', type=float, default=0.0)
 
     
     args = parser.parse_args()

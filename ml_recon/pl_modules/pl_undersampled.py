@@ -13,7 +13,7 @@ class UndersampledDataset(MRI_Loader):
             dataset_name: str,
             data_dir: str, 
             batch_size: int, 
-            R: float = 4,
+            R: float = 6,
             R_hat: float = 2.0,
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),

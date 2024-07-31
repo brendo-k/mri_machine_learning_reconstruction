@@ -16,8 +16,7 @@ class LearnedSSLLightning(plReconModel):
     def __init__(
             self, 
             image_size, 
-            R: float, 
-            R_hat: float, 
+            learned_R: float, 
             contrast_order: List[str], 
             center_region:int = 10,
             prob_method:str = 'loupe', 
@@ -27,8 +26,8 @@ class LearnedSSLLightning(plReconModel):
             warm_start:bool = False, 
             learn_R:bool = False,
             self_supervised:bool = False,
-            R_seeding: List[float] = [], 
-            R_freeze: List[bool] = []
+            ssim_scaling = 1e-4,
+            normalize_k_space_energy: float = 0
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -36,15 +35,16 @@ class LearnedSSLLightning(plReconModel):
         self.recon_model = pl_VarNet(contrast_order=contrast_order)
         self.image_size = image_size
         self.contrast_order = contrast_order
-        self.R = R
+        self.R = learned_R
         self.lr = lr
         self.center_region = center_region
         self.learn_R = learn_R
-        self.R_hat = R_hat
         self.self_supervised = self_supervised
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
         self.prob_method = prob_method
+        self.ssim_scaling = ssim_scaling
+        self.norm_k_space = normalize_k_space_energy
 
         self.R_value = torch.full((image_size[0],), float(self.R))
         self.R_freeze = [False for _ in range(len(contrast_order))]
@@ -69,46 +69,94 @@ class LearnedSSLLightning(plReconModel):
     def training_step(self, batch, batch_idx):
         undersampled = batch['input']
         initial_mask = undersampled != 0
-        batch, contrast, coil, h, w = undersampled.shape
+        nbatch, contrast, coil, h, w = undersampled.shape
         
-        first_sampling_mask = self.get_mask(self.sampling_weights, batch, deterministic=True, mask_center=True)
-        inverse_mask = ~first_sampling_mask
+        first_sampling_mask = self.get_mask(self.sampling_weights, nbatch, mask_center=True)
+        first_sampling_mask = first_sampling_mask.unsqueeze(2)
+        inverse_mask = 1 - first_sampling_mask
 
-        mask1 = initial_mask * first_sampling_mask
-        mask2 = initial_mask * inverse_mask
-        mask2[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
+        mask_lambda = initial_mask * first_sampling_mask
+        mask_inverse = initial_mask * inverse_mask
+        mask_inverse[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
 
-        estimate1 = self.recon_model(undersampled*mask1, mask1)
-        estimate2 = self.recon_model(undersampled*mask2, mask2)
+        estimate_lambda = self.recon_model({'input': undersampled*mask_lambda, 'mask': mask_lambda})
+        estimate_inverse = self.recon_model({'input': undersampled*mask_inverse, 'mask': mask_inverse})
 
-        loss1 = L1L2Loss(torch.view_as_real(undersampled*mask2), torch.view_as_real(estimate1)) 
-        loss2 = L1L2Loss(torch.view_as_real(undersampled*mask1), torch.view_as_real(estimate2)) 
-        self.log("train/train_loss", loss1 + loss2, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        loss_lambda = L1L2Loss(torch.view_as_real(undersampled*mask_inverse), torch.view_as_real(estimate_lambda)) 
+        loss_inverse = L1L2Loss(torch.view_as_real(undersampled*mask_lambda), torch.view_as_real(estimate_inverse)) 
+        image1 = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2) 
+        image2 = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2) 
+        ssim_loss = 0 
+        for i in range(image1.shape[1]):
+            ssim_loss += 1 - ssim(image1[:, [i], :, :], image2[:, [i], :, :], self.device)
+        ssim_loss /= image1.shape[1]
+        self.log("train/train_loss", loss_lambda + loss_inverse + self.ssim_scaling * ssim_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train/loss_lambda", loss_lambda, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train/loss_inverse", loss_inverse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train/ssim_loss", ssim_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(batch, 'train') 
-        return loss1 + loss2
+            with torch.no_grad():
+                image1 = image1.detach().cpu()
+                image2 = image2.detach().cpu()
+                wandb_logger = self.logger
+                initial_mask = initial_mask[0, :, 0, :, :]
+                wandb_logger.log_image('train' + '/initial_mask', np.split(initial_mask.cpu().detach().numpy(), initial_mask.shape[0], 0))
+                mask_lambda = mask_lambda[0, :, 0, : ,:]
+                mask_inverse = mask_inverse[0, :, 0, : ,:]
+                wandb_logger.log_image('train' + '/omega_lambda', np.split(mask_lambda.cpu().detach().numpy(), mask_lambda.shape[0], 0))
+                wandb_logger.log_image('train' + '/omega_(1-lambda)', np.split(mask_lambda.cpu().detach().numpy(), mask_inverse.shape[0], 0))
+                wandb_logger.log_image('train/estimate_lambda', np.split(image1[0].abs()/image1[0].abs().max(),image1.shape[1], 0))
+                wandb_logger.log_image('train/estimate_inverse', np.split(image2[0].abs()/image2[0].abs().max(),image1.shape[1], 0))
+        return loss_lambda + loss_inverse + self.ssim_scaling * ssim_loss
 
 
 
     def validation_step(self, batch, batch_idx):
-        k_space = batch['fs_k_space']
+        under = batch['input']
+        fs_k_space = batch['fs_k_space']
+        initial_mask = under != 0 
 
-        sampling_mask, loss_mask, target, estimate = self.pass_through_model(k_space)
+        nbatch, contrast, coil, h, w = under.shape
+        
+        first_sampling_mask = self.get_mask(self.sampling_weights, nbatch, mask_center=True)
+        first_sampling_mask = first_sampling_mask.unsqueeze(2)
+        inverse_mask = 1 - first_sampling_mask
 
-        loss = L1L2Loss(torch.view_as_real(target), torch.view_as_real(estimate*loss_mask))
+        mask_lambda = initial_mask * first_sampling_mask
+        mask_inverse = initial_mask * inverse_mask
+        mask_inverse[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
 
-        estimated_img = root_sum_of_squares(ifft_2d_img(estimate), coil_dim=2)
-        img = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
+        estimate_lambda = self.recon_model({'input': under*mask_lambda, 'mask': mask_lambda})
+        estimate_inverse = self.recon_model({'input': under*mask_inverse, 'mask': mask_inverse}) 
+        estimate_full = self.recon_model({'input': under, 'mask': under != 0})
+
+        est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
+        est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)
+        estimated_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)
+        fully_sampled_img = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=2)
+
+        wandb_logger = self.logger
+
+        loss_inverse = L1L2Loss(torch.view_as_real(under*mask_inverse), torch.view_as_real(estimate_lambda)) 
+        loss_lambda = L1L2Loss(torch.view_as_real(under*mask_lambda), torch.view_as_real(estimate_inverse)) 
+        ssim_loss = 0
+        for i in range(fully_sampled_img.shape[1]):
+            ssim_loss += ssim(est_lambda_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device)
+
         ssim_val = 0
-        for i in range(img.shape[1]):
-            ssim_val += ssim(img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device)
+        for i in range(fully_sampled_img.shape[1]):
+            ssim_val += ssim(fully_sampled_img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device)
 
-        self.log("val/val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim", ssim_val/img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/total_ssim", ssim_val/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(batch, 'val') 
+            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_img[0].cpu().numpy()/est_lambda_img[0].max().cpu().numpy(), est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_img[0].cpu().numpy()/est_inverse_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full', np.split(estimated_img[0].cpu().numpy()/estimated_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_img[0].cpu().numpy()/fully_sampled_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
 
 
     def test_step(self, batch, batch_idx):
