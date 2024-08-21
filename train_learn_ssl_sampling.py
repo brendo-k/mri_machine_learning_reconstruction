@@ -52,7 +52,9 @@ def main(args):
             learn_R=args.learn_R,
             warm_start=args.warm_start,
             self_supervised=args.self_supervised,
-            ssim_scaling=args.ssim_scaling
+            ssim_scaling=args.ssim_scaling,
+            lambda_scaling=args.lambda_scaling,
+            normalize_k_space_energy=args.k_space_regularizer
             )
 
     if args.checkpoint: 
@@ -100,6 +102,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='brats')
     parser.add_argument('--chans', type=int, default=32)
     parser.add_argument('--ssim_scaling', type=float, default=0.0)
+    parser.add_argument('--lambda_scaling', type=float, default=0.0)
+    parser.add_argument('--k_space_regularizer', type=float, default=0.0)
 
     
     args = parser.parse_args()
