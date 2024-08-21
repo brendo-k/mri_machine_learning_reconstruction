@@ -354,8 +354,8 @@ class LOUPE(plReconModel):
         k_space = batch['fs_k_space']
         with torch.no_grad():
             sampling_mask, loss_mask, target, estimate_k = self.pass_through_model(k_space)
-
             super().plot_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
+
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
             R_value = self.norm_R(self.R_value)
             probability = self.norm_prob(probability, R_value, mask_center=True)
