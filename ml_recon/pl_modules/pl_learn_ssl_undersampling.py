@@ -71,6 +71,7 @@ class LearnedSSLLightning(plReconModel):
     def training_step(self, batch, batch_idx):
         undersampled = batch['input']
         initial_mask = undersampled != 0
+
         nbatch, contrast, coil, h, w = undersampled.shape
         
         first_sampling_mask = self.get_mask(self.sampling_weights, nbatch, mask_center=True)
@@ -84,7 +85,7 @@ class LearnedSSLLightning(plReconModel):
         loss_lambda = L1L2Loss(torch.view_as_real(undersampled*mask_inverse), torch.view_as_real(estimate_lambda)) 
         image1 = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2) 
         loss = loss_lambda 
-        loss += self.norm_k_space * (undersampled.abs().max() - mask_lambda.abs() * undersampled).mean()
+        loss += self.norm_k_space * (undersampled.abs().max() - mask_lambda * undersampled.abs()).mean()
 
         if self.norm_k_space == 0:
             mask_inverse[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
