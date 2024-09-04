@@ -259,10 +259,11 @@ class LOUPE(plReconModel):
             assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
             assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
         else:
-            raise TypeError('prob_method should be loupe or gumbel')
+            raise TypeError('prob_method should be loupe')
         
-        R_value = self.norm_R(self.R_value)
-        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
+        normalize_R = self.norm_R(self.R_value)
+        norm_probability = scale_pdf(probability, normalize_R, self.center_region)
+        assert norm_probability is torch.Tensor
         norm_probability = torch.stack(norm_probability, dim=0)
         
         # make sure nothing is nan 

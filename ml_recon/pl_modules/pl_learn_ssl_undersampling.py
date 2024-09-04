@@ -57,7 +57,7 @@ class LearnedSSLLightning(plReconModel):
 
         if prob_method == 'loupe':
             if warm_start: 
-                init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/R, 8, center_region).astype(np.float32)
+                init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
                 init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
                 init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
             else:
@@ -113,16 +113,18 @@ class LearnedSSLLightning(plReconModel):
                 wandb_logger.log_image('train' + '/initial_mask', np.split(initial_mask.cpu().detach().numpy(), initial_mask.shape[0], 0))
                 mask_lambda = mask_lambda[0, :, 0, : ,:]
                 mask_inverse = mask_inverse[0, :, 0, : ,:]
-                wandb_logger.log_image('train' + '/omega_lambda', np.split(mask_lambda.cpu().detach().numpy(), mask_lambda.shape[0], 0))
-                wandb_logger.log_image('train' + '/omega_(1-lambda)', np.split(mask_inverse.cpu().detach().numpy(), mask_inverse.shape[0], 0))
+                wandb_logger.log_image('train/omega_lambda', np.split(mask_lambda.cpu().detach().numpy(), mask_lambda.shape[0], 0))
+                wandb_logger.log_image('train/omega_(1-lambda)', np.split(mask_inverse.cpu().detach().numpy(), mask_inverse.shape[0], 0))
                 wandb_logger.log_image('train/estimate_lambda', np.split(image1[0].abs()/image1[0].abs().max(),image1.shape[1], 0))
                 wandb_logger.log_image('train/estimate_inverse', np.split(image2[0].abs()/image2[0].abs().max(),image1.shape[1], 0))
+                wandb_logger.log_image('train/initial_mask', np.split(first_sampling_mask.cpu().detach().numpy(), mask_lambda.shape[0], 0))
+                wandb_logger.log_image('train/initial_mask', np.split(initial_mask.cpu().detach().numpy(), mask_lambda.shape[0], 0))
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
                 R_value = self.norm_R(self.R_value)
                 probability = self.norm_prob(probability, R_value, mask_center=True)
                 probability = torch.stack(probability, dim=0)
-                wandb_logger.log_image('train/probability', np.split(probability[0].abs(), image1.shape[1], 0))
+                wandb_logger.log_image('train/probability', np.split(probability.abs(), image1.shape[1], 0))
         return loss
 
 
@@ -307,7 +309,9 @@ class LearnedSSLLightning(plReconModel):
     def get_mask(self, sampling_weights, batch_size, mask_center=False, deterministic=False):
         # Calculate probability and normalize
 
-        assert not torch.isnan(sampling_weights).any() 
+        assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
+        assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
+
         if 'loupe' in self.prob_method:
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
             assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
