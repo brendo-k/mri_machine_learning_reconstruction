@@ -7,8 +7,12 @@ from ml_recon.models.unet import Unet
 
 
 @pytest.fixture
-def varnet_model() -> VarNet:
-    return VarNet(partial(Unet, 2, 2))
+def varnet_model() -> VarNet_mc:
+    return VarNet_mc(partial(Unet, 2, 2))
+
+@pytest.fixture
+def unet_model() -> Unet:
+    return Unet(2, 2, depth=1, chans=1)
 
 def test_varnet_forward(varnet_model):
     with torch.no_grad():
@@ -19,9 +23,9 @@ def test_varnet_forward(varnet_model):
 
     assert output_k.shape == reference_k.shape
 
-def test_varnet_block_forward():
+def test_varnet_block_forward(unet_model):
     with torch.no_grad():
-        unet = NormUnet(2, 2)
+        unet = unet_model
         varnet_block = VarnetBlock(unet)
         images = torch.randn(1, 2, 256, 256, dtype=torch.complex64)  # Example images input
         sensetivities = torch.randn(1, 2, 256, 256) > 0.5  # Example sensetivities input
@@ -51,24 +55,24 @@ def test_varnet_block_forward():
 #
 #    assert loss2 < loss
 
-def test_norm():
-    block = VarnetBlock(partial(Unet, 2, 2))
+def test_norm(unet_model):
+    block = VarnetBlock(unet_model)
     x = torch.randn(5, 2, 128, 128)
     x_norm, mean, std = block.norm(x)
     x_through = block.unnorm(x_norm, mean, std)
 
-    torch.testing.assert_allclose(x, x_through)
+    torch.testing.assert_close(x, x_through)
 
-def test_dc(varnet_model: VarNet):
+def test_dc(varnet_model: VarNet_mc):
     x = torch.randn(5, 16, 128, 128)
     mask = torch.zeros_like(x)
     mask[:, :, :, 60:68] = 1
     mask = mask.type(torch.bool)
     dc = varnet_model.data_consistency(x, x, mask)
 
-    torch.testing.assert_allclose(dc, torch.zeros_like(dc))
+    torch.testing.assert_close(dc, torch.zeros_like(dc))
 
-def test_dc_subtract(varnet_model: VarNet):
+def test_dc_subtract(varnet_model: VarNet_mc):
     x = torch.randn(5, 16, 128, 128)
     y = torch.randn(5, 16, 128, 128)
     mask = torch.zeros_like(x)
@@ -78,6 +82,6 @@ def test_dc_subtract(varnet_model: VarNet):
     dc = y - dc
     gt_result = x * mask + y * ~ mask
 
-    torch.testing.assert_allclose(dc, gt_result)
+    torch.testing.assert_close(dc, gt_result)
 
     
