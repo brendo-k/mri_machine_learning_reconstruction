@@ -33,7 +33,8 @@ def main(args):
             num_workers=args.num_workers,
             norm_method=args.norm_method,
             contrasts=args.contrasts,
-            line_constrained=False
+            line_constrained=False, 
+            R=args.R
             ) 
 
     data_module.setup('train')
@@ -45,13 +46,12 @@ def main(args):
 
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
-            learned_R=args.R, 
+            learned_R=args.R_hat, 
             prob_method=prob_method,
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             learn_R=args.learn_R,
             warm_start=args.warm_start,
-            self_supervised=args.self_supervised,
             ssim_scaling=args.ssim_scaling,
             lambda_scaling=args.lambda_scaling,
             normalize_k_space_energy=args.k_space_regularizer
@@ -88,7 +88,6 @@ if __name__ == '__main__':
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
-    parser.add_argument('--self_supervised', action='store_true')
     parser.add_argument('--fd_param', type=float, default=0)
     parser.add_argument('--learn_R', action='store_true')
     parser.add_argument('--warm_start', action='store_true')
