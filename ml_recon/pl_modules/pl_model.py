@@ -23,7 +23,7 @@ class plReconModel(pl.LightningModule):
         estimate_k, k_space = batch
 
         #loss = self.loss(estimate_k, k_space)
-        ssim_loss = StructuralSimilarityIndexMeasure().to(self.device)
+        ssim_loss = StructuralSimilarityIndexMeasure(reduction='none').to(self.device)
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
         total_ssim = 0

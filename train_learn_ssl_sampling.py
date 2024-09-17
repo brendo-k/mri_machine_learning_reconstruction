@@ -54,11 +54,16 @@ def main(args):
             warm_start=args.warm_start,
             ssim_scaling=args.ssim_scaling,
             lambda_scaling=args.lambda_scaling,
-            normalize_k_space_energy=args.k_space_regularizer
+            normalize_k_space_energy=args.k_space_regularizer,
+            pass_all_data=args.pass_all_data,
+            pass_inverse_data=args.pass_inverse_data
             )
 
     if args.checkpoint: 
         model = LearnedSSLLightning.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))
+
+    if not args.learn_sampling:
+        model.sampling_weights.requires_grad = False
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -73,37 +78,45 @@ def main(args):
 
 
 if __name__ == '__main__': 
-    parser = ArgumentParser()
+    parser = ArgumentParser(description="Deep learning multi-contrast reconstruction")
 
-    parser.add_argument('--num_workers', type=int, default=0)
-    parser.add_argument('--max_epochs', type=int, default=50)
-    parser.add_argument('--learn_sampling', action='store_true')
-    parser.add_argument('--line_constrained', action='store_true')
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--R', type=float, default=6.0)
-    parser.add_argument('--R_hat', type=float, default=2.0)
-    parser.add_argument('--lambda_param', type=float, default=0.)
-    parser.add_argument('--limit_batches', type=float, default=1.0)
-    parser.add_argument('--nx', type=int, default=128)
-    parser.add_argument('--ny', type=int, default=128)
-    parser.add_argument('--norm_method', type=str, default='k')
-    parser.add_argument('--fd_param', type=float, default=0)
-    parser.add_argument('--learn_R', action='store_true')
-    parser.add_argument('--warm_start', action='store_true')
-    parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
-    parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
-    parser.add_argument('--R_seeding', type=float, nargs='+', default=[])
-    parser.add_argument('--R_freeze', type=bool, nargs='+', default=[])
-    parser.add_argument('--checkpoint', type=str)
-    parser.add_argument('--run_name', type=str)
-    parser.add_argument('--project', type=str, default='MRI Reconstruction')
-    parser.add_argument('--dataset', type=str, default='brats')
-    parser.add_argument('--chans', type=int, default=32)
-    parser.add_argument('--ssim_scaling', type=float, default=0.0)
-    parser.add_argument('--lambda_scaling', type=float, default=0.0)
-    parser.add_argument('--k_space_regularizer', type=float, default=0.0)
+    # Training parameters
+    training_group = parser.add_argument_group('Training Parameters')
+    training_group.add_argument('--num_workers', type=int, default=0)
+    training_group.add_argument('--max_epochs', type=int, default=50)
+    training_group.add_argument('--batch_size', type=int, default=16)
+    training_group.add_argument('--lr', type=float, default=1e-3)
+    training_group.add_argument('--checkpoint', type=str)
+    
+    # dataset parameters
+    dataset_group = parser.add_argument_group('Dataset Parameters')
+    dataset_group.add_argument('--R', type=float, default=6.0)
+    dataset_group.add_argument('--dataset', type=str, default='brats')
+    dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
+    dataset_group.add_argument('--norm_method', type=str, default='k')
+    dataset_group.add_argument('--nx', type=int, default=128)
+    dataset_group.add_argument('--ny', type=int, default=128)
+    dataset_group.add_argument('--limit_batches', type=float, default=1.0)
+    dataset_group.add_argument('--line_constrained', action='store_true')
 
+    model_group = parser.add_argument_group('Model Parameters')
+    model_group.add_argument('--R_hat', type=float, default=2.0)
+    model_group.add_argument('--learn_R', action='store_true')
+    model_group.add_argument('--warm_start', action='store_true')
+    model_group.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
+    model_group.add_argument('--R_seeding', type=float, nargs='+', default=[])
+    model_group.add_argument('--R_freeze', type=bool, nargs='+', default=[])
+    model_group.add_argument('--chans', type=int, default=32)
+    model_group.add_argument('--ssim_scaling', type=float, default=0.0)
+    model_group.add_argument('--lambda_scaling', type=float, default=0.0)
+    model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
+    model_group.add_argument('--pass_inverse_data', action='store_true')
+    model_group.add_argument('--pass_all_data', action='store_true')
+    model_group.add_argument('--learn_sampling', action='store_true')
+
+    logger_group = parser.add_argument_group('Logging Parameters')
+    logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
+    logger_group.add_argument('--run_name', type=str)
     
     args = parser.parse_args()
 
