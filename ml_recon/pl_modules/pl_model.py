@@ -33,8 +33,8 @@ class plReconModel(pl.LightningModule):
         estimated_image *= mask
         ground_truth_image *= mask
 
-        estimated_image = estimated_image/estimated_image.amax([-1, -2], keepdim=True)
-        ground_truth_image = ground_truth_image/ground_truth_image.amax([-1, -2], keepdim=True)
+        estimated_image = self.norm(estimated_image)
+        ground_truth_image = self.norm(ground_truth_image)
 
 
         wandb_logger = self.logger
@@ -45,9 +45,14 @@ class plReconModel(pl.LightningModule):
             wandb_logger.log_image('test' + '/test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
         for contrast in range(len(self.contrast_order)):
-            batch_nmse = nmse(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
+            batch_nmse = nmse(ground_truth_image[:, [contrast], mask], estimated_image[:, [contrast], mask])
             batch_ssim_torch = ssim_loss(estimated_image[:, [contrast], :, :], ground_truth_image[:, [contrast], :, :])
-            batch_psnr = psnr(ground_truth_image[:, [contrast], :, :], estimated_image[:, [contrast], :, :])
+            batch_psnr = psnr(ground_truth_image[:, [contrast], mask], estimated_image[:, [contrast], mask])
+
+            # remove mask points that would equal to 1 (possibly some estimated points
+            # will be removed here but only if matches completely in the kernel)
+                                                    
+            batch_ssim_torch = batch_ssim_torch[batch_ssim_torch != 1].mean()
 
             #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
             self.log("metrics/nmse_" + self.contrast_order[contrast], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
@@ -61,6 +66,10 @@ class plReconModel(pl.LightningModule):
         self.log('metrics/mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
         self.log('metrics/mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
         self.log('metrics/mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
+
+    def norm(self, image): 
+        normed_image = (image - image.mean((-1, -2), keepdim=True)/image.std((-1, -2), keepdim=True))
+        return normed_image
 
 
     def plot_images(self, under_k, estimate_k, target, k_space, mask, mode='train'):
