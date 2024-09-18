@@ -87,6 +87,8 @@ class LearnedSSLLightning(plReconModel):
         loss_lambda = L1L2Loss(torch.view_as_real(undersampled*mask_inverse), torch.view_as_real(estimate_lambda*mask_inverse)) 
         estimate_lambda = estimate_lambda * inverse_mask + undersampled * mask_lambda
         image1 = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2) 
+        image1 = image1/image1.amax((-1, -2), keepdim=True)
+        
         loss = loss_lambda 
         loss += self.norm_k_space * (undersampled.abs().max() - mask_lambda * undersampled.abs()).mean()
         
@@ -103,9 +105,10 @@ class LearnedSSLLightning(plReconModel):
             # calculate loss
             loss_inverse = self.lambda_scaling * L1L2Loss(torch.view_as_real(undersampled*mask_lambda_wo_acs), torch.view_as_real(estimate_inverse*mask_lambda_wo_acs)) 
             b, c, h, w = image1.shape
-            image1 = image1.reshape(-1, image1.shape[-2], image1.shape[-1]).unsqueeze(1)
-            inverse_image = inverse_image.reshape(-1, image1.shape[-2], image1.shape[-1]).unsqueeze(1)
+            image1 = image1.reshape(b * c, 1, h, w)
+            inverse_image = inverse_image.reshape(b * c, 1, h, w)
             ssim_loss = 1 - ssim(image1, inverse_image, self.device)
+
             image1 = image1.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
 
@@ -125,13 +128,14 @@ class LearnedSSLLightning(plReconModel):
             image_full = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2) 
 
             b, c, h, w = image1.shape
-            image1 = image1.reshape(-1, image1.shape[-2], image1.shape[-1]).unsqueeze(1)
-            image_full = image_full.reshape(-1, image1.shape[-2], image1.shape[-1]).unsqueeze(1)
+            image1 = image1.reshape(b * c, 1, h, w)
+            image_full = image_full.reshape(b * c, 1, h, w)/image_full.amax((-1, -2), keepdim=True)
             ssim_loss_full = 1 - ssim(image1, image_full, self.device)
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
-                inverse_image = inverse_image.reshape(-1, image1.shape[-2], image1.shape[-1]).unsqueeze(1)
+                inverse_image = inverse_image.reshape(b * c, 1, h, w)
+                inverse_image = inverse_image/inverse_image.amax((-1, -2), keepdim=True)
                 ssim_loss_full_inverse = 1 - ssim(inverse_image, image_full, self.device)
                 inverse_image.reshape(b, c, h, w)
                 loss += ssim_loss_full_inverse * self.ssim_scaling
