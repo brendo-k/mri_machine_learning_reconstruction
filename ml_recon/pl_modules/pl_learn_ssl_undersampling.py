@@ -178,18 +178,24 @@ class LearnedSSLLightning(plReconModel):
         
         first_sampling_mask = self.get_mask(self.sampling_weights, nbatch, mask_center=True)
         first_sampling_mask = first_sampling_mask.unsqueeze(2)
-        inverse_mask = 1 - first_sampling_mask.clone()
+        inverse_mask = 1 - first_sampling_mask
 
         mask_lambda = initial_mask * first_sampling_mask
         mask_inverse = initial_mask * inverse_mask
-        mask_inverse[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
+        mask_inverse_w_acs = mask_inverse.clone()
+        mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
+        mask_lambda_wo_acs = mask_lambda.clone()
+        mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
 
         estimate_lambda = self.recon_model({'input': under*mask_lambda, 'mask': mask_lambda})
-        estimate_inverse = self.recon_model({'input': under*mask_inverse, 'mask': mask_inverse}) 
+        estimate_inverse = self.recon_model({'input': under*mask_inverse_w_acs, 'mask': mask_inverse_w_acs}) 
         estimate_full = self.recon_model({'input': under, 'mask': initial_mask})
 
-        estimate_lambda = estimate_lambda * mask_inverse + mask_lambda * under
-        estimate_inverse = estimate_inverse * mask_lambda +  under * mask_inverse
+        loss_inverse = L1L2Loss(torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), torch.view_as_real(under * mask_lambda_wo_acs)) 
+        loss_lambda = L1L2Loss(torch.view_as_real(estimate_lambda*mask_inverse), torch.view_as_real(under * mask_inverse)) 
+
+        estimate_lambda = estimate_lambda * ~initial_mask + under
+        estimate_inverse = estimate_inverse * ~initial_mask + under
         estimate_full = estimate_full * ~initial_mask + under
 
         est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
@@ -199,8 +205,6 @@ class LearnedSSLLightning(plReconModel):
 
         wandb_logger = self.logger
 
-        loss_inverse = L1L2Loss(torch.view_as_real(estimate_inverse*mask_lambda), torch.view_as_real(under * mask_lambda)) 
-        loss_lambda = L1L2Loss(torch.view_as_real(estimate_lambda*mask_inverse), torch.view_as_real(under * mask_inverse)) 
         ssim_loss = 0
         for i in range(fully_sampled_img.shape[1]):
             ssim_loss += ssim(est_lambda_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device)
@@ -212,6 +216,7 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True, logger=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True, logger=True)
         self.log("val/total_ssim", ssim_val/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_loss", self.ssim_scaling * (ssim_loss/fully_sampled_img.shape[1]), on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_img[0].cpu().numpy()/est_lambda_img[0].max().cpu().numpy(), est_lambda_img.shape[1], 0))
@@ -221,14 +226,14 @@ class LearnedSSLLightning(plReconModel):
 
 
     def test_step(self, batch, batch_idx):
+        undersampled = batch['input']
         k_space = batch['fs_k_space']
 
-        first_sampling_mask = self.get_mask(self.sampling_weights, k_space.shape[0], deterministic=True, mask_center=True)
-        first_sampling_mask = first_sampling_mask.unsqueeze(2)
-        under_k = k_space * first_sampling_mask
+        first_sampling_mask = undersampled != 0
 
-        estimate_k = self.recon_model({'input': under_k, 'mask': first_sampling_mask})
-        estimate_k = estimate_k * (1-first_sampling_mask) + under_k 
+
+        estimate_k = self.recon_model({'input': undersampled, 'mask': first_sampling_mask})
+        estimate_k = estimate_k + ~first_sampling_mask + undersampled
 
         super().test_step((estimate_k, k_space), None)
 
