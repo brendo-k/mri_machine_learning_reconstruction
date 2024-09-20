@@ -56,7 +56,8 @@ def main(args):
             lambda_scaling=args.lambda_scaling,
             normalize_k_space_energy=args.k_space_regularizer,
             pass_all_data=args.pass_all_data,
-            pass_inverse_data=args.pass_inverse_data
+            pass_inverse_data=args.pass_inverse_data,
+            supervised=args.supervised
             )
 
     if args.checkpoint: 
@@ -113,6 +114,7 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
+    model_group.add_argument('--supervised', action='store_true')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
