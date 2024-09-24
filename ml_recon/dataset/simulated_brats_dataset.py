@@ -9,6 +9,7 @@ import torch
 import numpy as np
 
 import nibabel as nib
+import matplotlib.pyplot as plt
 
 from ml_recon.dataset.k_space_dataset import KSpaceDataset
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
@@ -165,7 +166,7 @@ class SimulatedBrats(KSpaceDataset):
     @staticmethod
     def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=12):
         #simulate some random motion
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed)
         x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
         image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
         #image [Contrast height width]
@@ -184,21 +185,67 @@ class SimulatedBrats(KSpaceDataset):
             image = np.expand_dims(image, 1)
             return image
 
-        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_' + coil_size + '.npy')
-        sense_map = np.transpose(sense_map, (0, 2, 1))
-        sense_map = sense_map[:, 25:-26, 25:-25]
+        #sense_map = np.load('/home/brenden/Documents/data/subset/coil_compressed_' + coil_size + '.npy')
+        sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
+        print(sense_map.shape)
+        sense_map = np.transpose(sense_map, (2, 1, 0))
 
-        mag_sense_map = np.abs(sense_map)
-        mag_sense_phase = np.angle(sense_map)
+        #mag_sense_map = np.abs(sense_map)
+        #mag_sense_phase = np.angle(sense_map)
+        #print(sense_map.shape)
 
-        resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
-        resampled_sense_phase = SimulatedBrats.resample(mag_sense_phase, image.shape[1], image.shape[2])
-        
-        resampled_sense = resampled_sense_mag * np.exp(resampled_sense_phase * 1j)
+        #resampled_sense_mag = SimulatedBrats.resample(mag_sense_map, image.shape[1], image.shape[2])
+        #resampled_sense_phase = SimulatedBrats.resample(mag_sense_phase, image.shape[1], image.shape[2], 'nearest')
+        #
+        #resampled_sense = resampled_sense_mag * np.exp(resampled_sense_phase * 1j)
+
+        mag_sense_real = np.real(sense_map)
+        mag_sense_imag = np.imag(sense_map)
+        resampled_sense_real = SimulatedBrats.resample(mag_sense_real, image.shape[1], image.shape[2], 'nearest')
+        resampled_sense_imag = SimulatedBrats.resample(mag_sense_imag, image.shape[1], image.shape[2], 'nearest')
+        resampled_sense = resampled_sense_real + 1j * resampled_sense_imag 
+
+        #kernels = fft_2d_img(sense_map, axes=[-1, -2])
+        #kernels = SimulatedBrats.zero_pad_or_crop(kernels, (sense_map.shape[0], image.shape[1], image.shape[2]))
+
+        #plt.imshow(np.abs(kernels[0, :,:])**0.2)
+        #plt.show()
+        #resampled_sense = ifft_2d_img(kernels)
+        #resampled_sense[resampled_sense < 0.005] = 0
+        #resampled_sense = resampled_sense / np.sqrt(np.sum(resampled_sense * resampled_sense.conj() + 1e-20, 0, keepdims=True))
+
+        #plt.imshow(np.abs(np.sum(resampled_sense * resampled_sense.conj(), axis=0)))
+        #plt.show()
 
         sense_map = np.expand_dims(resampled_sense, 0)
         image_sense = sense_map * np.expand_dims(image, 1)
         return image_sense      
+    
+    @staticmethod
+    def zero_pad_or_crop(arr, target_shape):
+        original_shape = arr.shape
+        padding = []
+        for original_s, target_s in zip(original_shape, target_shape):
+            if original_s < target_s:
+                padding.append(((target_s - original_s)//2, np.ceil(target_s - original_s).astype(int)))
+            else:
+                padding.append((0, 0))
+
+        # Zero pad if the target shape is larger
+        padded = np.pad(arr, padding, mode='constant')
+
+        slices = []
+        # Crop if the target shape is smaller
+        for i in range(len(target_shape)):
+            if original_shape[i] > target_shape[i]:
+                # Calculate the start and end indices for center crop
+                start = (original_shape[i] - target_shape[i]) // 2
+                end = start + target_shape[i]
+                slices.append(slice(start, end))
+            else:
+                slices.append(slice(0, target_shape[i])) 
+
+        return padded[tuple(slices)]
 
     @staticmethod
     def generate_and_apply_phase(data, seed, center_region=20, same_phase=False):
@@ -208,13 +255,13 @@ class SimulatedBrats(KSpaceDataset):
             nc = data.shape[0]
 
         #phase = SimulatedBrats.build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
-        phase = SimulatedBrats.build_phase_from_same_dist(data)
+        phase = SimulatedBrats.build_phase_from_same_dist(data, seed)
         data = SimulatedBrats.apply_phase_map(data, phase)
         return data
 
     @staticmethod
-    def build_phase_from_same_dist(data): 
-        rng = np.random.default_rng()
+    def build_phase_from_same_dist(data, seed): 
+        rng = np.random.default_rng(seed=seed)
         coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
         k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1)) 
         phase_images = fft_2d_img(np.abs(k_space) * coeffs)
@@ -259,7 +306,7 @@ class SimulatedBrats(KSpaceDataset):
 
 
     @staticmethod
-    def resample(data, resample_height, resample_width):
+    def resample(data, resample_height, resample_width, method='linear'):
         contrasts, height, width = data.shape
         interp_data = np.zeros((contrasts, resample_height, resample_width))
         y = np.arange(0, height)
@@ -269,7 +316,7 @@ class SimulatedBrats(KSpaceDataset):
         xi = np.linspace(0, width - 1, resample_width)
         (yi, xi) = np.meshgrid(yi, xi, indexing='ij')
         for i in range(data.shape[0]):
-            interpolator = RegularGridInterpolator((y, x), data[i, :, :])
+            interpolator = RegularGridInterpolator((y, x), data[i, :, :], method=method)
             interp_data[i, :, :] = interpolator((yi, xi))
         
         return interp_data
