@@ -24,17 +24,16 @@ class plReconModel(pl.LightningModule):
         #loss = self.loss(estimate_k, k_space)
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
+        scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
         total_ssim = 0
         total_psnr = 0
         total_nmse = 0
         mask = ground_truth_image > 0.005
+        estimated_image /= scaling_factor
+        ground_truth_image /= scaling_factor
 
         estimated_image *= mask
         ground_truth_image *= mask
-
-        estimated_image = self.norm(estimated_image)
-        ground_truth_image = self.norm(ground_truth_image)
-
 
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
@@ -48,7 +47,7 @@ class plReconModel(pl.LightningModule):
             contrast_estimated = estimated_image[:, [contrast_index], :, :]
 
             batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
-            batch_ssim_torch = ssim(contrast_ground_truth, contrast_estimated, device=self.device, reduce=False)
+            batch_ssim_torch = ssim(contrast_ground_truth, contrast_estimated, device=self.device, reduce=False, max_val=1)
             batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
 
             # remove mask points that would equal to 1 (possibly some estimated points
@@ -68,6 +67,7 @@ class plReconModel(pl.LightningModule):
         self.log('metrics/mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
         self.log('metrics/mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
         self.log('metrics/mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
+        return estimated_image
 
     def norm(self, image): 
         normed_image = image/image.amax((-1, -2), keepdim=True)
