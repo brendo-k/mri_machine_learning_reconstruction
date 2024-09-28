@@ -11,9 +11,10 @@ from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 class VarNet_mc(nn.Module):
     def __init__(self, 
                  model_backbone: Union[nn.Module, partial],
-                 num_cascades=6,
-                 sens_chans=8,
-                 weight_sharing=False
+                 contrasts:int = 1,
+                 num_cascades:int = 6,
+                 sens_chans:int = 8,
+                 weight_sharing:bool =False
                  ):
         super().__init__()
 
@@ -21,7 +22,7 @@ class VarNet_mc(nn.Module):
         self.cascade = nn.ModuleList()
         
         if weight_sharing:
-            assert isinstance(model, nn.Module), "Model is not an instance of nn.Module"
+            assert isinstance(model_backbone, nn.Module), "Model is not an instance of nn.Module"
             self.cascades = nn.ModuleList(
                 [VarnetBlock(model_backbone) for _ in range(num_cascades)]
             )
@@ -33,7 +34,7 @@ class VarNet_mc(nn.Module):
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones((num_cascades)))
+        self.lambda_reg = nn.Parameter(torch.ones((num_cascades, contrasts)))
 
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
@@ -54,7 +55,7 @@ class VarNet_mc(nn.Module):
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step
-            current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
+            current_k = current_k - (self.lambda_reg[i].unsqueeze(0) * data_consistency) - refined_k
         return current_k
 
 
