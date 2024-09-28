@@ -9,30 +9,41 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.callbacks import Callback
+from ml_recon.utils.image_slices import image_slices
 
 def main():
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
-    model_checkpoint = './artifacts/model-bd8hwfif:v0/model.ckpt'
-        
-    trainer = pl.Trainer()
+    data_dir = '/home/brenden/Documents/data/simulated_subset_random_phase'
+    model_checkpoint = '/home/brenden/Documents/code/python/mri_machine_learning_reconstruction-1/artifacts/model-9u43xz0p:v0/model.ckpt'
+    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True, mode='disabled')
+    trainer = pl.Trainer(callbacks=[SaveTestOutputs()], logger = wandb_logger)
     model = LearnedSSLLightning.load_from_checkpoint(model_checkpoint)
-    datamodule_hparams = model.hparams.get("datamodule_hyper_parameters", {})
-
+    datamodule = UndersampledDataset.load_from_checkpoint(model_checkpoint, data_dir=data_dir, batch_size=1)
     # Instantiate the DataModule with the loaded hyperparameters
-    datamodule = UndersampledDataset(**datamodule_hparams)
 
     trainer.test(model, datamodule=datamodule)
 
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 import numpy as np
+import matplotlib.pyplot as plt
 class SaveTestOutputs(Callback):
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_index):
         estimated_iamge = outputs
         k_space = batch['fs_k_space']
         images = root_sum_of_squares(ifft_2d_img(k_space, axes=(-1, -2)), coil_dim=2)
         images /= images.amax((-1, -2), keepdim=True)
-        np.save(f'outputs/estimated_{batch_index}', np.squeeze(estimated_iamge))
-        np.save(f'outputs/ground_truth{batch_index}', np.squeeze(images))
+
+        np.save(f'outputs/estimated_{batch_index}', np.squeeze(estimated_iamge.cpu().numpy()))
+        np.save(f'outputs/ground_truth_{batch_index}', np.squeeze(images.cpu().numpy()))
+        fig, ax = image_slices(np.squeeze(estimated_iamge.cpu().numpy(), axis=0), cmap='gray')
+        fig.savefig(f'outputs/{batch_index}_estimated')
+        plt.close()
+        fig, ax = image_slices(np.squeeze(images.cpu().numpy(), axis=0), cmap='gray')
+        fig.savefig(f'outputs/{batch_index}_ground_truth')
+        plt.close()
+        fig, ax = image_slices(np.squeeze((estimated_iamge - images).abs().cpu().numpy(), axis=0), cmap='gray', vmax=images.cpu().max()/4)
+        fig.savefig(f'outputs/{batch_index}_diff')
+        plt.close()
+
 
 main()
