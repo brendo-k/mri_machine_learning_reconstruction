@@ -67,8 +67,9 @@ class pl_VarNet(plReconModel):
 
         self.model = VarNet_mc(
             backbone,
-            num_cascades, 
-            sense_chans,
+            contrasts=len(contrast_order),
+            num_cascades=num_cascades, 
+            sens_chans=sense_chans
         )
         self.lr = lr
         self.contrast_order = contrast_order
