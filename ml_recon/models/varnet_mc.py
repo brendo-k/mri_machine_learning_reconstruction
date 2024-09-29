@@ -55,7 +55,9 @@ class VarNet_mc(nn.Module):
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step
-            current_k = current_k - (self.lambda_reg[i].unsqueeze(0) * data_consistency) - refined_k
+            current_regularization = self.lambda_reg[i]
+            current_regularization = current_regularization[None, :, None, None, None]
+            current_k = current_k - (current_regularization * data_consistency) - refined_k
         return current_k
 
 
