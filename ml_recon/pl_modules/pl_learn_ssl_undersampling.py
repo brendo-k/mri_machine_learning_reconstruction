@@ -11,6 +11,7 @@ from ml_recon.pl_modules.pl_model import plReconModel
 from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
+from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -264,9 +265,9 @@ class LearnedSSLLightning(plReconModel):
             est_full_plot = estimated_img[0].cpu().numpy()
             fully_sampled_plot = fully_sampled_img[0].cpu().numpy()
             est_lambda_plot /= np.max(est_lambda_plot, axis=(-1, -2), keepdims=True)
-            est_inverse_plot /= np.max(est_inverse_img, (-1, -2), keepdims=True)
+            est_inverse_plot /= np.max(est_inverse_plot, (-1, -2), keepdims=True)
             est_full_plot /= np.max(est_full_plot, (-1, -2), keepdims=True)
-            fully_sampled_plot /= np.max(fully_sampled_img, (-1, -2), keepdims=True)
+            fully_sampled_plot /= np.max(fully_sampled_plot, (-1, -2), keepdims=True)
 
             diff_est_lambda_plot = np.abs(est_lambda_plot - fully_sampled_plot)
             diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
@@ -450,10 +451,11 @@ class LearnedSSLLightning(plReconModel):
         else:
             raise ValueError('No sampling method!')
 
-        if deterministic:
-            sampling_mask = (activation > 0).to(torch.float)
-        else:
-            sampling_mask = torch.sigmoid(activation * self.sigmoid_slope_2)
+        sampling_mask = self.kMaxSampling(activation, R_value, self.sigmoid_slope_2)
+        # if deterministic:
+        #     sampling_mask = (activation > 0).to(torch.float)
+        # else:
+        #     sampling_mask = torch.sigmoid(activation * self.sigmoid_slope_2)
 
         # check to make sure sampling the correct R
 
@@ -541,3 +543,6 @@ class LearnedSSLLightning(plReconModel):
         loss = L1L2Loss(torch.view_as_real(estimate), torch.view_as_real(fully_sampled)) 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
+    
+    def kMaxSampling(self, input, R, slope):
+        return KMaxSoftmaxFunction.apply(input, R, slope)
