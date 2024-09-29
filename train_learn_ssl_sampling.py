@@ -31,7 +31,6 @@ def main(args):
             batch_size=args.batch_size, 
             resolution=(ny, nx),
             num_workers=args.num_workers,
-            norm_method=args.norm_method,
             contrasts=args.contrasts,
             line_constrained=False, 
             R=args.R
@@ -94,7 +93,6 @@ if __name__ == '__main__':
     dataset_group.add_argument('--R', type=float, default=6.0)
     dataset_group.add_argument('--dataset', type=str, default='brats')
     dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
-    dataset_group.add_argument('--norm_method', type=str, default='k')
     dataset_group.add_argument('--nx', type=int, default=128)
     dataset_group.add_argument('--ny', type=int, default=128)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)

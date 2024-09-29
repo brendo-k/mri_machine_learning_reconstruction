@@ -225,17 +225,25 @@ class LearnedSSLLightning(plReconModel):
 
         wandb_logger = self.logger
 
-        ssim_loss = 0
+        ssim_lambda_inverse = 0
         for i in range(fully_sampled_img.shape[1]):
-            ssim_loss += ssim(est_lambda_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
+            ssim_lambda_inverse += ssim(est_lambda_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
 
-        ssim_val = 0
+        ssim_estimate_full = 0
         for i in range(fully_sampled_img.shape[1]):
-            ssim_val += ssim(fully_sampled_img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device, max_val=1)
+            ssim_estimate_full += ssim(fully_sampled_img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device, max_val=1)
 
         ssim_lambda_full = 0
         for i in range(fully_sampled_img.shape[1]):
             ssim_lambda_full += ssim(fully_sampled_img[:, [i], :, :], est_lambda_img[:, [i], :, :], device=self.device, max_val=1)
+
+        ssim_lambda_estimate = 0
+        for i in range(fully_sampled_img.shape[1]):
+            ssim_lambda_estimate += ssim(estimated_img[:, [i], :, :], est_lambda_img[:, [i], :, :], device=self.device, max_val=1)
+
+        ssim_inverse_estimate = 0
+        for i in range(fully_sampled_img.shape[1]):
+            ssim_inverse_estimate += ssim(estimated_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
 
         ssim_inverse_full = 0
         for i in range(fully_sampled_img.shape[1]):
@@ -243,16 +251,35 @@ class LearnedSSLLightning(plReconModel):
 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True, logger=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_full", ssim_val/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_inverse_lambda", ssim_loss/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_full", ssim_estimate_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_inverse_lambda", ssim_lambda_inverse/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
         self.log("val/ssim_inverse_full", ssim_lambda_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
         self.log("val/ssim_lambda_full", ssim_inverse_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_inverse_estimate", ssim_lambda_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_lambda_estimate", ssim_inverse_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_img[0].cpu().numpy()/est_lambda_img[0].max().cpu().numpy(), est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_img[0].cpu().numpy()/est_inverse_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_full', np.split(estimated_img[0].cpu().numpy()/estimated_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_img[0].cpu().numpy()/fully_sampled_img[0].max().cpu().numpy(), est_inverse_img.shape[1], 0))
+            est_lambda_plot = est_lambda_img[0].cpu().numpy()
+            est_inverse_plot = est_inverse_img[0].cpu().numpy()
+            est_full_plot = estimated_img[0].cpu().numpy()
+            fully_sampled_plot = fully_sampled_img[0].cpu().numpy()
+            est_lambda_plot /= np.max(est_lambda_plot, axis=(-1, -2), keepdims=True)
+            est_inverse_plot /= np.max(est_inverse_img, (-1, -2), keepdims=True)
+            est_full_plot /= np.max(est_full_plot, (-1, -2), keepdims=True)
+            fully_sampled_plot /= np.max(fully_sampled_img, (-1, -2), keepdims=True)
+
+            diff_est_lambda_plot = np.abs(est_lambda_plot - fully_sampled_plot)
+            diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
+            diff_est_full_plot = np.abs(est_full_plot - fully_sampled_plot)
+            
+            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
+
+            wandb_logger.log_image('val/estimate_lambda_diff', np.split(diff_est_lambda_plot*4, est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse_diff', np.split(diff_est_inverse_plot*4, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full_diff', np.split(diff_est_full_plot*4, est_inverse_img.shape[1], 0))
 
 
     def test_step(self, batch, batch_idx):

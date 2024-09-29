@@ -23,7 +23,6 @@ class MRI_Loader(pl.LightningDataModule):
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             num_workers: int = 0,
             batch_size: int = 4,
-            norm_method: str = 'k'
             ):
 
         super().__init__()
@@ -35,10 +34,7 @@ class MRI_Loader(pl.LightningDataModule):
         self.contrasts = contrasts
         self.num_workers = num_workers
 
-        if norm_method == 'k': 
-            self.transforms = normalize_k_max()
-        else: 
-            self.transforms = normalize_image_max()
+        self.transforms = normalize_k_max()
 
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
