@@ -278,9 +278,9 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
 
-            wandb_logger.log_image('val/estimate_lambda_diff', np.split(diff_est_lambda_plot*4, est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse_diff', np.split(diff_est_inverse_plot*4, est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_full_diff', np.split(diff_est_full_plot*4, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0))
 
 
     def test_step(self, batch, batch_idx):
