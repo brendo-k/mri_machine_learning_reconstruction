@@ -34,14 +34,14 @@ class plReconModel(pl.LightningModule):
 
         estimated_image *= mask
         ground_truth_image *= mask
-        diff = np.abs(ground_truth_image - estimated_image)
+        diff = (ground_truth_image - estimated_image).abs()
 
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
         for i in range(estimated_image.shape[0]):
             wandb_logger.log_image('test' + '/recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
             wandb_logger.log_image('test' + '/target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image('test' + '/diff', np.split(diff[i].unsqueeze(1).cpu().numpy(), contrasts, 0)*4)
+            wandb_logger.log_image('test' + '/diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0))
             wandb_logger.log_image('test' + '/test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
         for contrast_index in range(len(self.contrast_order)):
