@@ -19,6 +19,7 @@ class LearnedSSLLightning(plReconModel):
             image_size, 
             learned_R: float, 
             contrast_order: List[str], 
+            channels: int = 32,
             center_region:int = 10,
             prob_method:str = 'loupe', 
             sigmoid_slope1:float = 5.0,
@@ -36,7 +37,7 @@ class LearnedSSLLightning(plReconModel):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
 
-        self.recon_model = pl_VarNet(contrast_order=contrast_order)
+        self.recon_model = pl_VarNet(contrast_order=contrast_order, chans=channels)
         self.image_size = image_size
         self.contrast_order = contrast_order
         self.R = learned_R

@@ -56,7 +56,8 @@ def main(args):
             normalize_k_space_energy=args.k_space_regularizer,
             pass_all_data=args.pass_all_data,
             pass_inverse_data=args.pass_inverse_data,
-            supervised=args.supervised
+            supervised=args.supervised,
+            channels=args.chans
             )
 
     if args.checkpoint: 
