@@ -216,7 +216,7 @@ class LearnedSSLLightning(plReconModel):
 
         estimate_lambda = estimate_lambda * (1 - mask_lambda) + under * mask_lambda
         estimate_inverse = estimate_inverse * (1 - mask_inverse_w_acs) + under *  mask_inverse_w_acs
-        estimate_full = estimate_full * ~initial_mask + under
+        estimate_full_dc = estimate_full * ~initial_mask + under
 
         fully_sampled_img = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=2)
         scaling_factor = fully_sampled_img.amax((-1, -2), keepdim=True)
@@ -224,6 +224,7 @@ class LearnedSSLLightning(plReconModel):
         est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)/scaling_factor
         est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
         estimated_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
+        estimated_dc_img = root_sum_of_squares(ifft_2d_img(estimate_full_dc), coil_dim=2)/scaling_factor
 
         wandb_logger = self.logger
 
@@ -231,13 +232,13 @@ class LearnedSSLLightning(plReconModel):
         for i in range(fully_sampled_img.shape[1]):
             ssim_lambda_inverse += ssim(est_lambda_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
 
-        ssim_estimate_full = 0
+        ssim_estimate_gt = 0
         for i in range(fully_sampled_img.shape[1]):
-            ssim_estimate_full += ssim(fully_sampled_img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device, max_val=1)
+            ssim_estimate_gt += ssim(fully_sampled_img[:, [i], :, :], estimated_img[:, [i], :, :], device=self.device, max_val=1)
 
-        ssim_lambda_full = 0
+        ssim_lambda_gt = 0
         for i in range(fully_sampled_img.shape[1]):
-            ssim_lambda_full += ssim(fully_sampled_img[:, [i], :, :], est_lambda_img[:, [i], :, :], device=self.device, max_val=1)
+            ssim_lambda_gt += ssim(fully_sampled_img[:, [i], :, :], est_lambda_img[:, [i], :, :], device=self.device, max_val=1)
 
         ssim_lambda_estimate = 0
         for i in range(fully_sampled_img.shape[1]):
@@ -247,18 +248,23 @@ class LearnedSSLLightning(plReconModel):
         for i in range(fully_sampled_img.shape[1]):
             ssim_inverse_estimate += ssim(estimated_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
 
-        ssim_inverse_full = 0
+        ssim_inverse_gt = 0
         for i in range(fully_sampled_img.shape[1]):
-            ssim_inverse_full += ssim(fully_sampled_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
+            ssim_inverse_gt += ssim(fully_sampled_img[:, [i], :, :], est_inverse_img[:, [i], :, :], device=self.device, max_val=1)
+
+        ssim_inverse_full_dc = 0
+        for i in range(fully_sampled_img.shape[1]):
+            ssim_inverse_full_dc += ssim(fully_sampled_img[:, [i], :, :], estimated_dc_img[:, [i], :, :], device=self.device, max_val=1)
 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True, logger=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_full", ssim_estimate_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_gt_full", ssim_estimate_gt/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_gt_full_dc", ssim_inverse_full_dc/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
         self.log("val/ssim_inverse_lambda", ssim_lambda_inverse/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_inverse_full", ssim_lambda_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_lambda_full", ssim_inverse_full/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_inverse_estimate", ssim_lambda_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
-        self.log("val/ssim_lambda_estimate", ssim_inverse_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_inverse_gt", ssim_inverse_gt/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_lambda_gt", ssim_lambda_gt/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_inverse_full", ssim_inverse_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
+        self.log("val/ssim_lambda_full", ssim_lambda_estimate/fully_sampled_img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
