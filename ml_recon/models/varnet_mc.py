@@ -4,22 +4,29 @@ from typing import Tuple, Union
 from functools import partial
 
 from ml_recon.models import Unet
+from functools import partial
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
 
 
 class VarNet_mc(nn.Module):
     def __init__(self, 
-                 model_backbone: Union[nn.Module, partial],
+                 model_backbone: Union[nn.Module, partial, None] = None,
                  contrasts:int = 1,
                  num_cascades:int = 6,
                  sens_chans:int = 8,
-                 weight_sharing:bool =False
+                 weight_sharing:bool = False,
+                 chans:int = 32,
                  ):
         super().__init__()
+        if not model_backbone:
+            model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=chans)
+
+        assert model_backbone is not None
 
         # module cascades
         self.cascade = nn.ModuleList()
+        
         
         if weight_sharing:
             assert isinstance(model_backbone, nn.Module), "Model is not an instance of nn.Module"

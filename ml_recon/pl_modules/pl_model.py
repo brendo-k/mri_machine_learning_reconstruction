@@ -19,9 +19,8 @@ class plReconModel(pl.LightningModule):
         self.contrast_order = contrast_order
 
     def test_step(self, batch, _):
-        estimate_k, k_space = batch
+        estimate_k, k_space, label = batch
 
-        #loss = self.loss(estimate_k, k_space)
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
@@ -39,10 +38,10 @@ class plReconModel(pl.LightningModule):
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
         for i in range(estimated_image.shape[0]):
-            wandb_logger.log_image('test' + '/recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
-            wandb_logger.log_image('test' + '/target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image('test' + '/diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0))
-            wandb_logger.log_image('test' + '/test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
+            wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0))
+            wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
         for contrast_index in range(len(self.contrast_order)):
             contrast_ground_truth = ground_truth_image[:, [contrast_index], :, :]
@@ -58,17 +57,17 @@ class plReconModel(pl.LightningModule):
             batch_ssim_torch = batch_ssim_torch[batch_ssim_torch != 1].mean()
 
             #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-            self.log("metrics/nmse_" + self.contrast_order[contrast_index], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
-            self.log("metrics/ssim_torch_" + self.contrast_order[contrast_index], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
-            self.log("metrics/psnr_" + self.contrast_order[contrast_index], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
+            self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
+            self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
+            self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
 
             total_ssim += batch_ssim_torch
             total_psnr += batch_psnr
             total_nmse += batch_nmse
 
-        self.log('metrics/mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
-        self.log('metrics/mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
-        self.log('metrics/mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
+        self.log(f'metrics/{label}_mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
+        self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
+        self.log(f'metrics/{label}_mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
         return estimated_image
 
     def norm(self, image): 

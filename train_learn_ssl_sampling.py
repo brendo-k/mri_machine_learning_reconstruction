@@ -9,7 +9,47 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
 from pytorch_lightning.cli import LightningCLI
+from pytorch_lightning.callbacks import Callback
+from ml_recon.utils import root_sum_of_squares, ifft_2d_img
+import numpy as np
 
+class plotImagesEvery50(Callback):
+    def on_val_batch_start(self, trainer, pl_module, batch, batch_index, _):
+        epoch = trainer.current_epoch
+        if batch_index != 0 or batch_index != 100 or batch_index != 200: 
+            return None
+
+        if epoch % 25 == 0:
+            undersampled = batch['input']
+            fs_k_space = batch['fs_k_space']
+
+            initial_mask = undersampled != 0
+            nbatch, contrast, coil, h, w = undersampled.shape
+            
+            lambda_set, inverse_set = pl_module.split_into_lambda_loss_sets(initial_mask, nbatch)
+            estimate_lambda = pl_module.pass_through_model(undersampled, lambda_set)
+            estimate_inverse = pl_module.pass_through_model(undersampled, inverse_set)
+            estimate_full = pl_module.pass_through_model(undersampled, initial_mask)
+
+            lambda_image = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2).cpu()
+            inverse_image = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2).cpu()
+            estimate_image = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2).cpu()
+            gt_img = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=2).cpu()
+        
+            diff_lambda_image = np.abs(lambda_image - gt_img)
+            diff_inverse_image = np.abs(inverse_image - gt_img)
+            diff_estimate_image = np.abs(estimate_image - gt_img)
+            
+            wandb_logger:WandbLogger = pl_module.logger.expeiment
+
+            wandb_logger.log_image(f'{epoch}_{batch_index}_inverse', np.split(lambda_image[0].abs()/lambda_image[0].abs().max(),lambda_image.shape[1], 0))
+            wandb_logger.log_image(f'{epoch}_{batch_index}_lambda', np.split(inverse_image[0].abs()/inverse_image[0].abs().max(),lambda_image.shape[1], 0))
+            wandb_logger.log_image(f'{epoch}_{batch_index}_full', np.split(estimate_image[0].abs()/estimate_image[0].abs().max(),lambda_image.shape[1], 0))
+            wandb_logger.log_image(f'{epoch}_{batch_index}_gt', np.split(gt_img[0].abs()/gt_img[0].abs().max(),lambda_image.shape[1], 0))
+
+            wandb_logger.log_image(f'{epoch}_{batch_index}_diff_inverse', np.split(diff_lambda_image[0].abs()/lambda_image[0].abs().max(),lambda_image.shape[1], 0))
+            wandb_logger.log_image(f'{epoch}_{batch_index}_diff_lambda', np.split(diff_inverse_image[0].abs()/inverse_image[0].abs().max(),lambda_image.shape[1], 0))
+            wandb_logger.log_image(f'{epoch}_{batch_index}_diff_full', np.split(diff_estimate_image[0].abs()/estimate_image[0].abs().max(),lambda_image.shape[1], 0))
 
 def main(args):
         
@@ -18,6 +58,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         callbacks=[plotImagesEvery50()]
                          )
 
 

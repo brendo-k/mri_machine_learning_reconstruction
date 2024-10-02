@@ -35,10 +35,10 @@ class KMaxSoftmaxFunction(torch.autograd.Function):
         input, = ctx.saved_tensors
         
         # Apply softmax to the input
-        softmax_output = torch.sigmoid(input*ctx.slope)
+        sigmoid_output = torch.sigmoid(input*ctx.slope)
         
         # Compute gradient of softmax wrt input
-        grad_input = grad_output * softmax_output
+        grad_input = grad_output * (sigmoid_output * (1 - sigmoid_output))
         
         return grad_input, None, None # None for k_percent, as it doesn't require gradient
 
