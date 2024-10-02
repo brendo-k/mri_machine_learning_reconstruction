@@ -64,7 +64,6 @@ class LearnedSSLLightning(plReconModel):
         if self.learn_R: 
             self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
 
-
         if prob_method == 'loupe':
             if warm_start: 
                 init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
@@ -200,9 +199,9 @@ class LearnedSSLLightning(plReconModel):
         mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
 
-        estimate_lambda = self.recon_model(under*mask_lambda, mask_lambda)
-        estimate_inverse = self.recon_model(under*mask_inverse_w_acs, mask_inverse_w_acs) 
-        estimate_full = self.recon_model(under, initial_mask)
+        estimate_lambda = self.pass_through_model(under, mask_lambda)
+        estimate_inverse = self.pass_through_model(under, mask_inverse)
+        estimate_full = self.pass_through_model(under, initial_mask)
 
         loss_inverse = self.loss_func(
                 torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), 
@@ -215,14 +214,10 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)
 
-        estimate_lambda = estimate_lambda * (1 - mask_lambda) + under * mask_lambda
-        estimate_inverse = estimate_inverse * (1 - mask_inverse_w_acs) + under *  mask_inverse_w_acs
-        estimate_full = estimate_full * ~initial_mask + under
-
         fully_sampled_img = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=2)
         scaling_factor = fully_sampled_img.amax((-1, -2), keepdim=True)
-
         fully_sampled_img /= scaling_factor
+
         est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)/scaling_factor
         est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
         est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
@@ -260,9 +255,6 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/nmse_inverse_full", nmse_inverse_estimate, on_epoch=True)
         self.log("val/nmse_lambda_full", nmse_lambda_estimate, on_epoch=True)
 
-
-
-
         if batch_idx == 0:
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
             est_inverse_plot = est_inverse_img[0].cpu().numpy()
@@ -299,11 +291,6 @@ class LearnedSSLLightning(plReconModel):
         return super().test_step((estimate_k, k_space, 'pass y_hat'), None)
 
     
-
-    def forward(self, batch): 
-        k_space = batch['fs_k_space']
-        _, _, _, estimate_k = self.pass_through_model(k_space)
-        return estimate_k
 
     # takes an array of R values and normalizes it to the desired R value
     def norm_R(self, R):
@@ -425,11 +412,12 @@ class LearnedSSLLightning(plReconModel):
 
         if 'loupe' in self.prob_method:
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-            assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
-            assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
         else:
-            raise TypeError('prob_method should be loupe or gumbel')
+            raise TypeError('Only implemented 2d loupe')
         
+        assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
+        assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
+
         R_value = self.norm_R(self.R_value)
         norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
         norm_probability = torch.stack(norm_probability, dim=0)
@@ -456,12 +444,12 @@ class LearnedSSLLightning(plReconModel):
         else:
             raise ValueError('No sampling method!')
 
-        #sampling_mask = self.kMaxSampling(activation, R_value, self.sigmoid_slope_2)
-        if deterministic:
-            sampling_mask = (activation > 0).to(torch.float)
-        else:
-            sampling_mask = torch.sigmoid(activation * self.sigmoid_slope_2)
-
+        sampling_mask = self.kMaxSampling(activation, R_value, self.sigmoid_slope_2)
+        #if deterministic:
+        #    sampling_mask = (activation > 0).to(torch.float)
+        #else:
+        #    sampling_mask = torch.sigmoid(activation * self.sigmoid_slope_2)
+#
         # check to make sure sampling the correct R
 
         inverse = [1/R_val for R_val, freeze in zip(self.R_value, self.R_freeze) if not freeze]
@@ -507,10 +495,10 @@ class LearnedSSLLightning(plReconModel):
         lambda_mask = self.get_mask(batch_size, mask_center=True)
         return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
 
-    def final_dc_step(self, estimated, mask):
-        return estimated * (1 - mask) + estimated * mask
+    def final_dc_step(self, undersampled, estimated, mask):
+        return estimated * (1 - mask) + undersampled * mask
 
     def pass_through_model(self, undersampled, mask):
         estimate = self.recon_model(undersampled*mask, mask)
-        estimate = self.final_dc_step(estimate, mask)
+        estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate
