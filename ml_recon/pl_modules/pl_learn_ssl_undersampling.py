@@ -82,7 +82,7 @@ class LearnedSSLLightning(plReconModel):
             return self.train_supervised_step(batch)
 
         undersampled = batch['input']
-        initial_mask = undersampled != 0
+        initial_mask = (undersampled != 0).to(torch.float32)
         nbatch, contrast, coil, h, w = undersampled.shape
 
         lambda_set, inverse_set = self.split_into_lambda_loss_sets(initial_mask, nbatch)
@@ -188,7 +188,7 @@ class LearnedSSLLightning(plReconModel):
         under = batch['input']
 
         fs_k_space = batch['fs_k_space']
-        initial_mask = under != 0 
+        initial_mask = (under != 0).to(torch.float32)
 
         nbatch, contrast, coil, h, w = under.shape
         
