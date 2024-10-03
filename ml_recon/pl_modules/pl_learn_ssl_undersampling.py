@@ -200,7 +200,7 @@ class LearnedSSLLightning(plReconModel):
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
 
         estimate_lambda = self.pass_through_model(under, mask_lambda)
-        estimate_inverse = self.pass_through_model(under, mask_inverse)
+        estimate_inverse = self.pass_through_model(under, mask_inverse_w_acs)
         estimate_full = self.pass_through_model(under, initial_mask)
 
         loss_inverse = self.loss_func(
