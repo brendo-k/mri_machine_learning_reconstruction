@@ -4,9 +4,10 @@ import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
+from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
-from ml_recon.utils.evaluate import nmse, ssim, psnr
+from ml_recon.utils.evaluate import nmse, psnr
 
 # define the LightningModule
 class plReconModel(pl.LightningModule):
@@ -37,33 +38,37 @@ class plReconModel(pl.LightningModule):
 
         wandb_logger = self.logger
         contrasts = estimated_image.shape[1]
-        for i in range(estimated_image.shape[0]):
-            wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
-            wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0))
-            wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+        for i in range(estimated_image.shape[0], 50):
+            wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0), step=i)
+            wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=i)
+            wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0), step=i)
+            wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=i)
 
         for contrast_index in range(len(self.contrast_order)):
-            contrast_ground_truth = ground_truth_image[:, [contrast_index], :, :]
-            contrast_estimated = estimated_image[:, [contrast_index], :, :]
+            for i in range(ground_truth_image.shape[0]):
+                contrast_ground_truth = ground_truth_image[i, [contrast_index], :, :]
+                contrast_estimated = estimated_image[i, [contrast_index], :, :]
 
-            batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
-            batch_ssim_torch = ssim(contrast_ground_truth, contrast_estimated, device=self.device, reduce=False, max_val=1)
-            batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
 
-            # remove mask points that would equal to 1 (possibly some estimated points
-            # will be removed here but only if matches completely in the kernel)
-                                                    
-            batch_ssim_torch = batch_ssim_torch[batch_ssim_torch != 1].mean()
+                max_val = max(contrast_ground_truth.max().item(), contrast_estimated.max().item())
+                min_val = min(contrast_ground_truth.min().item(), contrast_ground_truth.min().item())
+                batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
+                batch_ssim_torch, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=max_val-min_val)
+                batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
 
-            #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-            self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, on_epoch=True, prog_bar=True, logger=True)
-            self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim_torch, on_epoch=True, prog_bar=True, logger=True)
-            self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr, on_epoch=True, prog_bar=True, logger=True)
+                # remove mask points that would equal to 1 (possibly some estimated points
+                # will be removed here but only if matches completely in the kernel)
+                                                        
+                batch_ssim_torch = ssim_image[ssim_image != 1].mean()
 
-            total_ssim += batch_ssim_torch
-            total_psnr += batch_psnr
-            total_nmse += batch_nmse
+                #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+                self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, on_epoch=True)
+                self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim_torch, on_epoch=True)
+                self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr, on_epoch=True)
+
+                total_ssim += batch_ssim_torch
+                total_psnr += batch_psnr
+                total_nmse += batch_nmse
 
         self.log(f'metrics/{label}_mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
         self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
