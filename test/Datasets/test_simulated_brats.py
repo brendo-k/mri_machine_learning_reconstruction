@@ -7,7 +7,7 @@ from ml_recon.utils import image_slices, ifft_2d_img
 def test_apply_sensetivites():
     nx, ny = 256, 256
     x = np.random.rand(5, nx, ny)
-    x_sense = SimulatedBrats.apply_sensetivities(x) 
+    x_sense = SimulatedBrats.apply_sensetivities(x, coil_size=10)
 
     assert np.iscomplex(x_sense).any()
     assert x_sense.ndim == 4

@@ -8,7 +8,7 @@ from ml_recon.models.unet import Unet
 
 @pytest.fixture
 def varnet_model() -> VarNet_mc:
-    return VarNet_mc(partial(Unet, 2, 2))
+    return VarNet_mc(partial(Unet, 4, 4), contrasts=2)
 
 @pytest.fixture
 def unet_model() -> Unet:
@@ -16,8 +16,8 @@ def unet_model() -> Unet:
 
 def test_varnet_forward(varnet_model):
     with torch.no_grad():
-        reference_k = torch.randn(1, 2, 256, 256, dtype=torch.complex64)  # Example reference k-space input
-        mask = torch.ones(1, 2, 256, 256) > 0.5 # Example mask input
+        reference_k = torch.randn(1, 2, 10, 256, 256, dtype=torch.complex64)  # Example reference k-space input
+        mask = torch.rand(1, 2, 10, 256, 256) > 0.5 # Example mask input
 
         output_k = varnet_model.forward(reference_k, mask)
 
