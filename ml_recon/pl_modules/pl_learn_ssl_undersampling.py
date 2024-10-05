@@ -5,10 +5,11 @@ import einops
 from typing import List
 from functools import partial
 
+from torchmetrics.functional.image import structural_similarity_index_measure as ssim 
 from ml_recon.losses import L1L2Loss
 from ml_recon.dataset.undersample import scale_pdf, gen_pdf_bern, gen_pdf_columns
 from ml_recon.pl_modules.pl_model import plReconModel
-from ml_recon.utils.evaluate import nmse, ssim, psnr
+from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.models import VarNet_mc
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
@@ -122,7 +123,7 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             inverse_image = inverse_image.reshape(b * c, 1, h, w)
-            ssim_loss = 1 - ssim(lambda_image, inverse_image, self.device, max_val=1)
+            ssim_loss = torch.Tensor([1]) - ssim(lambda_image, inverse_image, data_range=(1, 0))
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
@@ -146,12 +147,12 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             image_full = image_full.reshape(b * c, 1, h, w)
-            ssim_loss_full = 1 - ssim(lambda_image, image_full, self.device, max_val=1)
+            ssim_loss_full = torch.tensor([1]) - ssim(lambda_image, image_full, data_range=(0, 1))
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
-                ssim_loss_full_inverse = 1 - ssim(inverse_image, image_full, self.device, max_val=1)
+                ssim_loss_full_inverse = torch.tensor([1]) - ssim(inverse_image, image_full, data_range=(0, 1))
                 inverse_image.reshape(b, c, h, w)
                 loss += ssim_loss_full_inverse * self.ssim_scaling
 
@@ -225,14 +226,13 @@ class LearnedSSLLightning(plReconModel):
 
         wandb_logger = self.logger
 
-        ssim_func = partial(ssim, device=self.device)
 
-        ssim_full_gt = evaluate_over_contrasts(ssim_func, fully_sampled_img, est_full_img)
-        ssim_lambda_gt = evaluate_over_contrasts(ssim_func, fully_sampled_img, est_lambda_img)
-        ssim_inverse_gt = evaluate_over_contrasts(ssim_func, fully_sampled_img, est_inverse_img)
-        ssim_lambda_estimate = evaluate_over_contrasts(ssim_func, est_full_img, est_lambda_img)
-        ssim_inverse_estimate = evaluate_over_contrasts(ssim_func, est_full_img, est_inverse_img)
-        ssim_lambda_inverse = evaluate_over_contrasts(ssim_func, est_lambda_img, est_inverse_img)
+        ssim_full_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_full_img)
+        ssim_lambda_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_lambda_img)
+        ssim_inverse_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_inverse_img)
+        ssim_lambda_estimate = evaluate_over_contrasts(ssim, est_full_img, est_lambda_img)
+        ssim_inverse_estimate = evaluate_over_contrasts(ssim, est_full_img, est_inverse_img)
+        ssim_lambda_inverse = evaluate_over_contrasts(ssim, est_lambda_img, est_inverse_img)
 
         self.log("val/ssim_gt_full", ssim_full_gt, on_epoch=True)
         self.log("val/ssim_inverse_lambda", ssim_lambda_inverse, on_epoch=True)
