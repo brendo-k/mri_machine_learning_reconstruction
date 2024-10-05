@@ -16,7 +16,7 @@ import numpy as np
 class plotImagesEvery50(Callback):
     def on_val_batch_start(self, trainer, pl_module, batch, batch_index, _):
         epoch = trainer.current_epoch
-        if batch_index != 0 or batch_index != 100 or batch_index != 200: 
+        if batch_index == 0 or batch_index == 100 or batch_index == 200: 
             return None
 
         if epoch % 25 == 0:
@@ -98,7 +98,8 @@ def main(args):
             pass_all_data=args.pass_all_data,
             pass_inverse_data=args.pass_inverse_data,
             supervised=args.supervised,
-            channels=args.chans
+            channels=args.chans,
+            learn_sampling=args.learn_sampling
             )
 
     if args.checkpoint: 

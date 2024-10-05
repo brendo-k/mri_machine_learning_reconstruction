@@ -33,6 +33,8 @@ class FastMRIDataset(KSpaceDataset):
 
         # call super constructor
         super().__init__(nx=nx, ny=ny)
+        assert len(contrasts) == 1
+        assert 't1' in contrasts
 
         self.transforms = transforms
         self.contrast_order = ['t1']
