@@ -308,99 +308,104 @@ class LearnedSSLLightning(plReconModel):
         return cur_R
 
 
-    def norm_prob(self, probability:List[torch.Tensor], cur_R, center_region=10, mask_center=False):
+    def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
         image_shape = probability[0].shape
         if self.prob_method == 'loupe':
-            center = [image_shape[0]//2, image_shape[1]//2]
-
-            center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
-            center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
-            
-            probability_sum = []
-
-            # create acs mask of zeros for acs box and zeros elsewhere
-            center_mask = torch.ones(image_shape, device=probability[0].device)
-            if mask_center:
-                center_mask[center_bb_y, center_bb_x] = 0
-
-            for i in range(len(probability)):
-                probability[i] = probability[i] * center_mask
-                probability_sum.append(torch.sum(probability[i], dim=[-1, -2]))
-
-            
-            for i in range(len(probability_sum)):
-                probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
-                if mask_center:
-                    probability_total -= center_region ** 2
-
-                if probability_sum[i] > probability_total:
-                    scaling_factor = probability_total / probability_sum[i]
-
-                    assert scaling_factor <= 1 and scaling_factor >= 0
-                    assert not torch.isnan(scaling_factor)
-
-                    probability[i] = (probability[i] * scaling_factor)
-                else:
-                    inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
-                    inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
-                    if mask_center:
-                        inverse_sum -= center_region**2
-                    scaling_factor = inverse_total / inverse_sum
-
-                    assert scaling_factor <= 1 and scaling_factor >= 0
-                    assert not torch.isnan(scaling_factor)
-
-                    inv_prob = (1 - probability[i])*scaling_factor
-                    probability[i] = 1 - inv_prob
-           
-            # acs box is now ones and everything else is zeros
-            if mask_center:
-                for i in range(len(probability)):
-                    probability[i][center_bb_y, center_bb_x] = 1
+            self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
 
         elif self.prob_method == 'line_loupe':
-            center = image_shape[1]//2
-            center_bb_x = [center-self.center_region//2,center+self.center_region//2]
-
-            probability_sum = []
-            center_mask = torch.ones(self.image_size[2], device=self.device)
-            if mask_center:
-                center_mask[center_bb_x[0]:center_bb_x[1]] = 0
-
-            for i in range(len(probability)):
-                probability[i] = probability[i] * center_mask
-                probability_sum.append(torch.sum(probability[i], dim=[-1]) - probability[i][center_bb_x[0]:center_bb_x[1]].sum())
-
-
-            for i in range(len(probability_sum)):
-                probability_total = image_shape[1] / cur_R[i]
-                if mask_center:
-                    probability_total -= center_region
-
-                # if probability sum is greater than total scaling factor will 
-                # be less than 1 so we can multiply
-                if probability_sum[i] > probability_total: 
-                    scaling_factor = probability_total/probability_sum[i]
-                    probability[i] = probability[i] * scaling_factor
-                else:
-                # Scaling factor will be greater than 1 so we need to go into the 
-                # inverse of probs
-                    inverse_total = image_shape[1]*(1 - 1/cur_R[i])
-                    inverse_sum = image_shape[1] - probability_sum[i] 
-                    if mask_center:
-                        inverse_sum -= center_region
-                    scaling_factor = inverse_total / inverse_sum
-                    inv_prob = (1 - probability[i])*scaling_factor
-                    probability[i] = 1 - inv_prob
-
-            center_box = 1-center_mask
-            for i in range(len(probability)):
-                probability[i] = probability[i] + center_box
+            self.norm_1d_probability(probability, cur_R, center_region, mask_center, image_shape)
         else:
             raise ValueError(f'No prob method found for {self.prob_method}')
         
         assert all((torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) for probs, R in zip(probability, cur_R))), f'Probability should be equal to R {[prob.mean() for prob in probability]}'
         return probability
+
+    def norm_1d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
+        center = image_shape[1]//2
+        center_bb_x = [center-self.center_region//2,center+self.center_region//2]
+
+        probability_sum = []
+        center_mask = torch.ones(self.image_size[2], device=self.device)
+        if mask_center:
+            center_mask[center_bb_x[0]:center_bb_x[1]] = 0
+
+        for i in range(len(probability)):
+            probability[i] = probability[i] * center_mask
+            probability_sum.append(torch.sum(probability[i], dim=[-1]) - probability[i][center_bb_x[0]:center_bb_x[1]].sum())
+
+
+        for i in range(len(probability_sum)):
+            probability_total = image_shape[1] / cur_R[i]
+            if mask_center:
+                probability_total -= center_region
+
+                # if probability sum is greater than total scaling factor will 
+                # be less than 1 so we can multiply
+            if probability_sum[i] > probability_total: 
+                scaling_factor = probability_total/probability_sum[i]
+                probability[i] = probability[i] * scaling_factor
+            else:
+                # Scaling factor will be greater than 1 so we need to go into the 
+                # inverse of probs
+                inverse_total = image_shape[1]*(1 - 1/cur_R[i])
+                inverse_sum = image_shape[1] - probability_sum[i] 
+                if mask_center:
+                    inverse_sum -= center_region
+                scaling_factor = inverse_total / inverse_sum
+                inv_prob = (1 - probability[i])*scaling_factor
+                probability[i] = 1 - inv_prob
+
+        center_box = 1-center_mask
+        for i in range(len(probability)):
+            probability[i] = probability[i] + center_box
+
+    def norm_2d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
+        center = [image_shape[0]//2, image_shape[1]//2]
+
+        center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
+        center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
+            
+        probability_sum = torch.zeros((len(probability), 1))
+
+        # create acs mask of zeros for acs box and zeros elsewhere
+        center_mask = torch.ones(image_shape, device=probability[0].device)
+        if mask_center:
+            center_mask[center_bb_y, center_bb_x] = 0
+
+        for i in range(len(probability)):
+            probability[i] = probability[i] * center_mask
+            probability_sum[i] = probability[i].sum(dim=[-1, -2])
+            
+        for i in range(len(probability)):
+            probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
+            if mask_center:
+                probability_total -= center_region ** 2
+
+            # we need to find cur_R * scaling_factor = R
+            # scaling down the values of 1
+            if probability_sum[i] > probability_total:
+                scaling_factor = probability_total / probability_sum[i]
+                assert scaling_factor <= 1 and scaling_factor >= 0
+
+                probability[i] = (probability[i] * scaling_factor)
+
+            # scaling down the complement probability (scaling down 0)
+            else:
+                inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
+                inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
+                if mask_center:
+                    inverse_sum -= center_region**2
+                scaling_factor = inverse_total / inverse_sum
+                assert scaling_factor <= 1 and scaling_factor >= 0
+
+                inv_prob = (1 - probability[i])*scaling_factor
+                probability[i] = 1 - inv_prob
+           
+            # acs box is now ones and everything else is zeros
+        if mask_center:
+            for i in range(len(probability)):
+                probability[i][center_bb_y, center_bb_x] = 1
 
 
     def get_mask(self, batch_size, mask_center=False, deterministic=False):
