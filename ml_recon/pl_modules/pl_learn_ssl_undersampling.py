@@ -221,11 +221,10 @@ class LearnedSSLLightning(plReconModel):
         est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)/scaling_factor
         est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
         est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
-        data_range_max = max(est_lambda_img.max().item(), est_inverse_img.max().item(), est_full_img.max().item(), 1.0)
 
         wandb_logger = self.logger
 
-        ssim_func = partial(ssim, device=self.device, max_val=data_range_max)
+        ssim_func = partial(ssim, device=self.device)
 
         ssim_full_gt = evaluate_over_contrasts(ssim_func, fully_sampled_img, est_full_img)
         ssim_lambda_gt = evaluate_over_contrasts(ssim_func, fully_sampled_img, est_lambda_img)
@@ -241,12 +240,12 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/ssim_inverse_full", ssim_inverse_estimate, on_epoch=True)
         self.log("val/ssim_lambda_full", ssim_lambda_estimate, on_epoch=True)
 
-        nmse_full_gt = evaluate_over_contrasts(nmse, fully_sampled_img, est_full_img)
-        nmse_lambda_gt = evaluate_over_contrasts(nmse, fully_sampled_img, est_lambda_img)
-        nmse_inverse_gt = evaluate_over_contrasts(nmse, fully_sampled_img, est_inverse_img)
-        nmse_lambda_estimate = evaluate_over_contrasts(nmse, est_full_img, est_lambda_img)
-        nmse_inverse_estimate = evaluate_over_contrasts(nmse, est_full_img, est_inverse_img)
-        nmse_lambda_inverse = evaluate_over_contrasts(nmse, est_lambda_img, est_inverse_img)
+        nmse_full_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_full)
+        nmse_lambda_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_lambda)
+        nmse_inverse_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_inverse)
+        nmse_lambda_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_lambda)
+        nmse_inverse_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_inverse)
+        nmse_lambda_inverse = evaluate_over_contrasts(nmse, estimate_lambda, estimate_inverse)
 
         self.log("val/nmse_gt_full", nmse_full_gt, on_epoch=True)
         self.log("val/nmse_inverse_lambda", nmse_lambda_inverse, on_epoch=True)
