@@ -33,7 +33,8 @@ class LearnedSSLLightning(plReconModel):
             lambda_scaling: float = 0.0, 
             pass_all_data: bool = False,
             pass_inverse_data: bool = False,
-            supervised: bool = False
+            supervised: bool = False,
+            learn_sampling: bool = True
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -71,11 +72,11 @@ class LearnedSSLLightning(plReconModel):
                 init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
             else:
                 init_prob = torch.zeros(image_size) + 0.5
-            self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1)
+            self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
 
         elif prob_method == 'line_loupe':
             O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
-            self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k)
+            self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k, requires_grad=learn_sampling)
 
     def training_step(self, batch, batch_idx):
         if self.supervised: 

@@ -40,4 +40,8 @@ def test_splitting_sets(build_model: LearnedSSLLightning):
     inital_mask = torch.zeros((batch_size, IMAGE_SIZE[0], ) +  (IMAGE_SIZE))
     inital_mask[:, :, ::2, ::2] = 1
     lambda_set, inverse_set = model.split_into_lambda_loss_sets(inital_mask, batch_size)
-    assert torch.all(((lambda_set == 1) | (inverse_set == 1)) == inital_mask)
+    lambda_set2, inverse_set2 = model.split_into_lambda_loss_sets(inital_mask, batch_size)
+
+    assert torch.all(((lambda_set == 1) ^ (inverse_set == 1)) == inital_mask)
+    assert torch.any(lambda_set != lambda_set2, dim=(-1, -2)).any()
+    assert torch.any(inverse_set != inverse_set2, dim=(-1, -2)).any()
