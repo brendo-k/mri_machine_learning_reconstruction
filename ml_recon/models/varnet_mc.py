@@ -74,9 +74,9 @@ class VarnetBlock(nn.Module):
         self.model = model
 
     # sensetivities data [B, contrast, C, H, W]
-    def forward(self, images, sensetivities):
+    def forward(self, k_space, sensetivities):
         # Reduce
-        images = ifft_2d_img(images, axes=[-1, -2])
+        images = ifft_2d_img(k_space, axes=[-1, -2])
 
         # Images now [B, contrast, h, w] (complex)
         images = torch.sum(images * sensetivities.conj(), dim=2)
