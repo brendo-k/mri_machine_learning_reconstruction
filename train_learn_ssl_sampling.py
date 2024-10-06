@@ -92,7 +92,8 @@ def main(args):
             lr = args.lr,
             learn_R=args.learn_R,
             warm_start=args.warm_start,
-            ssim_scaling=args.ssim_scaling,
+            ssim_scaling_full=args.ssim_scaling_full,
+            ssim_scaling_set=args.ssim_scaling_set,
             lambda_scaling=args.lambda_scaling,
             normalize_k_space_energy=args.k_space_regularizer,
             pass_all_data=args.pass_all_data,
@@ -149,7 +150,8 @@ if __name__ == '__main__':
     model_group.add_argument('--R_seeding', type=float, nargs='+', default=[])
     model_group.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     model_group.add_argument('--chans', type=int, default=32)
-    model_group.add_argument('--ssim_scaling', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--lambda_scaling', type=float, default=0.0)
     model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
     model_group.add_argument('--pass_inverse_data', action='store_true')
