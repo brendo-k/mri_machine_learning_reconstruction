@@ -64,7 +64,7 @@ class plReconModel(pl.LightningModule):
                 # remove mask points that would equal to 1 (possibly some estimated points
                 # will be removed here but only if matches completely in the kernel)
                                                         
-                batch_ssim = ssim_image[mask[i].unsqueeze(0)].mean()
+                batch_ssim = ssim_image[mask[i, contrast_index].unsqueeze(0).unsqueeze(0)].mean()
 
                 #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
             self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse)
