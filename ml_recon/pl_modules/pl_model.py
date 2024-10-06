@@ -24,13 +24,7 @@ class plReconModel(pl.LightningModule):
 
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
-        scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        total_ssim = 0
-        total_psnr = 0
-        total_nmse = 0
         mask = ground_truth_image > 0.005
-        estimated_image /= scaling_factor
-        ground_truth_image /= scaling_factor
 
         estimated_image *= mask
         ground_truth_image *= mask
@@ -47,31 +41,39 @@ class plReconModel(pl.LightningModule):
                 wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0), step=current_step + i)
                 wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step+i)
 
+        total_ssim = 0
+        total_psnr = 0
+        total_nmse = 0
         for contrast_index in range(len(self.contrast_order)):
+            batch_nmse = 0
+            batch_ssim = 0 
+            batch_psnr = 0
             for i in range(ground_truth_image.shape[0]):
-                contrast_ground_truth = ground_truth_image[i, [contrast_index], :, :]
-                contrast_estimated = estimated_image[i, [contrast_index], :, :]
+                contrast_ground_truth = ground_truth_image[i, contrast_index, :, :]
+                contrast_estimated = estimated_image[i, contrast_index, :, :]
+                contrast_ground_truth = contrast_ground_truth[None, None, :, :]
+                contrast_estimated = contrast_estimated[None, None, :, :]
 
 
                 max_val = max(contrast_ground_truth.max().item(), contrast_estimated.max().item())
-                min_val = min(contrast_ground_truth.min().item(), contrast_ground_truth.min().item())
+                min_val = min(contrast_ground_truth.min().item(), contrast_estimated.min().item())
                 batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
-                batch_ssim_torch, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=max_val-min_val)
+                batch_ssim, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=max_val-min_val)
                 batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
 
                 # remove mask points that would equal to 1 (possibly some estimated points
                 # will be removed here but only if matches completely in the kernel)
                                                         
-                batch_ssim_torch = ssim_image[ssim_image != 1].mean()
+                batch_ssim = ssim_image[mask[i].unsqueeze(0)].mean()
 
                 #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-                self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, on_epoch=True)
-                self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim_torch, on_epoch=True)
-                self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr, on_epoch=True)
+            self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse)
+            self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim)
+            self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr)
 
-                total_ssim += batch_ssim_torch
-                total_psnr += batch_psnr
-                total_nmse += batch_nmse
+            total_ssim += batch_ssim
+            total_psnr += batch_psnr
+            total_nmse += batch_nmse
 
         self.log(f'metrics/{label}_mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
         self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
