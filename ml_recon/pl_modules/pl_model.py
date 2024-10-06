@@ -58,7 +58,7 @@ class plReconModel(pl.LightningModule):
                 max_val = max(contrast_ground_truth.max().item(), contrast_estimated.max().item())
                 min_val = min(contrast_ground_truth.min().item(), contrast_estimated.min().item())
                 batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
-                batch_ssim, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=max_val-min_val)
+                batch_ssim, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=(min_val, max_val))
                 batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
 
                 # remove mask points that would equal to 1 (possibly some estimated points
