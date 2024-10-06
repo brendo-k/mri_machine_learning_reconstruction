@@ -123,7 +123,7 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             inverse_image = inverse_image.reshape(b * c, 1, h, w)
-            ssim_loss = torch.Tensor([1]) - ssim(lambda_image, inverse_image, data_range=(1, 0))
+            ssim_loss = torch.tensor(1, device=self.device) - ssim(lambda_image, inverse_image, data_range=(1, 0))
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
@@ -147,12 +147,12 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             image_full = image_full.reshape(b * c, 1, h, w)
-            ssim_loss_full = torch.tensor([1]) - ssim(lambda_image, image_full, data_range=(0, 1))
+            ssim_loss_full = torch.tensor(1, device=self.device) - ssim(lambda_image, image_full, data_range=(0, 1))
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
-                ssim_loss_full_inverse = torch.tensor([1]) - ssim(inverse_image, image_full, data_range=(0, 1))
+                ssim_loss_full_inverse = torch.tensor(1, device=self.device) - ssim(inverse_image, image_full, data_range=(0, 1))
                 inverse_image.reshape(b, c, h, w)
                 loss += ssim_loss_full_inverse * self.ssim_scaling
 
