@@ -29,7 +29,8 @@ class LearnedSSLLightning(plReconModel):
             lr:float = 1e-2,
             warm_start:bool = False, 
             learn_R:bool = False,
-            ssim_scaling = 1e-4,
+            ssim_scaling_set = 1e-4,
+            ssim_scaling_full = 1e-4,
             normalize_k_space_energy: float = 0.0,
             lambda_scaling: float = 0.0, 
             pass_all_data: bool = False,
@@ -50,7 +51,8 @@ class LearnedSSLLightning(plReconModel):
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
         self.prob_method = prob_method
-        self.ssim_scaling = ssim_scaling
+        self.ssim_scaling_set = ssim_scaling_set
+        self.ssim_scaling_full = ssim_scaling_full
         self.lambda_scaling = lambda_scaling
         self.norm_k_space = normalize_k_space_energy
         self.pass_all_data = pass_all_data
@@ -61,7 +63,6 @@ class LearnedSSLLightning(plReconModel):
         self.R_freeze = [False for _ in range(len(contrast_order))]
 
         self.loss_func = L1L2Loss
-        self.loss_func = torch.nn.MSELoss()
 
         if self.learn_R: 
             self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
@@ -128,7 +129,7 @@ class LearnedSSLLightning(plReconModel):
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
 
-            ssim_loss *= self.ssim_scaling
+            ssim_loss *= self.ssim_scaling_set
 
             self.log("train/loss_inverse", loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
             self.log("train/ssim_loss", ssim_loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -154,11 +155,11 @@ class LearnedSSLLightning(plReconModel):
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
                 ssim_loss_full_inverse = torch.tensor(1, device=self.device) - ssim(inverse_image, image_full, data_range=(0, 1))
                 inverse_image.reshape(b, c, h, w)
-                loss += ssim_loss_full_inverse * self.ssim_scaling
+                loss += ssim_loss_full_inverse * self.ssim_scaling_full
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             image_full = image_full.reshape(b, c, h, w)
-            loss += ssim_loss_full * self.ssim_scaling
+            loss += ssim_loss_full * self.ssim_scaling_full
 
         
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
