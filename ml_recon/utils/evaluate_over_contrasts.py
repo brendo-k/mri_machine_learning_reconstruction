@@ -14,8 +14,9 @@ def evaluate_over_contrasts(function: Callable, ground_truth:torch.Tensor, estim
         estimated_contrast = estimated[:, [i], ...]
         if accepts_data_range:
             # Call with `data_range` argument if the function accepts it
-            data_range = (gt_contrast - estimated_contrast).max() - (gt_contrast - estimated_contrast).min()
-            metric_value.append(function(gt_contrast, estimated_contrast, data_range=data_range))
+            max_val = max(gt_contrast.max().item(), estimated_contrast.max().item()) 
+            min_val = min(gt_contrast.min().item(), estimated_contrast.min().item())
+            metric_value.append(function(gt_contrast, estimated_contrast, data_range=(min_val, max_val)))
         else:
             # Call without `data_range` argument
             metric_value.append(function(gt_contrast, estimated_contrast))
