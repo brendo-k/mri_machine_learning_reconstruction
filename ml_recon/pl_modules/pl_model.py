@@ -24,8 +24,11 @@ class plReconModel(pl.LightningModule):
 
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
+        scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
         mask = ground_truth_image > 0.005
 
+        estimated_image /= scaling_factor
+        ground_truth_image /= scaling_factor
         estimated_image *= mask
         ground_truth_image *= mask
         diff = (ground_truth_image - estimated_image).abs()
@@ -37,7 +40,7 @@ class plReconModel(pl.LightningModule):
             current_step = batch_index * estimated_image.shape[0]
             for i in range(estimated_image.shape[0]):
                 wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0), step=current_step+i)
-                wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step+i)
+                wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step + i)
                 wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0), step=current_step + i)
                 wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step+i)
 
