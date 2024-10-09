@@ -6,9 +6,9 @@ import torch
 import h5py
 from argparse import ArgumentParser
 
-from ml_recon.dataset.k_space_dataset import KSpaceDataset
+from torch.utils.data import Dataset
 
-class M4Raw(KSpaceDataset):
+class M4Raw(Dataset):
     """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
     dataset. It does not do any subsampling
 
@@ -24,7 +24,9 @@ class M4Raw(KSpaceDataset):
             ):
 
         # call super constructor
-        super().__init__(nx=nx, ny=ny)
+        super().__init__()
+        self.nx = nx
+        self.ny = ny
 
         self.transforms = transforms
 
@@ -47,7 +49,9 @@ class M4Raw(KSpaceDataset):
             self.file_names.append(np.array(patient_files))
 
             with h5py.File(patient_files[0], 'r') as fr:
-                slices.append(fr['kspace'].shape[0])
+                dataset = fr['kspace']
+                assert dataset is h5py.Dataset
+                slices.append(dataset.shape[0])
 
 
         contrasts = np.array(contrasts)
@@ -86,9 +90,11 @@ class M4Raw(KSpaceDataset):
         
         for file in cur_files:
             with h5py.File(file) as fr:
-                k_space.append(torch.as_tensor(fr['kspace'][slice_index]))
+                dataset = fr['kspace']
+                assert dataset is h5py.Dataset
+                k_space.append(torch.as_tensor(dataset[slice_index]))
 
-        k_space = torch.stack(k_space, axis=0)
+        k_space = torch.stack(k_space, dim=0)
         return k_space 
 
     def resample_or_pad(self, k_space):
@@ -105,35 +111,4 @@ class M4Raw(KSpaceDataset):
         resample_height = self.ny
         resample_width = self.nx
 
-        return F.center_crop(k_space, (resample_height, resample_width))
-
-    @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
-
-        parser.add_argument(
-                '--data_dir', 
-                type=str, 
-                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/multicoil_train/16_chans/', 
-                help=''
-                )
-
-        return parser
-
-
-import matplotlib.pyplot as plt 
-from ml_recon.utils import image_slices, root_sum_of_squares, ifft_2d_img
-if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw/multicoil_train_averaged/'
-    dataset = M4Raw(dir, contrasts=['t1', 't2'])
-    l = dataset[0]
-
-    image_slices(l[0].abs(), cmap='gray')
-    image_slices(ifft_2d_img(l[0]).abs(), cmap='gray')
-    plt.figure(3)
-    plt.imshow(root_sum_of_squares(ifft_2d_img(l[0]), coil_dim=0), cmap='gray')
-    plt.figure(4)
-    plt.imshow(root_sum_of_squares(ifft_2d_img(l[1]), coil_dim=0), cmap='gray')
-    plt.show()
-
-
+        return F.center_crop(k_space, [resample_height, resample_width])

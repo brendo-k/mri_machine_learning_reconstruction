@@ -8,10 +8,9 @@ import h5py
 from argparse import ArgumentParser
 from typing import List
 
-from ml_recon.utils.read_headers import make_header
-from ml_recon.dataset.k_space_dataset import KSpaceDataset
+from torch.utils.data import Dataset
 
-class FastMRIDataset(KSpaceDataset):
+class FastMRIDataset(Dataset):
     """This is a supervised slice dataloader. Returns data in [contrast, channel, height, width] where
     contrast dimension is 1
 
@@ -32,7 +31,9 @@ class FastMRIDataset(KSpaceDataset):
             ):
 
         # call super constructor
-        super().__init__(nx=nx, ny=ny)
+        super().__init__()
+        self.nx = nx
+        self.ny = ny
         assert len(contrasts) == 1
         assert 't1' in contrasts
 
@@ -48,7 +49,9 @@ class FastMRIDataset(KSpaceDataset):
             full_path = os.path.join(data_dir, file)
             with h5py.File(full_path) as fr:
                 # loop through all the slices
-                slices.append(fr['kspace'].shape[0])
+                dataset = fr['kspace']
+                assert dataset is h5py.Dataset
+                slices.append(dataset.shape[0])
                 self.file_names.append(full_path)
             
         self.slice_cumulative_sum = np.cumsum(slices)
@@ -81,7 +84,9 @@ class FastMRIDataset(KSpaceDataset):
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         file_name = self.file_names[volume_index]
         with h5py.File(file_name) as fr:
-            k_space = torch.as_tensor(fr['kspace'][slice_index])
+            dataset = fr['kspace']
+            assert dataset is h5py.Dataset
+            k_space = torch.as_tensor(dataset[slice_index])
 
         return k_space 
 
@@ -103,16 +108,3 @@ class FastMRIDataset(KSpaceDataset):
 
         return F.center_crop(k_space, [resample_height, resample_width])
 
-    @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
-        parser = KSpaceDataset.add_model_specific_args(parent_parser)
-        parser = ArgumentParser(parents=[parser], add_help=False)
-
-        parser.add_argument(
-                '--data_dir', 
-                type=str, 
-                default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/16_chans/' ,
-                help='Top data directory where multicoil_train, multicoil_val, multicoil_test directories are'
-                )
-
-        return parser
