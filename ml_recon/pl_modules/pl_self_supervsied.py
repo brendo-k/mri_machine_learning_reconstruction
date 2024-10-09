@@ -1,6 +1,6 @@
 from ml_recon.dataset.self_supervised_decorator import SelfSupervisedDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.pl_modules.MRILoader import MRI_Loader
+from ml_recon.pl_modules.MRIDataModule import MRI_Loader
 
 
 class UndersampledDataset(MRI_Loader):

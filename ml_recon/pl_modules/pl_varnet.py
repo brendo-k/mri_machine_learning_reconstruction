@@ -8,7 +8,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.losses import L1L2Loss
 from ml_recon.models.varnet_mc import VarNet_mc
-from ml_recon.pl_modules.pl_model import plReconModel
+from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.models import Unet
 from ml_recon.models import ResNet
 from ml_recon.models import UnetR

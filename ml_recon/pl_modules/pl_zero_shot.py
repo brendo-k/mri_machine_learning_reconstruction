@@ -3,12 +3,13 @@ import numpy as np
 import torch
 import einops
 from typing import List
+from functools import partial
 
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim 
 from ml_recon.losses import L1L2Loss
-from ml_recon.utils.undersample_tools import gen_pdf_bern
+from ml_recon.utils.undersample_tools import scale_pdf, gen_pdf_bern, gen_pdf_columns
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
-from ml_recon.utils.evaluate import nmse
+from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.models import VarNet_mc
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
@@ -259,9 +260,6 @@ class LearnedSSLLightning(plReconModel):
             est_inverse_plot = est_inverse_img[0].cpu().numpy()
             est_full_plot = est_full_img[0].cpu().numpy()
             fully_sampled_plot = fully_sampled_img[0].cpu().numpy()
-            mask_lambda = mask_lambda[0, :, 0].cpu().numpy()
-            mask_inverse = mask_inverse[0, :, 0].cpu().numpy()
-            initial_mask = initial_mask[0, :, 0].cpu().numpy()
             est_lambda_plot /= np.max(est_lambda_plot, axis=(-1, -2), keepdims=True)
             est_inverse_plot /= np.max(est_inverse_plot, (-1, -2), keepdims=True)
             est_full_plot /= np.max(est_full_plot, (-1, -2), keepdims=True)
@@ -279,10 +277,6 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0))
             wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
-
 
 
     def test_step(self, batch, batch_idx):
@@ -517,8 +511,8 @@ class LearnedSSLLightning(plReconModel):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-2) 
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-2) 
+        return [optimizer], [scheduler]
 
     def train_supervised_step(self, batch): 
         undersampled = batch['input']
@@ -531,8 +525,9 @@ class LearnedSSLLightning(plReconModel):
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
     
-    def kMaxSampling(self, input, R, slope) -> torch.Tensor:
-        return KMaxSoftmaxFunction.apply(input, R, slope) # type: ignore
+    def kMaxSampling(self, input, R, slope):
+        return KMaxSoftmaxFunction.apply(input, R, slope)
+
 
     def split_into_lambda_loss_sets(self, omega_mask, batch_size): 
         lambda_mask = self.get_mask(batch_size, mask_center=True)

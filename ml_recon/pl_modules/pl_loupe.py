@@ -6,8 +6,8 @@ import einops
 from typing import List
 
 from ml_recon.losses import L1L2Loss
-from ml_recon.dataset.undersample import scale_pdf, gen_pdf_bern, gen_pdf_columns
-from ml_recon.pl_modules.pl_model import plReconModel
+from ml_recon.utils.undersample_tools import scale_pdf, gen_pdf_bern, gen_pdf_columns
+from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluate import nmse, ssim, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.pl_modules.pl_varnet import pl_VarNet

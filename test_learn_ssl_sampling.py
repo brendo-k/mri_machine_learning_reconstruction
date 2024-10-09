@@ -1,8 +1,8 @@
 import os
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
-from ml_recon.pl_modules.MRILoader import MRI_Loader
-from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
+from ml_recon.pl_modules.MRIDataModule import MRI_Loader
+from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from pathlib import Path
 import wandb
 import pytorch_lightning as pl
@@ -19,7 +19,7 @@ def main():
     artifact_dir = wandb_logger.download_artifact('chiew-lab/MRI Reconstruction/model-60e02djd:v0')
     trainer = pl.Trainer(callbacks=[], logger = wandb_logger)
     model = LearnedSSLLightning.load_from_checkpoint(Path(artifact_dir) / 'model.ckpt' )
-    datamodule = UndersampledDataset.load_from_checkpoint(Path(artifact_dir) / 'model.ckpt', data_dir=data_dir, batch_size=1)
+    datamodule = UndersampledDataModule.load_from_checkpoint(Path(artifact_dir) / 'model.ckpt', data_dir=data_dir, batch_size=1)
     # Instantiate the DataModule with the loaded hyperparameters
 
     trainer.test(model, datamodule=datamodule)

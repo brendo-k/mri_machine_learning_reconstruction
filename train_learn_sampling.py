@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import os
 
 from ml_recon.pl_modules.pl_loupe import LOUPE
-from ml_recon.pl_modules.MRILoader import MRI_Loader
+from ml_recon.pl_modules.MRIDataModule import MRI_Loader
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
