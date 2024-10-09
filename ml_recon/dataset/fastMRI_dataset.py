@@ -5,21 +5,14 @@ from typing import Optional, Callable, Union
 import torchvision.transforms.functional as F
 import torch
 import h5py
-from argparse import ArgumentParser
 from typing import List
 
 from torch.utils.data import Dataset
 
 class FastMRIDataset(Dataset):
-    """This is a supervised slice dataloader. Returns data in [contrast, channel, height, width] where
+    """This is a slice dataloader. Returns data in [contrast, channel, height, width] where
     contrast dimension is 1
 
-    Args:
-        data_dir: Directory of h5py files
-        nx: resolution in the x direction
-        ny: resolution in the y direction
-        build_new_header: builds a new header file so we don't have to every time
-        
     """
     def __init__(
             self,
@@ -71,13 +64,9 @@ class FastMRIDataset(Dataset):
         # add contrast dimension
         k_space = k_space.unsqueeze(0)
 
-        output = {
-                'fs_k_space': k_space
-                }
-
         if self.transforms:
-            output = self.transforms(output)
-        return output
+            k_space = self.transforms(k_space)
+        return k_space
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)

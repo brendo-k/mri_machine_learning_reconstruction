@@ -1,13 +1,20 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.pl_modules.MRILoader import MRI_Loader
-from ml_recon.dataset.Brats_dataset import BratsDataset
+from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.m4raw_dataset import M4Raw
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+from ml_recon.dataset.dataset_output_type import TrainingSample
+
+from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
+
+import pytorch_lightning as pl
+
+from dataclasses import asdict
 import os
 
 
-class UndersampledDataset(MRI_Loader):
+class UndersampledDataModule(pl.LightningDataModule):
     def __init__(
             self, 
             dataset_name: str,
@@ -24,9 +31,10 @@ class UndersampledDataset(MRI_Loader):
             self_supervsied: bool = False
             ):
 
-        super().__init__(dataset_name, data_dir, resolution, contrasts, batch_size=batch_size, num_workers=num_workers)
+        super().__init__()
         self.save_hyperparameters()
-
+        
+        dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
             self.dataset_class = BratsDataset
         elif dataset_name == 'fastmri':
@@ -35,6 +43,8 @@ class UndersampledDataset(MRI_Loader):
             self.dataset_class = M4Raw
 
         self.data_dir = data_dir
+        self.contrasts = contrasts
+        self.num_workers = num_workers
         self.batch_size = batch_size
         self.resolution = resolution
         self.line_constrained = line_constrained
@@ -44,9 +54,9 @@ class UndersampledDataset(MRI_Loader):
         self.self_supervised = self_supervsied
         
         if norm_method == 'img':
-            self.transforms = normalize_image_max()
+            self.transforms = Compose([normalize_image_max(), convert_dataclass_to_dict()])
         else: 
-            self.transforms = normalize_k_max()
+            self.transforms = Compose([normalize_k_max(), convert_dataclass_to_dict()]) 
 
     def setup(self, stage):
         super().setup(stage)
@@ -60,84 +70,101 @@ class UndersampledDataset(MRI_Loader):
         val_dir = os.path.join(self.data_dir, val_file)
         test_dir = os.path.join(self.data_dir, test_file)
 
+        dataset_keyword_args = {
+            'nx': self.resolution[0], 
+            'ny': self.resolution[1],
+            'contrasts': self.contrasts
+        }
+
+        undersample_keywords = {
+                'R': self.R,
+                'R_hat': self.R_hat,
+                'line_constrained': self.line_constrained,
+                'transforms': self.transforms,
+                'segregated': self.segregated,
+                'self_supervised': self.self_supervised
+        }
+
         self.train_dataset = self.dataset_class(
                 train_dir, 
-                nx=self.resolution[0], 
-                ny=self.resolution[1],
-                contrasts=self.contrasts,
+                **dataset_keyword_args
                 )
 
         self.val_dataset = self.dataset_class(
                 val_dir, 
-                nx=self.resolution[0], 
-                ny=self.resolution[1],
-                contrasts=self.contrasts,
+                **dataset_keyword_args
                 )
 
         self.test_dataset = self.dataset_class(
                 test_dir, 
-                nx=self.resolution[0], 
-                ny=self.resolution[1], 
-                contrasts=self.contrasts,
+                **dataset_keyword_args
                 )
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                R=self.R,
-                R_hat=self.R_hat,
-                line_constrained=self.line_constrained,
-                transforms=self.transforms,
-                segregated=self.segregated,
-                self_supervised=self.self_supervised
+                **undersample_keywords
                 )
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
-                R=self.R,
-                R_hat=self.R_hat,
-                line_constrained=self.line_constrained,
-                transforms=self.transforms,
-                segregated=self.segregated,
-                self_supervised=self.self_supervised
+                **undersample_keywords
                 )
         
-        # Test dataset should not be false because we want to see how well ssl training did
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
-                R=self.R,
-                R_hat=self.R_hat,
-                line_constrained=self.line_constrained,
-                transforms=self.transforms,
-                segregated=self.segregated,
-                self_supervised=False
+                **undersample_keywords
                 )
 
         self.contrast_order = self.train_dataset.contrast_order
+    
+    def train_dataloader(self):
+        return DataLoader(
+                self.train_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                shuffle=True,
+                pin_memory=True
+                )
+
+    def val_dataloader(self):
+        return DataLoader(
+                self.val_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                pin_memory=True
+                )
+
+    def test_dataloader(self):
+        return DataLoader(
+                self.test_dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers,
+                pin_memory=True
+                )
 
 
 class normalize_image_max(object):
-    def __call__(self, data):
-        input = data['input']
-        target = data['target']
+    def __call__(self, data: TrainingSample):
+        input = data.input
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        data.update({
-            'input': input/scaling_factor, 
-            'target': target/scaling_factor,
-            'fs_k_space': data['fs_k_space']/scaling_factor
-            })
+        data.input /= scaling_factor
+        data.target /= scaling_factor
+        data.fs_k_space /= scaling_factor
         return data
 
 class normalize_k_max(object):
-    def __call__(self, data):
-        input = data['input']
-        target = data['target']
+    def __call__(self, data: TrainingSample):
+        input = data.input
         undersample_max = input.abs().amax((1, 2, 3), keepdim=True)
         
-        data.update({
-            'input': input/undersample_max, 
-            'target': target/undersample_max,
-            'fs_k_space': data['fs_k_space']/undersample_max
-            })
+        data.input /= undersample_max
+        data.target /= undersample_max
+        data.fs_k_space /= undersample_max
         return data
+
+class convert_dataclass_to_dict(object):
+    def __call__(self, data: TrainingSample):
+        return asdict(data)
+        

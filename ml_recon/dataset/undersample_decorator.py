@@ -6,9 +6,15 @@ from torch.utils.data import Dataset
 
 from typing import Union, Callable
 from ml_recon.utils.undersample_tools import apply_undersampling, gen_pdf, scale_pdf, calc_k
-from dataset_output_type import TrainingSample
+from ml_recon.dataset.dataset_output_type import TrainingSample
 
 class UndersampleDecorator(Dataset):
+    """Decorator class that can be used on all datasets present in the dataset folder.
+    The decorator wraps the original dataset and undersamples it based on parameters
+    here. Can further do self supervised undersampling.
+
+    """
+
     def __init__(
         self, 
         dataset: Dataset, 
@@ -24,7 +30,7 @@ class UndersampleDecorator(Dataset):
         super().__init__()
 
         self.dataset = dataset
-        self.contrasts = dataset[0]['fs_k_space'].shape[0]
+        self.contrasts = dataset[0].shape[0]
         self.contrast_order = dataset.contrast_order # type: ignore
         self.line_constrained = line_constrained
         self.segregated = segregated
@@ -59,7 +65,6 @@ class UndersampleDecorator(Dataset):
 
     def __getitem__(self, index):
         k_space = self.dataset[index] #[con, chan, h, w] 
-        k_space = k_space['fs_k_space']
         
         under, mask_omega, new_prob = apply_undersampling(self.random_index + index, 
                                        self.omega_prob, 
@@ -71,7 +76,7 @@ class UndersampleDecorator(Dataset):
         output = TrainingSample(
                 input = under, 
                 target = k_space, 
-                fs_k_space = k_space,
+                fs_k_space = k_space.clone(),
                 mask = torch.from_numpy(mask_omega),
                 loss_mask = torch.ones_like(torch.from_numpy(mask_omega))
                 )

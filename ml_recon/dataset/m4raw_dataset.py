@@ -4,7 +4,6 @@ from typing import Union, Callable, Collection
 import torchvision.transforms.functional as F
 import torch
 import h5py
-from argparse import ArgumentParser
 
 from torch.utils.data import Dataset
 
@@ -12,7 +11,6 @@ class M4Raw(Dataset):
     """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
     dataset. It does not do any subsampling
 
-    Args:
     """
     def __init__(
             self,
@@ -71,14 +69,11 @@ class M4Raw(Dataset):
         k_space = self.get_data_from_file(index)
         k_space = self.resample_or_pad(k_space)
 
-        output = {
-                'fs_k_space': k_space
-                }
 
         if self.transforms:
-            output = self.transforms(output)
+            k_space = self.transforms(k_space)
 
-        return output
+        return k_space
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)

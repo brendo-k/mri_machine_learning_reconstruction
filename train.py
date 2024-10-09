@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
-from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
+from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -32,7 +32,7 @@ def main(args):
     nx = args.nx
     ny = args.ny
     
-    data_module = UndersampledDataset(
+    data_module = UndersampledDataModule(
             args.dataset_name, 
             data_dir, 
             batch_size=args.batch_size, 

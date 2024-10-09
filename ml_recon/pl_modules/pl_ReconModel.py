@@ -9,15 +9,17 @@ from torchmetrics.functional.image import structural_similarity_index_measure as
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 from ml_recon.utils.evaluate import nmse, psnr
 
-# define the LightningModule
-class plReconModel(pl.LightningModule):
-    def __init__(
-            self, 
-            contrast_order,
-            ):
 
+class plReconModel(pl.LightningModule):
+    """This is a superclass for all reconstruction models. It tests the output 
+    vs the ground truth using SSIM, PSNR, and NMSE. Handles multiple contrasts.
+    Most recon networks here inhereit from this class. 
+    """
+
+    def __init__(self, contrast_order):
         super().__init__()
         self.contrast_order = contrast_order
+
 
     def test_step(self, batch, batch_index):
         estimate_k, k_space, label = batch

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ml_recon.dataset.undersample import gen_pdf_columns, gen_pdf_bern, get_mask_from_distribution, get_mask_from_segregated_sampling, scale_pdf
+from ml_recon.utils.undersample_tools import gen_pdf_columns, gen_pdf_bern, get_mask_from_distribution, get_mask_from_segregated_sampling, scale_pdf
 
 def test_line_probability_mask():
     pdf = gen_pdf_columns(300, 600, 1/4, 8, 10)

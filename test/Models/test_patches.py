@@ -2,7 +2,6 @@ import torch
 import pytest
 import numpy as np
 from ml_recon.models.patches import Patches
-import matplotlib.pyplot as plt
 
 # Unit tests for double_conv module
 def test_zero_tensor():

@@ -1,5 +1,5 @@
 from ml_recon.pl_modules.pl_loupe import LOUPE
-from ml_recon.pl_modules.pl_undersampled import UndersampledDataset
+from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.models import Unet
 import torch
@@ -21,7 +21,7 @@ def main():
     print(checkpoint.keys())
 
 
-    data_module = UndersampledDataset(**checkpoint['datamodule_hyper_parameters']) 
+    data_module = UndersampledDataModule(**checkpoint['datamodule_hyper_parameters']) 
     data_module.setup(stage='train')
    
 

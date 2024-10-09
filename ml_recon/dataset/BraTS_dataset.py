@@ -3,22 +3,18 @@ import csv
 import time
 import h5py
 from typing import Callable, Optional, Union, Collection
-from argparse import ArgumentParser
 import torchvision.transforms.functional as F 
 
-from scipy.interpolate import interpn
 import torch
 import numpy as np
 
-import nibabel as nib
 
-from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 from torch.utils.data import Dataset
 
-class KSpaceBrats(Dataset):
+class BratsDataset(Dataset):
     """
-    Takes data directory and creates a dataset. Before using you need to specify the file reader 
-    to use in the filereader variable. 
+    Takes data directory and creates a dataset for BraTS dataset. Need to simulate first 
+    using ml_recon/utils/simulate_brats
     """
 
     def __init__(
@@ -54,13 +50,13 @@ class KSpaceBrats(Dataset):
             sample_file_path = os.path.join(sample_path, sample_file[0])
             with h5py.File(sample_file_path, 'r') as fr:
                 k_space = fr['k_space']
-                assert k_space is h5py.Dataset
+                assert isinstance(k_space, h5py.Dataset)
                 num_slices = k_space.shape[0]
                 slices.append(num_slices)
                 if first:
                     contrast_dataset = fr['contrasts']
-                    assert contrast_dataset is h5py.Dataset
-                    contrast_order = contrast_dataset[:].astype('U').lower()
+                    assert isinstance(contrast_dataset, h5py.Dataset)
+                    contrast_order = contrast_dataset[:].astype('U')
                     first = False
 
             data_list.append(sample_file_path)
@@ -87,14 +83,11 @@ class KSpaceBrats(Dataset):
     def __getitem__(self, index):
         volume_index, slice_index = self.get_vol_slice_index(index)
         data = self.get_data_from_indecies(volume_index, slice_index)
-        output = {
-                'fs_k_space': data
-                }
 
         if self.transforms:
-            output = self.transforms(output)
+            data = self.transforms(data)
 
-        return output
+        return data
 
     # get the volume index and slice index. This is done using the cumulative sum
     # of the number of slices.
@@ -114,7 +107,7 @@ class KSpaceBrats(Dataset):
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
             dataset = fr['k_space']
-            assert dataset is h5py.Dataset
+            assert isinstance(dataset, h5py.Dataset)
             data = torch.as_tensor(dataset[slice_index, self.contrast_order_indexes])
             data = F.center_crop(data, [self.ny, self.nx])
 

@@ -5,55 +5,58 @@ import torch
 from torch.utils.data import DataLoader
 
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
-from ml_recon.dataset.Brats_dataset import BratsDataset
-from ml_recon.dataset.self_supervised_decorator import SelfSupervisedDecorator
+from ml_recon.dataset.BraTS_dataset import BratsDataset
+from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 
 
 ACS_LINES = 10
 @pytest.fixture
-def dataset(get_data_dir, scope='session') -> SelfSupervisedDecorator:
-    dataset = BratsDataset(get_data_dir)
-    undersample_dataset = SelfSupervisedDecorator(dataset, R=8, acs_lines=ACS_LINES)
+def supervised_dataset(get_data_dir) -> UndersampleDecorator:
+    dataset = BratsDataset(get_data_dir, nx=128, ny=128)
+    undersample_dataset = UndersampleDecorator(dataset, R=8, acs_lines=ACS_LINES, self_supervised=False)
     return undersample_dataset
 
 @pytest.fixture
 def get_data_dir() -> str:
-    return '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/train/'
+    return './test/test_data/simulated_subset_random_phase/train/'
 
-def test_slice_load(dataset):
-    dataset = BratsDataset('/home/kadotab/projects/def-mchiew/kadotab/Datasets/t1_fastMRI/16_chans/multicoil_train/')
-    undersample_dataset = SelfSupervisedDecorator(dataset, acs_lines=ACS_LINES)
-    data = next(iter(undersample_dataset))
-    assert len(data) == 2
+def test_undersampled_slice(supervised_dataset):
+    data = next(iter(supervised_dataset))
 
-def test_fast_mri(dataset):
-    data = next(iter(dataset))
-    assert len(data) == 2
+    width = data.input.shape[-1]
+    center_width = np.floor(width/2).astype(int)
+    height = data.input.shape[-2]
+    center_height = np.floor(height/2).astype(int)
 
-def test_undersampled_slice(dataset):
-    data = next(iter(dataset))
-
-    phase_encode_size = data[0].shape[-1]
-    center = np.floor(phase_encode_size/2).astype(int)
-    fe_size = data[0].shape[-2]
-    fe_center = np.floor(fe_size/2).astype(int)
-    acs = data[0][..., fe_center,  center - ACS_LINES//2:center + ACS_LINES//2]
+    acs = data.input[..., center_height - ACS_LINES//2:center_height + ACS_LINES + 2,  center_width - ACS_LINES//2:center_width + ACS_LINES//2]
     assert (acs != 0).all()
 
+def test_fully_sampled(supervised_dataset):
+    data = supervised_dataset[0]
 
-def test_non_deterministic(dataset):
-    data1 = dataset[0]
-    data2 = dataset[0]
+    assert (data.fs_k_space != 0).all()
 
-    assert ((data1[0] != 0) != (data2[0] != 0)).any()
 
-def test_non_deterministic_between_slices(dataset):
-    data1 = dataset[0]
-    data2 = dataset[1]
-    assert ((data1[1] != 0) != (data2[1] != 0)).any()
+def test_non_deterministic(supervised_dataset):
+    data1 = supervised_dataset[0]
+    data2 = supervised_dataset[0]
 
-def test_undersampling(dataset):
-    doub_under, under = dataset[0]
+    assert ((data1.input != 0) == (data2.input != 0)).any()
 
-    assert not torch.any((doub_under != 0) & (under != 0))
+def test_non_deterministic_between_slices(supervised_dataset):
+    data1 = supervised_dataset[0]
+    data2 = supervised_dataset[1]
+    assert ((data1.input != 0) != (data2.input != 0)).any()
+
+def test_non_deterministic_between_lambda(get_data_dir):
+    dataset = BratsDataset(get_data_dir, nx=128, ny=128)
+    undersample_dataset = UndersampleDecorator(dataset, R=4, acs_lines=ACS_LINES, self_supervised=True, R_hat=2)
     
+    data1 = undersample_dataset[0]
+    data2 = undersample_dataset[0]
+
+    assert ((data1.input != 0) != (data2.input != 0)).any()
+    assert ((data1.target != 0) != (data2.target != 0)).any()
+    assert ((data1.loss_mask) != (data2.loss_mask)).any()
+    assert ((data1.mask) != (data2.mask)).any()
+    torch.testing.assert_close(data1.fs_k_space, data2.fs_k_space)
