@@ -5,13 +5,13 @@ import math
 from torch.utils.data import Dataset
 
 from typing import Union, Callable
-from ml_recon.dataset.undersample import apply_undersampling, gen_pdf, scale_pdf, calc_k
-from ml_recon.dataset.k_space_dataset import KSpaceDataset
+from ml_recon.utils.undersample_tools import apply_undersampling, gen_pdf, scale_pdf, calc_k
+from dataset_output_type import TrainingSample
 
 class UndersampleDecorator(Dataset):
     def __init__(
         self, 
-        dataset: KSpaceDataset, 
+        dataset: Dataset, 
         R: float = 4, 
         line_constrained: bool = True, 
         poly_order: int = 8,
@@ -25,11 +25,11 @@ class UndersampleDecorator(Dataset):
 
         self.dataset = dataset
         self.contrasts = dataset[0]['fs_k_space'].shape[0]
-        self.contrast_order = dataset.contrast_order
+        self.contrast_order = dataset.contrast_order # type: ignore
         self.line_constrained = line_constrained
         self.segregated = segregated
 
-        self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines)
+        self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
         # create omega probability the same size as number of contrasts
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
@@ -54,7 +54,7 @@ class UndersampleDecorator(Dataset):
 
 
     def __len__(self):
-        return self.dataset.__len__()
+        return self.dataset.__len__() # type: ignore
 
 
     def __getitem__(self, index):
@@ -68,14 +68,13 @@ class UndersampleDecorator(Dataset):
                                        line_constrained=self.line_constrained, 
                                        segregated=self.segregated
                                        )
-        output = {
-                'input': under, 
-                'target': k_space, 
-                'fs_k_space': k_space,
-                'mask': mask_omega,
-                'omega_mask': mask_omega,
-                'loss_mask': np.ones_like(mask_omega)
-                }
+        output = TrainingSample(
+                input = under, 
+                target = k_space, 
+                fs_k_space = k_space,
+                mask = torch.from_numpy(mask_omega),
+                loss_mask = torch.ones_like(torch.from_numpy(mask_omega))
+                )
 
         if self.self_supervised:
 
@@ -92,15 +91,13 @@ class UndersampleDecorator(Dataset):
             
             # loss mask is what is not in double undersampled
             target = under * ~mask_lambda
-            
-            ssl_keys = {
-                    'input': doub_under, 
-                    'target': target, 
-                    'mask_lambda': mask_lambda,
-                    'mask': mask_lambda & mask_omega,
-                    'loss_mask': ~mask_lambda & mask_omega
-                    }
-            output.update(ssl_keys)
+            output = TrainingSample(
+                input = doub_under, 
+                target = target, 
+                fs_k_space = k_space,
+                mask = torch.from_numpy(mask_lambda & mask_omega),
+                loss_mask = torch.from_numpy(~mask_lambda & mask_omega)
+                )
 
         if self.transforms: 
             output = self.transforms(output)
