@@ -301,9 +301,9 @@ class LearnedSSLLightning(plReconModel):
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
 
         estimate_lambda = self.pass_through_model(undersampled, mask_lambda)
-        estimate_lambda = estimate_lambda * ~initial_mask + estimate_lambda
+        estimate_lambda = estimate_lambda * ~initial_mask + undersampled 
         estimate_inverse = self.pass_through_model(undersampled, mask_inverse_w_acs)
-        estimate_inverse = estimate_inverse * ~initial_mask + estimate_inverse
+        estimate_inverse = estimate_inverse * ~initial_mask + undersampled
 
         mean_lambda_inverse = torch.stack([estimate_lambda, estimate_inverse]).mean(0)
         mean_all_3 = torch.stack([estimate_lambda, estimate_inverse, estimate_k]).mean(0)
@@ -319,7 +319,7 @@ class LearnedSSLLightning(plReconModel):
 
         variance_map = torch.stack([lambda_img, inverse_img, full_img]).std(0)
         wandb_logger = self.logger
-        wandb_logger.log_image('test/std of 3 images', np.split(np.clip(variance_map.cpu(), 0, 1), variance_map.shape[1], 0))
+        wandb_logger.log_image('test/std of 3 images', np.split(np.clip(variance_map[0].cpu(), 0, 1), variance_map.shape[1], 0))
 
 
     
