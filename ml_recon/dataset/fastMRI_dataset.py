@@ -43,7 +43,7 @@ class FastMRIDataset(Dataset):
             with h5py.File(full_path) as fr:
                 # loop through all the slices
                 dataset = fr['kspace']
-                assert dataset is h5py.Dataset
+                assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[0])
                 self.file_names.append(full_path)
             
@@ -74,7 +74,7 @@ class FastMRIDataset(Dataset):
         file_name = self.file_names[volume_index]
         with h5py.File(file_name) as fr:
             dataset = fr['kspace']
-            assert dataset is h5py.Dataset
+            assert isinstance(dataset, h5py.Dataset)
             k_space = torch.as_tensor(dataset[slice_index])
 
         return k_space 
