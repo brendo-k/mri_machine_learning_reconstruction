@@ -3,7 +3,6 @@ import torch
 import ml_recon.pl_modules.pl_loupe as pl_loupe
 from itertools import repeat
 
-@torch.no_grad()
 def test_norm_prob():
     contrasts = 4
     image_size = (320, 320)
@@ -23,3 +22,5 @@ def test_norm_prob():
     torch.testing.assert_close(actual_R_values, torch.full(actual_R_values.shape, 1/R))
     
 
+if __name__ == '__main__':
+    pytest.main()
