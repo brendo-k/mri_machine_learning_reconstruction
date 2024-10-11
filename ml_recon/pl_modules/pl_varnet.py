@@ -77,8 +77,7 @@ class pl_VarNet(plReconModel):
 
     def training_step(self, batch, batch_idx):
 
-        estimate_target = self(batch)
-        estimate_target = estimate_target * (batch['input'] == 0) + batch['input']
+        estimate_target = self.forward(batch)
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
 
@@ -92,7 +91,6 @@ class pl_VarNet(plReconModel):
 
     def validation_step(self, batch, batch_idx):
         estimate_target = self.forward(batch)
-        estimate_target = estimate_target * (batch['input'] == 0) + batch['input']
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
         self.log('val/val_loss', loss, on_epoch=True, logger=True)
@@ -109,13 +107,13 @@ class pl_VarNet(plReconModel):
 
     def test_step(self, batch, batch_idx):
         estimated_target = self.forward(batch)
-        estimated_target = estimated_target * (batch['input'] == 0) + batch['input']
-        super().test_step((estimated_target, batch['fs_k_space']), None)
+        super().test_step((estimated_target, batch['fs_k_space']), batch_idx)
 
 
     def forward(self, data): 
         under_k, mask = data['input'], data['mask']
         estimate_k = self.model(under_k, mask)
+        estimate_k = estimate_k * ~mask + under_k
         return estimate_k
 
     # optimizer configureation -> using adam w/ lr of 1e-3

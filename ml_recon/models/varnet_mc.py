@@ -25,9 +25,6 @@ class VarNet_mc(nn.Module):
         assert model_backbone is not None
 
         # module cascades
-        self.cascade = nn.ModuleList()
-        
-        
         if weight_sharing:
             assert isinstance(model_backbone, nn.Module), "Model is not an instance of nn.Module"
             self.cascades = nn.ModuleList(
