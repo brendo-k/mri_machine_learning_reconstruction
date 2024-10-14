@@ -11,8 +11,8 @@ def evaluate_over_contrasts(function: Callable, ground_truth:torch.Tensor, estim
     metric_value = []
     for i in range(ground_truth.shape[1]):
         for j in range(ground_truth.shape[0]):
-            gt_contrast = ground_truth[[j], [i], ...]
-            estimated_contrast = estimated[[j], [i], ...]
+            gt_contrast = ground_truth[j, i, ...].unsqueeze(0).unsqueeze(0)
+            estimated_contrast = estimated[j, i, ...].unsqueeze(0).unsqueeze(0)
             if accepts_data_range:
                 # Call with `data_range` argument if the function accepts it
                 max_val = max(gt_contrast.max().item(), estimated_contrast.max().item()) 

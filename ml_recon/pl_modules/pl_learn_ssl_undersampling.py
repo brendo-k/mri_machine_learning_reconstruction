@@ -222,6 +222,9 @@ class LearnedSSLLightning(plReconModel):
         est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)/scaling_factor
         est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
         est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
+        est_lambda_img = est_lambda_img.clip(0, 1)
+        est_full_img = est_full_img.clip(0, 1)
+        est_inverse_img = est_inverse_img.clip(0, 1)
 
         wandb_logger = self.logger
 
