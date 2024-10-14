@@ -29,32 +29,28 @@ class M4Raw(Dataset):
         self.transforms = transforms
 
         files = os.listdir(data_dir)
-        patient_id = list(set([file.split('-')[0] for file in files]))
+        patient_id = list(set([file.split('_')[0] for file in files]))
         patient_id.sort()
         
         slices = []
         self.file_names = []
 
-        first = True
         for patient in patient_id:
-            patient_files = [os.path.join(data_dir, file) for file in files if patient in file]
-            patient_files.sort()
+            patient_files = [] 
+            for contrast in contrasts: 
+                con_label = contrast.upper()
+                file_label = f'{patient}_{con_label}.h5'
+                patient_files.append(os.path.join(data_dir, file_label))
 
-            if first: 
-                self.contrast_order = np.array([file.split('-')[-1].split('.')[0] for file in patient_files])
-                first = False
-            
-            self.file_names.append(np.array(patient_files))
+            self.file_names.append(patient_files)
 
             with h5py.File(patient_files[0], 'r') as fr:
                 dataset = fr['kspace']
-                assert dataset is h5py.Dataset
+                assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[0])
 
 
-        contrasts = np.array(contrasts)
-        self.contrast_index = np.isin(self.contrast_order, contrasts)
-        self.contrast_order = self.contrast_order[self.contrast_index]
+        self.contrast_order = contrasts
 
         self.slice_cumulative_sum = np.cumsum(slices) 
         self.length = self.slice_cumulative_sum[-1]
@@ -79,14 +75,13 @@ class M4Raw(Dataset):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         cur_files = self.file_names[volume_index]
-        cur_files = cur_files[self.contrast_index]
         
         k_space = []
         
         for file in cur_files:
             with h5py.File(file) as fr:
                 dataset = fr['kspace']
-                assert dataset is h5py.Dataset
+                assert isinstance(dataset, h5py.Dataset)
                 k_space.append(torch.as_tensor(dataset[slice_index]))
 
         k_space = torch.stack(k_space, dim=0)
