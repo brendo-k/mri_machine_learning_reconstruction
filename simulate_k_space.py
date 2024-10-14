@@ -1,20 +1,17 @@
-from ml_recon.dataset.Brats_dataset import SimulatedBrats
+from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space
 import numpy as np
 import nibabel as nib
 import h5py
 import os
 import multiprocessing
 from itertools import repeat
-from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
-import matplotlib.pyplot as plt
-from torchvision.transforms.functional import center_crop
-import torch
+from ml_recon.utils import fft_2d_img, ifft_2d_img
+import sys
 
 IMAGE_SIZE = (128, 128)
-COIL_SIZE = 12
 
 # Define a function to process a single file
-def process_file(file, out_path, seed):
+def process_file(file, out_path, seed, noise, coils):
     print(f'Starting file {file}, with seed: {seed}')
     patient_name = file.split('/')[-1]
 
@@ -29,7 +26,7 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, COIL_SIZE, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, int(coils), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -46,9 +43,9 @@ def process_file(file, out_path, seed):
             cur_images = ifft_2d_img(cur_images)
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            k_space[..., (i-70)//3] = SimulatedBrats.simulate_k_space(
-                                        cur_images, seed+i, same_phase=False, 
-                                        center_region=20, noise_std=0.0001, coil_size=COIL_SIZE
+            k_space[..., (i-70)//3] = simulate_k_space(
+                                        cur_images, seed+i,
+                                        center_region=20, noise_std=noise, coil_size=coils
                                         )
 
     k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
@@ -79,15 +76,19 @@ if __name__ == '__main__':
     save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
     dataset_splits = ['train', 'test', 'val']
 
+    save_dir = sys.argv[1]
+    noise = float(sys.argv[2])
+    coils = sys.argv[3]
+
     # Create a pool of worker processes
     num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
+    #num_processes = 1
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
         # Process each file in parallel
-        results = []
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
@@ -102,4 +103,11 @@ if __name__ == '__main__':
         #ax[0, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 2, :, :, :]), 128)), coil_dim = 0))
         #ax[1, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 3, :, :, :]), 128)), coil_dim = 0))
         #plt.show()
-        pool.starmap(process_file, zip(files.__iter__(), repeat(os.path.join(save_dir, split)), seeds))
+        pool.starmap(process_file, 
+                     zip(
+                         files.__iter__(), 
+                         repeat(os.path.join(save_dir, split)),
+                         seeds,
+                         repeat(noise),
+                         repeat(coils))
+                     )

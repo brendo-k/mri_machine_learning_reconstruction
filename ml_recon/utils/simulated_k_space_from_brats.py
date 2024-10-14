@@ -3,7 +3,7 @@ import numpy as np
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
-def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=12):
+def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=12):
     #simulate some random motion
     rng = np.random.default_rng(seed)
     x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
@@ -11,7 +11,7 @@ def simulate_k_space(image, seed, same_phase=False, center_region=20, noise_std=
     #image [Contrast height width]
     image_w_sense = apply_sensetivities(image, coil_size)
     #image_w_sense [Contrast coil height width]
-    image_w_phase = generate_and_apply_phase(image_w_sense, seed, same_phase=same_phase, center_region=center_region)
+    image_w_phase = generate_and_apply_phase(image_w_sense, seed, center_region=center_region)
     k_space = fft_2d_img(image_w_phase)
     k_space = apply_noise(k_space, seed, noise_std)
     return k_space
@@ -24,10 +24,17 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    #sense_map = np.load('/home/brenden/Documents/data/subset/coil_compressed_' + coil_size + '.npy')
-    sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
+    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_maps_' + coil_size + '.npy')
+    #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     print(sense_map.shape)
-    sense_map = np.transpose(sense_map, (2, 1, 0))
+    sense_map = np.transpose(sense_map, (0, 2, 1))
+    sense_map = sense_map[:, 50:-50, 50:-50]
+    print(sense_map.shape)
+    rng = np.random.default_rng()
+    x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
+    image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
+    #image [Contrast height width]
+    
 
     #mag_sense_map = np.abs(sense_map)
     #mag_sense_phase = np.angle(sense_map)
@@ -87,11 +94,7 @@ def zero_pad_or_crop(arr, target_shape):
     return padded[tuple(slices)]
 
 
-def generate_and_apply_phase(data, seed, center_region=20, same_phase=False):
-    if same_phase: 
-        nc = 1
-    else:
-        nc = data.shape[0]
+def generate_and_apply_phase(data, seed, center_region=20):
 
     #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
     phase = build_phase_from_same_dist(data, seed)
