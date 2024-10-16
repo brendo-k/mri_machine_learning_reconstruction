@@ -24,12 +24,13 @@ class LearnedSSLLightning(plReconModel):
             center_region:int = 10,
             prob_method:str = 'loupe', 
             sigmoid_slope1:float = 5.0,
-            sigmoid_slope2:float = 200.0,
+            sigmoid_slope2:float = 200,
             lr:float = 1e-2,
             warm_start:bool = False, 
             learn_R:bool = False,
             ssim_scaling_set = 1e-4,
             ssim_scaling_full = 1e-4,
+            ssim_scaling_inverse = 1e-4,
             normalize_k_space_energy: float = 0.0,
             lambda_scaling: float = 0.0, 
             pass_all_data: bool = False,
@@ -52,6 +53,7 @@ class LearnedSSLLightning(plReconModel):
         self.prob_method = prob_method
         self.ssim_scaling_set = ssim_scaling_set
         self.ssim_scaling_full = ssim_scaling_full
+        self.ssim_scaling_inverse_full = ssim_scaling_inverse
         self.lambda_scaling = lambda_scaling
         self.norm_k_space = normalize_k_space_energy
         self.pass_all_data = pass_all_data
@@ -65,6 +67,8 @@ class LearnedSSLLightning(plReconModel):
 
         if self.learn_R: 
             self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+        else: 
+            self.R_value = torch.full((image_size[0],), float(self.R))
 
         if prob_method == 'loupe':
             if warm_start: 
@@ -154,7 +158,7 @@ class LearnedSSLLightning(plReconModel):
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
                 ssim_loss_full_inverse = torch.tensor(1, device=self.device) - ssim(inverse_image, image_full, data_range=(0, 1))
                 inverse_image.reshape(b, c, h, w)
-                loss += ssim_loss_full_inverse * self.ssim_scaling_full
+                loss += ssim_loss_full_inverse * self.ssim_scaling_inverse_full
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             image_full = image_full.reshape(b, c, h, w)
@@ -178,6 +182,9 @@ class LearnedSSLLightning(plReconModel):
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
                 R_value = self.norm_R(self.R_value)
+                for i in range(len(R_value)):
+                    self.log(f'train/R_{self.contrast_order[i]}', R_value[i], on_epoch=True)
+
                 probability = self.norm_prob(probability, R_value, mask_center=True)
                 probability = torch.stack(probability, dim=0)
                 wandb_logger.log_image('train/probability', np.split(probability.abs(), lambda_image.shape[1], 0))
@@ -334,7 +341,8 @@ class LearnedSSLLightning(plReconModel):
     
 
     # takes an array of R values and normalizes it to the desired R value
-    def norm_R(self, R):
+
+    def norm_R(self, R) -> List[torch.Tensor]:
         if self.learn_R:
             inverse = [1/R_val for R_val, freeze in zip(R, self.R_freeze) if not freeze]
             cur_R = []
