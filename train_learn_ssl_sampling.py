@@ -53,7 +53,9 @@ def main(args):
             learn_R=args.learn_R,
             warm_start=args.warm_start,
             ssim_scaling_full=args.ssim_scaling_full,
+            sigmoid_slope2=args.sigmoid_slope2,
             ssim_scaling_set=args.ssim_scaling_set,
+            ssim_scaling_inverse=args.ssim_scaling_inverse,
             lambda_scaling=args.lambda_scaling,
             normalize_k_space_energy=args.k_space_regularizer,
             pass_all_data=args.pass_all_data,
@@ -70,9 +72,9 @@ def main(args):
         model.sampling_weights.requires_grad = False
 
     ## AUTOMATIC HYPERPARAMETER TUNING
-    tuner = Tuner(trainer)
+    #tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
-    tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
+    #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
     #wandb_logger.experiment.config.update(model.hparams)
 
@@ -112,8 +114,10 @@ if __name__ == '__main__':
     model_group.add_argument('--chans', type=int, default=32)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
     model_group.add_argument('--lambda_scaling', type=float, default=0.0)
     model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
+    model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
