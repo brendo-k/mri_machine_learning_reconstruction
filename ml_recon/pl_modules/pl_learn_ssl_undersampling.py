@@ -182,8 +182,8 @@ class LearnedSSLLightning(plReconModel):
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
                 R_value = self.norm_R(self.R_value)
-                for i in range(len(R_value)):
-                    self.log(f'train/R_{self.contrast_order[i]}', R_value[i], on_epoch=True)
+                for i in range(len(self.R_value)):
+                    self.log(f'train/R_{self.contrast_order[i]}', self.R_value[i], on_epoch=True)
 
                 probability = self.norm_prob(probability, R_value, mask_center=True)
                 probability = torch.stack(probability, dim=0)
@@ -281,17 +281,18 @@ class LearnedSSLLightning(plReconModel):
             diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
             diff_est_full_plot = np.abs(est_full_plot - fully_sampled_plot)
             
-            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
 
-            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
+            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0), step=self.current_epoch)
+
 
 
 
@@ -344,13 +345,10 @@ class LearnedSSLLightning(plReconModel):
 
     def norm_R(self, R) -> List[torch.Tensor]:
         if self.learn_R:
-            inverse = [1/R_val for R_val, freeze in zip(R, self.R_freeze) if not freeze]
             cur_R = []
-            for R_val, freeze in zip(R, self.R_freeze):
+            for R_val in R:
+                cur_R.append(1 + torch.nn.functional.softplus(R_val))
                 # normalize R_value unless it is forzen
-                if not freeze:
-                    R_val = (R_val * sum(inverse) / (len(inverse)/self.R))
-                cur_R.append(R_val)
         else: 
             cur_R = R
                 
@@ -388,6 +386,7 @@ class LearnedSSLLightning(plReconModel):
             probability_total = image_shape[1] / cur_R[i]
             if mask_center:
                 probability_total -= center_region
+            probability_total = torch.maximum(probability_total, torch.zeros_like(probability_total))
 
                 # if probability sum is greater than total scaling factor will 
                 # be less than 1 so we can multiply
@@ -445,6 +444,7 @@ class LearnedSSLLightning(plReconModel):
                 inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
                 if mask_center:
                     inverse_sum -= center_region**2
+                inverse_total = torch.maximum(inverse_total, torch.zeros_like(inverse_sum))
                 scaling_factor = inverse_total / inverse_sum
                 assert scaling_factor <= 1 and scaling_factor >= 0
 
@@ -486,9 +486,6 @@ class LearnedSSLLightning(plReconModel):
             acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
             acs_box = norm_probability[:, acs_y, acs_x]
             torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
-    
-            # ensure acs line probabilities are really large so there is no change that they aren't sampled
-            norm_probability[:, acs_y, acs_x] = norm_probability[:, acs_y, acs_x] * 10
 
         if self.prob_method == 'loupe':
             activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
@@ -498,26 +495,13 @@ class LearnedSSLLightning(plReconModel):
         else:
             raise ValueError('No sampling method!')
 
-        sampling_mask = self.kMaxSampling(activation, R_value, self.sigmoid_slope_2)
-        #if deterministic:
-        #    sampling_mask = (activation > 0).to(torch.float)
-        #else:
-        #    sampling_mask = torch.sigmoid(activation * self.sigmoid_slope_2)
-#
-        # check to make sure sampling the correct R
-
-        inverse = [1/R_val for R_val, freeze in zip(self.R_value, self.R_freeze) if not freeze]
-        cur_R = []
-        for R_val, freeze in zip(self.R_value, self.R_freeze):
-            if freeze:
-                cur_R.append(R_val)
-            else:
-                cur_R.append(R_val * sum(inverse) / (len(inverse)/self.R))
+        sampling_mask = self.kMaxSampling(activation, self.sigmoid_slope_2)
+        
 
 
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
-                assert (torch.isclose(sampling_mask[i, j].mean(), 1/cur_R[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/cur_R[j]}'
+                assert (torch.isclose(sampling_mask[i, j].mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
 
         assert not torch.isnan(sampling_mask).any()
         # Ensure sampling mask values are within [0, 1]
@@ -542,8 +526,8 @@ class LearnedSSLLightning(plReconModel):
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
     
-    def kMaxSampling(self, input, R, slope) -> torch.Tensor:
-        return KMaxSoftmaxFunction.apply(input, R, slope) # type: ignore
+    def kMaxSampling(self, input, slope) -> torch.Tensor:
+        return KMaxSoftmaxFunction.apply(input, slope) # type: ignore
 
     def split_into_lambda_loss_sets(self, omega_mask, batch_size): 
         lambda_mask = self.get_mask(batch_size, mask_center=True)
