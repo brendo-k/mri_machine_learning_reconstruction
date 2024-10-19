@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import einops
 from typing import List
+from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR, StepLR
 
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim 
 from ml_recon.losses import L1L2Loss
@@ -22,7 +23,7 @@ class LearnedSSLLightning(plReconModel):
             contrast_order: List[str], 
             channels: int = 32,
             center_region:int = 10,
-            prob_method:str = 'loupe', 
+            line_constrained:bool = False, 
             sigmoid_slope1:float = 5.0,
             sigmoid_slope2:float = 200,
             lr:float = 1e-2,
@@ -50,7 +51,7 @@ class LearnedSSLLightning(plReconModel):
         self.learn_R = learn_R
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
-        self.prob_method = prob_method
+        self.line_constrained = line_constrained
         self.ssim_scaling_set = ssim_scaling_set
         self.ssim_scaling_full = ssim_scaling_full
         self.ssim_scaling_inverse_full = ssim_scaling_inverse
@@ -70,7 +71,7 @@ class LearnedSSLLightning(plReconModel):
         else: 
             self.R_value = torch.full((image_size[0],), float(self.R))
 
-        if prob_method == 'loupe':
+        if not self.line_constrained:
             if warm_start: 
                 init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
                 init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
@@ -79,7 +80,7 @@ class LearnedSSLLightning(plReconModel):
                 init_prob = torch.zeros(image_size) + 0.5
             self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
 
-        elif prob_method == 'line_loupe':
+        else:
             O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
             self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k, requires_grad=learn_sampling)
 
@@ -357,13 +358,11 @@ class LearnedSSLLightning(plReconModel):
 
     def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
         image_shape = probability[0].shape
-        if self.prob_method == 'loupe':
+        if not self.line_constrained:
             self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
 
-        elif self.prob_method == 'line_loupe':
-            self.norm_1d_probability(probability, cur_R, center_region, mask_center, image_shape)
         else:
-            raise ValueError(f'No prob method found for {self.prob_method}')
+            self.norm_1d_probability(probability, cur_R, center_region, mask_center, image_shape)
         
         assert all((torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) for probs, R in zip(probability, cur_R))), f'Probability should be equal to R {[prob.mean() for prob in probability]}'
         return probability
@@ -464,10 +463,7 @@ class LearnedSSLLightning(plReconModel):
         assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
         assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
 
-        if 'loupe' in self.prob_method:
-            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-        else:
-            raise TypeError('Only implemented 2d loupe')
+        probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
         
         assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
         assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
@@ -487,13 +483,11 @@ class LearnedSSLLightning(plReconModel):
             acs_box = norm_probability[:, acs_y, acs_x]
             torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
 
-        if self.prob_method == 'loupe':
+        if not self.line_constrained:
             activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
-        elif self.prob_method == 'line_loupe':
+        else:
             activation = norm_probability - torch.rand((batch_size, self.image_size[0], self.image_size[2]), device=self.device)
             activation = einops.repeat(activation, 'b c w -> b c h w', h=self.image_size[-1])
-        else:
-            raise ValueError('No sampling method!')
 
         sampling_mask = self.kMaxSampling(activation, self.sigmoid_slope_2)
         
@@ -512,7 +506,8 @@ class LearnedSSLLightning(plReconModel):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-2) 
+        #warmup_scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1) 
+        #step_lr = StepLR(optimizer, step_size=50)
         return optimizer
 
     def train_supervised_step(self, batch): 
