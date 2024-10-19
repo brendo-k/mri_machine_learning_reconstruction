@@ -39,15 +39,11 @@ def main(args):
 
     data_module.setup('train')
     
-    if args.line_constrained:
-        prob_method = 'line_loupe'
-    else:
-        prob_method = 'loupe'
 
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
             learned_R=args.R_hat, 
-            prob_method=prob_method,
+            line_constrained=args.line_constrained,
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             learn_R=args.learn_R,
