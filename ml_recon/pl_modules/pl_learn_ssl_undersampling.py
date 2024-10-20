@@ -154,7 +154,7 @@ class LearnedSSLLightning(plReconModel):
             image_full = image_full.reshape(b * c, 1, h, w)
             ssim_loss_full = torch.tensor(1, device=self.device) - ssim(lambda_image, image_full, data_range=(0, 1))
             ssim_loss_full *= ssim_loss_full
-            self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False)
+            self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False, on_epoch=True)
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
@@ -163,7 +163,7 @@ class LearnedSSLLightning(plReconModel):
                 inverse_image.reshape(b, c, h, w)
                 ssim_loss_inverse_full = ssim_loss_full_inverse * self.ssim_scaling_inverse_full
                 loss += ssim_loss_inverse_full
-                self.log('train/ssim_loss_inverse_full', ssim_loss_inverse_full, on_step=False)
+                self.log('train/ssim_loss_inverse_full', ssim_loss_inverse_full, on_step=False, on_epoch=True)
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             image_full = image_full.reshape(b, c, h, w)
@@ -466,18 +466,7 @@ class LearnedSSLLightning(plReconModel):
     def get_mask(self, batch_size, mask_center=False, deterministic=False):
         # Calculate probability and normalize
 
-        sampling_weights = self.sampling_weights
-        assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
-        assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
-
-        probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-        
-        assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
-        assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
-
-        R_value = self.norm_R(self.R_value)
-        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
-        norm_probability = torch.stack(norm_probability, dim=0)
+        R_value, norm_probability = self.get_probability(mask_center)
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
@@ -509,6 +498,24 @@ class LearnedSSLLightning(plReconModel):
         assert sampling_mask.min() >= 0 and sampling_mask.max() <= 1
     
         return sampling_mask.unsqueeze(2)
+
+    def get_probability(self, mask_center):
+        sampling_weights = self.sampling_weights
+        assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
+        assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
+
+        if 'loupe' in self.prob_method:
+            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
+        else:
+            raise TypeError('Only implemented 2d loupe')
+        
+        assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
+        assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
+
+        R_value = self.norm_R(self.R_value)
+        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
+        norm_probability = torch.stack(norm_probability, dim=0)
+        return R_value,norm_probability
         
 
     def configure_optimizers(self):

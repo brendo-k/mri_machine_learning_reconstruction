@@ -1,7 +1,6 @@
 import os
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
-from ml_recon.pl_modules.MRIDataModule import MRI_Loader
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from pathlib import Path
 import wandb
@@ -15,8 +14,9 @@ from ml_recon.utils.image_slices import image_slices
 def main():
     data_dir = '/home/brenden/Documents/data/simulated_subset_random_phase'
     model_checkpoint = '/home/brenden/Documents/code/python/mri_machine_learning_reconstruction-1/artifacts/model-9u43xz0p:v0/model.ckpt'
-    wandb_logger = WandbLogger(project='MRI Reconstruction', name='3 pathway')
-    artifact_dir = wandb_logger.download_artifact('chiew-lab/MRI Reconstruction/model-60e02djd:v0')
+    wandb_logger = WandbLogger(project='MRI Reconstruction', name='ssl baseline')
+    artifact = wandb_logger.use_artifact(artifact='chiew-lab/MRI Reconstruction/model-lyl2o7wz:v0')
+    artifact_dir = artifact.download()
     trainer = pl.Trainer(callbacks=[], logger = wandb_logger)
     model = LearnedSSLLightning.load_from_checkpoint(Path(artifact_dir) / 'model.ckpt' )
     datamodule = UndersampledDataModule.load_from_checkpoint(Path(artifact_dir) / 'model.ckpt', data_dir=data_dir, batch_size=1)
