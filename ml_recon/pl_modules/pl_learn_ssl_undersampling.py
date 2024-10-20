@@ -133,7 +133,7 @@ class LearnedSSLLightning(plReconModel):
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
 
-            ssim_loss *= self.ssim_scaling_se
+            ssim_loss *= self.ssim_scaling_set
 
             self.log("train/ssim_loss_inverse_lambda", ssim_loss, on_epoch=True, on_step=False)
             self.log("train/loss_inverse", loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
