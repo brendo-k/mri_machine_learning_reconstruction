@@ -128,7 +128,7 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             inverse_image = inverse_image.reshape(b * c, 1, h, w)
-            ssim_loss = torch.tensor(1, device=self.device) - ssim(lambda_image, inverse_image, data_range=(1, 0))
+            ssim_loss = torch.tensor(1, device=self.device) - ssim(lambda_image, inverse_image, data_range=(0, 1))
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
@@ -170,7 +170,7 @@ class LearnedSSLLightning(plReconModel):
 
             loss += ssim_loss_full 
             if batch_idx == 0:
-                self.logger.log_image('train/estimate_full', np.split(estimate_full[0].abs()/estimate_full[0].abs().max(),lambda_image.shape[1], 0))
+                self.logger.log_image('train/estimate_full', np.split(image_full[0].abs()/image_full[0].abs().max(),image_full.shape[1], 0))
 
         
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
