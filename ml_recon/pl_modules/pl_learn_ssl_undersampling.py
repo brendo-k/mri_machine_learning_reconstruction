@@ -504,10 +504,7 @@ class LearnedSSLLightning(plReconModel):
         assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
         assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
 
-        if 'loupe' in self.prob_method:
-            probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-        else:
-            raise TypeError('Only implemented 2d loupe')
+        probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
         
         assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
         assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
