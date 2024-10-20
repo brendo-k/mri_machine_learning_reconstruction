@@ -133,10 +133,10 @@ class LearnedSSLLightning(plReconModel):
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
 
-            ssim_loss *= self.ssim_scaling_set
+            ssim_loss *= self.ssim_scaling_se
 
+            self.log("train/ssim_loss_inverse_lambda", ssim_loss, on_epoch=True, on_step=False)
             self.log("train/loss_inverse", loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
-            self.log("train/ssim_loss", ssim_loss, on_step=True, on_epoch=True, prog_bar=True)
 
             if batch_idx == 0:
                 self.logger.log_image('train/estimate_inverse', np.split(inverse_image[0].abs()/inverse_image[0].abs().max(),lambda_image.shape[1], 0))
@@ -153,17 +153,24 @@ class LearnedSSLLightning(plReconModel):
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             image_full = image_full.reshape(b * c, 1, h, w)
             ssim_loss_full = torch.tensor(1, device=self.device) - ssim(lambda_image, image_full, data_range=(0, 1))
+            ssim_loss_full *= ssim_loss_full
+            self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False)
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
                 ssim_loss_full_inverse = torch.tensor(1, device=self.device) - ssim(inverse_image, image_full, data_range=(0, 1))
                 inverse_image.reshape(b, c, h, w)
-                loss += ssim_loss_full_inverse * self.ssim_scaling_inverse_full
+                ssim_loss_inverse_full = ssim_loss_full_inverse * self.ssim_scaling_inverse_full
+                loss += ssim_loss_inverse_full
+                self.log('train/ssim_loss_inverse_full', ssim_loss_inverse_full, on_step=False)
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             image_full = image_full.reshape(b, c, h, w)
-            loss += ssim_loss_full * self.ssim_scaling_full
+
+            loss += ssim_loss_full 
+            if batch_idx == 0:
+                self.logger.log_image('train/estimate_full', np.split(estimate_full[0].abs()/estimate_full[0].abs().max(),lambda_image.shape[1], 0))
 
         
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -184,7 +191,7 @@ class LearnedSSLLightning(plReconModel):
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
                 R_value = self.norm_R(self.R_value)
                 for i in range(len(self.R_value)):
-                    self.log(f'train/R_{self.contrast_order[i]}', self.R_value[i], on_epoch=True)
+                    self.log(f'train/R_{self.contrast_order[i]}', self.R_value[i], on_epoch=True, on_step=False)
 
                 probability = self.norm_prob(probability, R_value, mask_center=True)
                 probability = torch.stack(probability, dim=0)
@@ -213,12 +220,12 @@ class LearnedSSLLightning(plReconModel):
         estimate_full = self.pass_through_model(under, initial_mask)
 
         loss_inverse = self.loss_func(
+                torch.view_as_real(under * mask_lambda_wo_acs),
                 torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), 
-                torch.view_as_real(under * mask_lambda_wo_acs)
                 ) 
         loss_lambda = self.loss_func(
-                torch.view_as_real(estimate_lambda*mask_inverse), 
-                torch.view_as_real(under * mask_inverse)
+                torch.view_as_real(under * mask_inverse),
+                torch.view_as_real(estimate_lambda*mask_inverse)
                 ) 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)
