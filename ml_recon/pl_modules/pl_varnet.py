@@ -107,7 +107,7 @@ class pl_VarNet(plReconModel):
 
     def test_step(self, batch, batch_idx):
         estimated_target = self.forward(batch)
-        super().test_step((estimated_target, batch['fs_k_space']), batch_idx)
+        super().test_step((estimated_target, batch['fs_k_space'], 'pass full'), batch_idx)
 
 
     def forward(self, data): 

@@ -19,6 +19,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         detect_anomaly=True
                          )
 
 
