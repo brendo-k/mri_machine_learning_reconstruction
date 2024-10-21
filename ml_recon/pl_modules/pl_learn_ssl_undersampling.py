@@ -153,7 +153,7 @@ class LearnedSSLLightning(plReconModel):
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             image_full = image_full.reshape(b * c, 1, h, w)
             ssim_loss_full = torch.tensor(1, device=self.device) - ssim(lambda_image, image_full, data_range=(0, 1))
-            ssim_loss_full *= ssim_loss_full
+            ssim_loss_full *= self.ssim_scaling_full
             self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False, on_epoch=True)
             
             if self.pass_inverse_data:
@@ -288,7 +288,7 @@ class LearnedSSLLightning(plReconModel):
             diff_est_lambda_plot = np.abs(est_lambda_plot - fully_sampled_plot)
             diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
             diff_est_full_plot = np.abs(est_full_plot - fully_sampled_plot)
-            
+
             wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0), step=self.current_epoch)
             wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
             wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
@@ -300,8 +300,6 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0), step=self.current_epoch)
             wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0), step=self.current_epoch)
             wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0), step=self.current_epoch)
-
-
 
 
     def test_step(self, batch, batch_idx):
