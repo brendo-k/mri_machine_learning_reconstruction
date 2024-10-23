@@ -525,7 +525,7 @@ class LearnedSSLLightning(plReconModel):
         fully_sampled = batch['fs_k_space']
 
         estimate = self.pass_through_model(undersampled, mask.to(torch.float32))
-        loss = self.loss_func(torch.view_as_real(estimate), torch.view_as_real(fully_sampled)) 
+        loss = self.loss_func(torch.view_as_real(fully_sampled), torch.view_as_real(estimate)) 
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
