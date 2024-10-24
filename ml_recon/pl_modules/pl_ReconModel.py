@@ -72,17 +72,17 @@ class plReconModel(pl.LightningModule):
                 batch_ssim = ssim_image[mask[i, contrast_index].unsqueeze(0).unsqueeze(0)].mean()
 
                 #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-            self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse)
-            self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim)
-            self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr)
+            self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, sync_dist=True)
+            self.log(f"metrics/{label}ssim_torch_" + self.contrast_order[contrast_index], batch_ssim, sync_dist=True)
+            self.log(f"metrics/{label}psnr_" + self.contrast_order[contrast_index], batch_psnr, sync_dist=True)
 
             total_ssim += batch_ssim
             total_psnr += batch_psnr
             total_nmse += batch_nmse
 
-        self.log(f'metrics/{label}_mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True)
-        self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True)
-        self.log(f'metrics/{label}_mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True)
+        self.log(f'metrics/{label}_mean_ssim', total_ssim/len(self.contrast_order), on_epoch=True, sync_dist=True)
+        self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True, sync_dist=True)
+        self.log(f'metrics/{label}_mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True, sync_dist=True)
         return estimated_image
 
     def norm(self, image): 
