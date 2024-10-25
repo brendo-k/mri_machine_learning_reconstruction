@@ -109,7 +109,7 @@ class BratsDataset(Dataset):
             dataset = fr['k_space']
             assert isinstance(dataset, h5py.Dataset)
             data = torch.as_tensor(dataset[slice_index, self.contrast_order_indexes])
-            data = F.center_crop(data, [self.ny, self.nx])
+            data = F.center_crop(data, [self.ny, self.nx]).numpy()
 
         return data
 

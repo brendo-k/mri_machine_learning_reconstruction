@@ -1,4 +1,6 @@
 import numpy as np
+from numpy.typing import NDArray
+from typing import Tuple
 
 def gen_pdf(line_constrained, nx, ny, one_over_r, poly_power, center_square):
     if line_constrained:
@@ -14,17 +16,18 @@ def calc_k(lambda_probability, omega_probability):
     K = K.astype(float)
     return K
     
-def apply_undersampling(index, prob_map, k_space, line_constrained, deterministic, segregated):
+def apply_undersampling_from_dist(
+        index: int, 
+        prob_map: NDArray[np.float_], 
+        k_space: NDArray[np.complex_], 
+        line_constrained: bool, 
+        deterministic: bool
+) -> Tuple[NDArray[np.complex_], NDArray[np.bool_]]:
+
     rng = get_random_generator(index, deterministic)
-    new_probs = None
-    if not segregated:
-        mask = get_mask_from_distribution(prob_map, rng, line_constrained)
-        new_probs = prob_map.copy()
-    else:
-        mask, new_probs = get_mask_from_segregated_sampling(prob_map, rng, line_constrained)
-        
+    mask = get_mask_from_distribution(prob_map, rng, line_constrained)
     undersampled = k_space * np.expand_dims(mask, 1)
-    return undersampled, np.expand_dims(mask, 1), new_probs
+    return undersampled, np.expand_dims(mask, 1)
     
    
 def get_random_generator(index, deterministic):
@@ -76,7 +79,6 @@ def gen_pdf_columns_charlie(nx, ny, delta, p, c_sq):
             break
         ii += 1
         if ii == 100:
-            warnings.warn('gen_pdf_columns did not converge after 100 iterations')
             break
     prob_map = np.repeat(prob_map, nx, axis=1)
     prob_map = np.rot90(prob_map)
@@ -100,7 +102,7 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
     return prob_map
 
 
-def get_mask_from_distribution(prob_map, rng, line_constrained):
+def get_mask_from_distribution(prob_map: NDArray[np.float_], rng, line_constrained) -> NDArray[np.bool_]:
     prob_map[prob_map > 0.999] = 1
     if line_constrained:
         (_, ny, _) = np.shape(prob_map)

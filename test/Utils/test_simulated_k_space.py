@@ -10,14 +10,14 @@ def sample_image():
 
 def test_simulate_k_space_output_shape(sample_image):
     seed = 42
-    k_space = simulate_k_space(sample_image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=10)
+    k_space = simulate_k_space(sample_image, seed,  center_region=20, noise_std=0.001, coil_size=10)
     
     # The output should have the shape [contrast, channel, height, width]
     assert k_space.shape == (3, 10, 64, 64), "Output shape mismatch"
 
 def test_simulate_k_space_non_zero_phase(sample_image):
     seed = 42
-    k_space = simulate_k_space(sample_image, seed, same_phase=False, center_region=20, noise_std=0.001, coil_size=10)
+    k_space = simulate_k_space(sample_image, seed,  center_region=20, noise_std=0.001, coil_size=10)
     
     # Perform inverse FFT to get the image back in the image domain
     img_domain = np.fft.ifft2(k_space, axes=(-2, -1))
@@ -29,8 +29,8 @@ def test_simulate_k_space_non_zero_phase(sample_image):
 def test_simulate_k_space_noise_application(sample_image):
     seed = 42
     noise_std = 0.001
-    k_space_no_noise = simulate_k_space(sample_image, seed, same_phase=False, center_region=20, noise_std=0.0, coil_size=10)
-    k_space_with_noise = simulate_k_space(sample_image, seed, same_phase=False, center_region=20, noise_std=noise_std, coil_size=10)
+    k_space_no_noise = simulate_k_space(sample_image, seed,  center_region=20, noise_std=0.0, coil_size=10)
+    k_space_with_noise = simulate_k_space(sample_image, seed,  center_region=20, noise_std=noise_std, coil_size=10)
     
     # The noisy version should differ from the noise-free version
     assert np.any(np.abs(k_space_no_noise - k_space_with_noise) > 0), "Noise was not applied properly"

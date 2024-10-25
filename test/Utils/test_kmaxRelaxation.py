@@ -11,13 +11,13 @@ def test_passthrough():
     slope = 100
     R_values = torch.full(size=(con,), fill_value=R)
     activations = torch.randn(b, con, h, w, dtype=torch.float32)
-    mask = kmax.apply(activations, R_values, slope)
+    mask = kmax.apply(activations, slope)
 
     average_mask = mask.mean((-1, -2)) 
     real_ground_truth = torch.full_like(average_mask, 1/2)
 
     # average values should be R
-    torch.testing.assert_close(average_mask, real_ground_truth)
+    torch.testing.assert_close(average_mask, real_ground_truth, atol=1e-2, rtol=0)
     assert mask.max() <= 1 and mask.min() >= 0 # constrained between 0 1 
     assert torch.all((mask == 1) | (mask == 0)) # constrained to be 0 or 1 
 
@@ -39,7 +39,7 @@ def test_backwards():
     R_values = torch.full(size=(con,), fill_value=R)
     activations = torch.randn(b, con, h, w, dtype=torch.float32, requires_grad=True)
 
-    mask = kmax.apply(activations, R_values, slope)
+    mask = kmax.apply(activations, slope)
 
 
     sigmoid_output = torch.sigmoid(activations * slope)

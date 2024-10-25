@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 import h5py
 import torch
 import numpy as np
-from ml_recon.utils.undersample_tools import gen_pdf, apply_undersampling
+from ml_recon.utils.undersample_tools import gen_pdf, apply_undersampling_from_dist
 
 from ml_recon.dataset.dataset_output_type import TrainingSample
 import torchvision.transforms.functional as F
@@ -61,22 +61,20 @@ class ZeroShotDataset(Dataset):
             under = k_space
             mask_omega = under != 0
         else:
-            under, mask_omega, _ = apply_undersampling(
+            under, mask_omega = apply_undersampling_from_dist(
                                     index, 
                                     omega_prob,
                                     k_space, 
                                     deterministic=True, 
                                     line_constrained=False, 
-                                    segregated=False
                                     )
-            under = under.numpy()
         
         # test case: pass all data and see how well ouput against fully sampled data
         if self.is_test:
             output = TrainingSample(
                 input = torch.from_numpy(under),
-                target = k_space,
-                fs_k_space = k_space,
+                target = torch.from_numpy(k_space),
+                fs_k_space = torch.from_numpy(k_space),
                 mask = torch.from_numpy(mask_omega), 
                 loss_mask = torch.ones_like(torch.from_numpy(under))
             )
@@ -92,7 +90,7 @@ class ZeroShotDataset(Dataset):
             output = TrainingSample(
                 input = torch.from_numpy(training_mask * under),
                 target = torch.from_numpy(val_mask * under),
-                fs_k_space = k_space,
+                fs_k_space = torch.from_numpy(k_space),
                 mask = training_mask, 
                 loss_mask = val_mask
             )
@@ -101,20 +99,19 @@ class ZeroShotDataset(Dataset):
         else:
             lambda_prob = gen_pdf(False, w, h, 1/self.R_hat, 8, 10)
             lambda_prob = lambda_prob[np.newaxis]
-            _, mask_lambda, _ = apply_undersampling(
+            _, mask_lambda = apply_undersampling_from_dist(
                                     index, 
                                     lambda_prob, 
                                     k_space, 
                                     deterministic=False, 
                                     line_constrained=False, 
-                                    segregated=False
                                     )
             lambda_set = mask_lambda * training_mask
             loss_set = (~mask_lambda * training_mask)
             output = TrainingSample(
                 input = torch.from_numpy(under * lambda_set),
                 target = torch.from_numpy(under * loss_set),
-                fs_k_space = k_space,
+                fs_k_space = torch.from_numpy(k_space),
                 mask = lambda_set, 
                 loss_mask = loss_set
             )
@@ -157,4 +154,4 @@ class ZeroShotDataset(Dataset):
         if reduce_fov:
             k_space = k_space[..., ::2, :]
 
-        return F.center_crop(k_space, [resample_height, resample_width])
+        return F.center_crop(k_space, [resample_height, resample_width]).numpy()

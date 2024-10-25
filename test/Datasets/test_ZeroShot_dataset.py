@@ -2,12 +2,34 @@ import pytest
 import numpy as np
 import torch
 from ml_recon.dataset.Zeroshot_datset import ZeroShotDataset
+import h5py
+import tempfile
+import os
+
+@pytest.fixture
+def temp_h5_file():
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as temp_file:
+        temp_file_path = temp_file.name
+
+    # Open the file in write mode and create the dataset
+    with h5py.File(temp_file_path, 'w') as f:
+        real = np.random.rand(16, 10, 256, 256)
+        imag = np.random.rand(16, 10, 256, 256)
+        f.create_dataset('kspace', data= real + 1j * imag)
+
+    # Yield the file path for use in tests
+    yield temp_file_path
+
+    # Clean up the file after the test
+    os.remove(temp_file_path)
 
 
-def test_sets():
-    dataset_val = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=True)
-    dataset_train = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False)
-    dataset_test = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False, is_test=True)
+
+def test_sets(temp_h5_file):
+    dataset_val = ZeroShotDataset(temp_h5_file, is_validation=True)
+    dataset_train = ZeroShotDataset(temp_h5_file, is_validation=False)
+    dataset_test = ZeroShotDataset(temp_h5_file, is_validation=False, is_test=True)
 
 
     input = dataset_val[0].input
@@ -22,8 +44,8 @@ def test_sets():
     torch.testing.assert_close(input_train + target_train, input)
     torch.testing.assert_close(under, input + target)
 
-def test_determinism(): 
-    dataset_val = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=True)
+def test_determinism(temp_h5_file): 
+    dataset_val = ZeroShotDataset(temp_h5_file, is_validation=True)
 
     input1 = dataset_val[0].input
     input2 = dataset_val[0].input
@@ -38,8 +60,8 @@ def test_determinism():
     torch.testing.assert_close(target1, target2)
     torch.testing.assert_close(target2, target3)
 
-def test_new_masks():
-    dataset_train = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False)
+def test_new_masks(temp_h5_file):
+    dataset_train = ZeroShotDataset(temp_h5_file, is_validation=False)
     data1 = dataset_train[0]
     data2 = dataset_train[0]
     data3 = dataset_train[0]
@@ -57,8 +79,8 @@ def test_new_masks():
 
     
 
-def test_splitting_mask():
-    dataset_train = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False)
+def test_splitting_mask(temp_h5_file):
+    dataset_train = ZeroShotDataset(temp_h5_file, is_validation=False)
     mask = np.random.rand(1, 10, 320, 320) < 0.5
     val_mask, train_mask = dataset_train.gen_validation_set(0, mask)
 
@@ -67,10 +89,10 @@ def test_splitting_mask():
     assert val_mask.sum() < mask.sum() * 0.3
     assert val_mask.sum() > mask.sum() * 0.1
 
-def test_same_size():
-    dataset_train = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False)
-    dataset_val = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=True)
-    dataset_test = ZeroShotDataset('test/test_data/file_brain_AXT1_201_6002779.h5', is_validation=False, is_test=True)
+def test_same_size(temp_h5_file):
+    dataset_train = ZeroShotDataset(temp_h5_file, is_validation=False)
+    dataset_val = ZeroShotDataset(temp_h5_file, is_validation=True)
+    dataset_test = ZeroShotDataset(temp_h5_file, is_validation=False, is_test=True)
 
     data_train = dataset_train[0]
     data_val = dataset_val[0]

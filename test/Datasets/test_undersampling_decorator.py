@@ -60,3 +60,14 @@ def test_non_deterministic_between_lambda(get_data_dir):
     assert ((data1.loss_mask) != (data2.loss_mask)).any()
     assert ((data1.mask) != (data2.mask)).any()
     torch.testing.assert_close(data1.fs_k_space, data2.fs_k_space)
+
+def test_pi_sampling(get_data_dir):
+    dataset = BratsDataset(get_data_dir, nx=128, ny=128)
+    undersample_dataset = UndersampleDecorator(dataset, R=4, acs_lines=ACS_LINES, self_supervised=False, is_variable_density=False)
+    
+    data1 = undersample_dataset[0]
+
+    mask = data1.input != 0 
+    torch.testing.assert_close(mask, data1.mask)
+    assert torch.all(mask == mask[...,0,:].unsqueeze(-2))
+
