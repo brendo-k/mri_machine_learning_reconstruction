@@ -27,7 +27,6 @@ class UndersampledDataModule(pl.LightningDataModule):
             line_constrained: bool = True,
             num_workers: int = 0,
             norm_method: str = 'k',
-            segregated: bool = False,
             self_supervsied: bool = False
             ):
 
@@ -48,7 +47,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.resolution = resolution
         self.line_constrained = line_constrained
-        self.segregated = segregated
         self.R = R
         self.R_hat = R_hat
         self.self_supervised = self_supervsied
@@ -81,7 +79,6 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
-                'segregated': self.segregated,
                 'self_supervised': self.self_supervised
         }
 
