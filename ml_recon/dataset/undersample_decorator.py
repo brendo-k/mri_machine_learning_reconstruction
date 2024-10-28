@@ -84,7 +84,7 @@ class UndersampleDecorator(Dataset):
         output = TrainingSample(
                 input = torch.from_numpy(under), 
                 target = torch.from_numpy(k_space), 
-                fs_k_space = torch.from_numpy(k_space),
+                fs_k_space = torch.from_numpy(k_space).clone(),
                 mask = torch.from_numpy(mask_omega),
                 loss_mask = torch.ones_like(torch.from_numpy(mask_omega))
                 )
@@ -106,7 +106,7 @@ class UndersampleDecorator(Dataset):
             output = TrainingSample(
                 input = torch.from_numpy(doub_under), 
                 target = torch.from_numpy(target), 
-                fs_k_space = torch.from_numpy(k_space),
+                fs_k_space = torch.from_numpy(k_space).clone(),
                 mask = torch.from_numpy(mask_lambda & mask_omega),
                 loss_mask = torch.from_numpy(~mask_lambda & mask_omega)
                 )

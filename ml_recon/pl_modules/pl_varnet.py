@@ -134,7 +134,7 @@ class pl_VarNet(plReconModel):
             sense_maps = self.model.sens_model(under_k, under_k != 0)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
             masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(under_k))
-            masked_k = masked_k[0, 0, [0], :, :].abs()/(masked_k[0, 0, [0], :, :].abs().max()/20)
+            masked_k = masked_k[0, 0, [0], :, :].abs()**0.2
 
             wandb_logger = self.logger
             wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))

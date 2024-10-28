@@ -82,9 +82,9 @@ class M4Raw(Dataset):
             with h5py.File(file) as fr:
                 dataset = fr['kspace']
                 assert isinstance(dataset, h5py.Dataset)
-                k_space.append(torch.as_tensor(dataset[slice_index]))
+                k_space.append((dataset[slice_index]))
 
-        k_space = torch.stack(k_space, dim=0)
+        k_space = np.stack(k_space, axis=0)
         return k_space 
 
     def resample_or_pad(self, k_space):
@@ -101,4 +101,4 @@ class M4Raw(Dataset):
         resample_height = self.ny
         resample_width = self.nx
 
-        return F.center_crop(k_space, [resample_height, resample_width])
+        return F.center_crop(torch.from_numpy(k_space), [resample_height, resample_width]).numpy()
