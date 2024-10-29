@@ -7,7 +7,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
-from ml_recon.utils.wandbCheckpoint import WandbModelCheckpoint
 
 
 """
@@ -67,11 +66,10 @@ def main(args):
             chans=args.chans
             )
 
-    ## AUTOMATIC HYPERPARAMETER TUNING
-    #tuner = Tuner(trainer)
-    #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
-    #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
+
+    #wandb_logger.experiment.config.update(model.hparams)
+   
     #wandb_logger.experiment.config.update(model.hparams)
 
     print(data_module.hparams)
