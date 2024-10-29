@@ -38,7 +38,7 @@ class VarNet_mc(nn.Module):
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones((num_cascades, contrasts)))
+        self.lambda_reg = nn.Parameter(torch.ones(num_cascades, 1))
 
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
@@ -61,7 +61,7 @@ class VarNet_mc(nn.Module):
             # gradient descent step
             current_regularization = self.lambda_reg[i]
             current_regularization = current_regularization[None, :, None, None, None]
-            current_k = current_k - (current_regularization * data_consistency) - refined_k
+            current_k = current_k + (current_regularization * data_consistency) + refined_k
         return current_k
 
 
