@@ -27,7 +27,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             line_constrained: bool = True,
             num_workers: int = 0,
             norm_method: str = 'k',
-            self_supervsied: bool = False
+            self_supervsied: bool = False,
+            is_variable_density: bool = False
             ):
 
         super().__init__()
@@ -50,6 +51,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.R = R
         self.R_hat = R_hat
         self.self_supervised = self_supervsied
+        self.is_variable_density = is_variable_density
         
         if norm_method == 'img':
             self.transforms = Compose([normalize_image_max(), convert_dataclass_to_dict()])
@@ -79,7 +81,8 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
-                'self_supervised': self.self_supervised
+                'self_supervised': self.self_supervised,
+                'is_variable_density': self.is_variable_density
         }
 
         self.train_dataset = self.dataset_class(

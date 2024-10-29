@@ -23,7 +23,6 @@ class LearnedSSLLightning(plReconModel):
             contrast_order: List[str], 
             channels: int = 32,
             center_region:int = 10,
-            line_constrained:bool = False, 
             sigmoid_slope1:float = 5.0,
             sigmoid_slope2:float = 200,
             lr:float = 1e-2,
@@ -51,7 +50,6 @@ class LearnedSSLLightning(plReconModel):
         self.learn_R = learn_R
         self.sigmoid_slope_1 = sigmoid_slope1
         self.sigmoid_slope_2 = sigmoid_slope2
-        self.line_constrained = line_constrained
         self.ssim_scaling_set = ssim_scaling_set
         self.ssim_scaling_full = ssim_scaling_full
         self.ssim_scaling_inverse_full = ssim_scaling_inverse
@@ -71,18 +69,14 @@ class LearnedSSLLightning(plReconModel):
         else: 
             self.R_value = torch.full((image_size[0],), float(self.R))
 
-        if not self.line_constrained:
-            if warm_start: 
-                init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
-                init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
-                init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
-            else:
-                init_prob = torch.zeros(image_size) + 0.5
-            self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
-
+        if warm_start: 
+            init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
+            init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
+            init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
-            O = torch.rand((image_size[0], image_size[2]))*(1 - 2e-2) + 1e-2 
-            self.sampling_weights = nn.Parameter(-torch.log((1/O) - 1) / self.sigmoid_slope_k, requires_grad=learn_sampling)
+            init_prob = torch.zeros(image_size) + 0.5
+        self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
+
 
     def training_step(self, batch, batch_idx):
         if self.supervised: 
@@ -361,11 +355,7 @@ class LearnedSSLLightning(plReconModel):
     def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
         image_shape = probability[0].shape
 
-        if not self.line_constrained:
-            self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
-        else:
-            self.norm_1d_probability(probability, cur_R, center_region, mask_center, image_shape)
-        
+        probability = self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
 
         # testing function to ensure probabilities are close to the set R value
         for probs, R in zip(probability, cur_R):
@@ -472,28 +462,23 @@ class LearnedSSLLightning(plReconModel):
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
-
+        # make sure acs box is ones
         if mask_center:
-            # make sure acs box is ones
             center_x, center_y = norm_probability.shape[1]//2, norm_probability.shape[2]//2
             acs_x = slice(center_x-self.center_region//2, center_x+self.center_region//2)
             acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
             acs_box = norm_probability[:, acs_y, acs_x]
             torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
 
-        if not self.line_constrained:
-            activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
-        else:
-            activation = norm_probability - torch.rand((batch_size, self.image_size[0], self.image_size[2]), device=self.device)
-            activation = einops.repeat(activation, 'b c w -> b c h w', h=self.image_size[-1])
-
+        # get sampling using softamx relaxation
+        activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
         sampling_mask = self.kMaxSampling(activation, self.sigmoid_slope_2)
         
         # test to make sure all sampling masks are close to desired R value 
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
                 assert (torch.isclose(sampling_mask[i, j].mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
-
+        #ensure sampling mask has no nans
         assert not torch.isnan(sampling_mask).any()
         # Ensure sampling mask values are within [0, 1]
         assert sampling_mask.min() >= 0 and sampling_mask.max() <= 1

@@ -43,7 +43,8 @@ def main(args):
             resolution=(ny, nx),
             num_workers=args.num_workers,
             contrasts=args.contrasts,
-            line_constrained=False, 
+            line_constrained=args.line_constrained,
+            is_variable_density=args.pi_sampling, 
             R=args.R
             ) 
 
@@ -53,7 +54,6 @@ def main(args):
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
             learned_R=args.R_hat, 
-            line_constrained=args.line_constrained,
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             learn_R=args.learn_R,
@@ -109,6 +109,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--ny', type=int, default=128)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
     dataset_group.add_argument('--line_constrained', action='store_true')
+    dataset_group.add_argument('--pi_sampling', action='store_false')
 
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)

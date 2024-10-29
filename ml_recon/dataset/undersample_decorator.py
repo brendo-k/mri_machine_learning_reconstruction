@@ -77,7 +77,7 @@ class UndersampleDecorator(Dataset):
                                         )
         else:
             mask_omega = np.zeros_like(k_space, dtype=bool)
-            mask_omega[..., ::self.R] = 1
+            mask_omega[..., ::int(self.R)] = 1
             w = mask_omega.shape[-1]
             mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1
             under = k_space * mask_omega
