@@ -181,17 +181,17 @@ class LearnedSSLLightning(plReconModel):
                 lambda_image = lambda_image.detach().cpu()
                 wandb_logger = self.logger
                 initial_mask = initial_mask[0, :, 0, :, :]
-                lambda_set = lambda_set[0, :, 0, : ,:]
+                lambda_set_plot = lambda_set[0, :, 0, : ,:]
                 inverse_set = inverse_set[0, :, 0, : ,:]
-                wandb_logger.log_image('train/omega_lambda', np.split(lambda_set.cpu().detach().numpy(), lambda_set.shape[0], 0))
+                wandb_logger.log_image('train/omega_lambda', np.split(lambda_set_plot.cpu().detach().numpy(), lambda_set_plot.shape[0], 0))
                 wandb_logger.log_image('train/omega_(1-lambda)', np.split(inverse_set.cpu().detach().numpy(), inverse_set.shape[0], 0))
                 wandb_logger.log_image('train/estimate_lambda', np.split(lambda_image[0].abs()/lambda_image[0].abs().max(),lambda_image.shape[1], 0))
-                wandb_logger.log_image('train/initial_mask', np.split(initial_mask.cpu().detach().numpy(), lambda_set.shape[0], 0))
+                wandb_logger.log_image('train/initial_mask', np.split(initial_mask.cpu().detach().numpy(), lambda_set_plot.shape[0], 0))
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
                 R_value = self.norm_R(self.R_value)
                 for i in range(len(self.R_value)):
-                    self.log(f'train/R_{self.contrast_order[i]}', self.R_value[i], on_epoch=True, on_step=False)
+                    self.log(f'train/R_{self.contrast_order[i]}', lambda_set[:, i, 0, :, :].sum()/lambda_set[:, i, 0, :, :].numel(), on_epoch=True, on_step=False)
 
                 probability = self.norm_prob(probability, R_value, mask_center=True)
                 probability = torch.stack(probability, dim=0)
@@ -286,17 +286,17 @@ class LearnedSSLLightning(plReconModel):
             diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
             diff_est_full_plot = np.abs(est_full_plot - fully_sampled_plot)
 
-            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
 
-            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0), step=self.current_epoch)
-            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0), step=self.current_epoch)
+            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
+            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
+            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
 
 
     def test_step(self, batch, batch_idx):
@@ -360,21 +360,26 @@ class LearnedSSLLightning(plReconModel):
 
     def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
         image_shape = probability[0].shape
+
         if not self.line_constrained:
             self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
-
         else:
             self.norm_1d_probability(probability, cur_R, center_region, mask_center, image_shape)
         
-        assert all((torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) for probs, R in zip(probability, cur_R))), f'Probability should be equal to R {[prob.mean() for prob in probability]}'
+
+        # testing function to ensure probabilities are close to the set R value
+        for probs, R in zip(probability, cur_R):
+            assert torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) 
+             
         return probability
 
+    
     def norm_1d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
         center = image_shape[1]//2
-        center_bb_x = [center-self.center_region//2,center+self.center_region//2]
+        center_bb_x = [center-center_region//2,center+center_region//2]
 
         probability_sum = []
-        center_mask = torch.ones(self.image_size[2], device=self.device)
+        center_mask = torch.ones(image_shape[1], device=probability[0].device)
         if mask_center:
             center_mask[center_bb_x[0]:center_bb_x[1]] = 0
 
@@ -408,6 +413,7 @@ class LearnedSSLLightning(plReconModel):
         center_box = 1-center_mask
         for i in range(len(probability)):
             probability[i] = probability[i] + center_box
+        return probability
 
     def norm_2d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
         center = [image_shape[0]//2, image_shape[1]//2]
@@ -415,7 +421,7 @@ class LearnedSSLLightning(plReconModel):
         center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
         center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
             
-        probability_sum = torch.zeros((len(probability), 1), device=self.device)
+        probability_sum = torch.zeros((len(probability), 1), device=probability[0].device)
 
         # create acs mask of zeros for acs box and zeros elsewhere
         center_mask = torch.ones(image_shape, device=probability[0].device)
@@ -456,6 +462,7 @@ class LearnedSSLLightning(plReconModel):
         if mask_center:
             for i in range(len(probability)):
                 probability[i][center_bb_y, center_bb_x] = 1
+        return probability
 
 
     def get_mask(self, batch_size, mask_center=False, deterministic=False):
@@ -482,8 +489,7 @@ class LearnedSSLLightning(plReconModel):
 
         sampling_mask = self.kMaxSampling(activation, self.sigmoid_slope_2)
         
-
-
+        # test to make sure all sampling masks are close to desired R value 
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
                 assert (torch.isclose(sampling_mask[i, j].mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
@@ -534,10 +540,10 @@ class LearnedSSLLightning(plReconModel):
         lambda_mask = self.get_mask(batch_size, mask_center=True)
         return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
 
-    def final_dc_step(self, undersampled, estimated, mask):
-        return estimated * (1 - mask) + undersampled * mask
-
     def pass_through_model(self, undersampled, mask):
         estimate = self.recon_model(undersampled*mask, mask)
         estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate
+
+    def final_dc_step(self, undersampled, estimated, mask):
+        return estimated * (1 - mask) + undersampled * mask

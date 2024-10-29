@@ -6,6 +6,7 @@ from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.tuner.tuning import Tuner
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.callbacks import Callback
@@ -15,10 +16,19 @@ import numpy as np
 def main(args):
         
     wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True, name=args.run_name)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints/',  # Directory to save the checkpoints
+        filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+        save_top_k=1,  # Save the top 3 models
+        monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
+        mode='min',  # Save the model with the minimum val_loss
+        save_weights_only=True,  # Save only the model weights, not the entire model
+    )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         callbacks=[checkpoint_callback]
                          )
 
 

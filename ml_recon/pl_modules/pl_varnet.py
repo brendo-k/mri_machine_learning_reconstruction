@@ -111,10 +111,11 @@ class pl_VarNet(plReconModel):
 
 
     def forward(self, data): 
-        under_k, mask = data['input'], data['mask']
+        under_k, mask, fs_k_space = data['input'], data['mask'], data['fs_k_space']
+        zero_fill_mask = fs_k_space != 0
         estimate_k = self.model(under_k, mask)
         estimate_k = estimate_k * ~mask + under_k
-        return estimate_k
+        return estimate_k * zero_fill_mask
 
     # optimizer configureation -> using adam w/ lr of 1e-3
     def configure_optimizers(self):

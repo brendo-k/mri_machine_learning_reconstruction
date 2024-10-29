@@ -2,10 +2,12 @@ from argparse import ArgumentParser
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
+from ml_recon.utils.wandbCheckpoint import WandbModelCheckpoint
 
 
 """
@@ -19,10 +21,19 @@ Examples:
 """
 def main(args):
     wandb_logger = WandbLogger(project='SSL Characterization', name=args.run_name, log_model=True)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints/',  # Directory to save the checkpoints
+        filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+        monitor="val/val_loss", 
+        mode="min", 
+        save_last=True, 
+        save_weights_only=True
+        )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
+                         callbacks=[checkpoint_callback],
                          devices="auto", 
                          strategy="auto"
                          )
