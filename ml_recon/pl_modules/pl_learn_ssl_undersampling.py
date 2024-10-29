@@ -4,6 +4,7 @@ import torch
 import einops
 from typing import List
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR, StepLR
+from pytorch_lightning.loggers import WandbLogger
 
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim 
 from ml_recon.losses import L1L2Loss
@@ -225,43 +226,14 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)
 
         fully_sampled_img = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=2)
-        scaling_factor = fully_sampled_img.amax((-1, -2), keepdim=True)
-        fully_sampled_img /= scaling_factor
-
-        est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)/scaling_factor
-        est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
-        est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
+        est_lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
+        est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)
+        est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)
 
         wandb_logger = self.logger
+        assert isinstance(wandb_logger, WandbLogger)
 
-
-        ssim_full_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_full_img)
-        ssim_lambda_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_lambda_img)
-        ssim_inverse_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_inverse_img)
-        ssim_lambda_estimate = evaluate_over_contrasts(ssim, est_full_img, est_lambda_img)
-        ssim_inverse_estimate = evaluate_over_contrasts(ssim, est_full_img, est_inverse_img)
-        ssim_lambda_inverse = evaluate_over_contrasts(ssim, est_lambda_img, est_inverse_img)
-
-        self.log("val/ssim_gt_full", ssim_full_gt, on_epoch=True)
-        self.log("val/ssim_inverse_lambda", ssim_lambda_inverse, on_epoch=True)
-        self.log("val/ssim_inverse_gt", ssim_inverse_gt, on_epoch=True)
-        self.log("val/ssim_lambda_gt", ssim_lambda_gt, on_epoch=True)
-        self.log("val/ssim_inverse_full", ssim_inverse_estimate, on_epoch=True)
-        self.log("val/ssim_lambda_full", ssim_lambda_estimate, on_epoch=True)
-
-        nmse_full_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_full)
-        nmse_lambda_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_lambda)
-        nmse_inverse_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_inverse)
-        nmse_lambda_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_lambda)
-        nmse_inverse_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_inverse)
-        nmse_lambda_inverse = evaluate_over_contrasts(nmse, estimate_lambda, estimate_inverse)
-
-        self.log("val/nmse_gt_full", nmse_full_gt, on_epoch=True)
-        self.log("val/nmse_inverse_lambda", nmse_lambda_inverse, on_epoch=True)
-        self.log("val/nmse_inverse_gt", nmse_inverse_gt, on_epoch=True)
-        self.log("val/nmse_lambda_gt", nmse_lambda_gt, on_epoch=True)
-        self.log("val/nmse_inverse_full", nmse_inverse_estimate, on_epoch=True)
-        self.log("val/nmse_lambda_full", nmse_lambda_estimate, on_epoch=True)
+        self.calculate_metrics(fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img)
 
         if batch_idx == 0:
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
@@ -291,6 +263,35 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
             wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
             wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
+
+    def calculate_metrics(self, fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img):
+        ssim_full_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_full_img)
+        ssim_lambda_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_lambda_img)
+        ssim_inverse_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_inverse_img)
+        ssim_lambda_estimate = evaluate_over_contrasts(ssim, est_full_img, est_lambda_img)
+        ssim_inverse_estimate = evaluate_over_contrasts(ssim, est_full_img, est_inverse_img)
+        ssim_lambda_inverse = evaluate_over_contrasts(ssim, est_lambda_img, est_inverse_img)
+
+        self.log("val/ssim_gt_full", ssim_full_gt, on_epoch=True)
+        self.log("val/ssim_inverse_lambda", ssim_lambda_inverse, on_epoch=True)
+        self.log("val/ssim_inverse_gt", ssim_inverse_gt, on_epoch=True)
+        self.log("val/ssim_lambda_gt", ssim_lambda_gt, on_epoch=True)
+        self.log("val/ssim_inverse_full", ssim_inverse_estimate, on_epoch=True)
+        self.log("val/ssim_lambda_full", ssim_lambda_estimate, on_epoch=True)
+
+        nmse_full_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_full)
+        nmse_lambda_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_lambda)
+        nmse_inverse_gt = evaluate_over_contrasts(nmse, fs_k_space, estimate_inverse)
+        nmse_lambda_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_lambda)
+        nmse_inverse_estimate = evaluate_over_contrasts(nmse, estimate_full, estimate_inverse)
+        nmse_lambda_inverse = evaluate_over_contrasts(nmse, estimate_lambda, estimate_inverse)
+
+        self.log("val/nmse_gt_full", nmse_full_gt, on_epoch=True)
+        self.log("val/nmse_inverse_lambda", nmse_lambda_inverse, on_epoch=True)
+        self.log("val/nmse_inverse_gt", nmse_inverse_gt, on_epoch=True)
+        self.log("val/nmse_lambda_gt", nmse_lambda_gt, on_epoch=True)
+        self.log("val/nmse_inverse_full", nmse_inverse_estimate, on_epoch=True)
+        self.log("val/nmse_lambda_full", nmse_lambda_estimate, on_epoch=True)
 
 
     def test_step(self, batch, batch_idx):

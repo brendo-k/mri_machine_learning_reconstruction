@@ -27,7 +27,7 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        mask = ground_truth_image > 0.0
+        mask = ground_truth_image > 0.00
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
@@ -36,6 +36,7 @@ class plReconModel(pl.LightningModule):
         diff = (ground_truth_image - estimated_image).abs()
 
         wandb_logger = self.logger
+        assert isinstance(wandb_logger, WandbLogger)
         contrasts = estimated_image.shape[1]
 
         if batch_index % 20 == 0:
@@ -110,6 +111,7 @@ class plReconModel(pl.LightningModule):
             under_k = under_k.clamp(0, 1)
             k_space_scaled = k_space_scaled.clamp(0, 1)
             wandb_logger = self.logger
+            assert isinstance(wandb_logger, WandbLogger)
 
             contrasts = estimated_image.shape[0]
             wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
