@@ -230,6 +230,13 @@ class LearnedSSLLightning(plReconModel):
         est_inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)
         est_full_img = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)
 
+        scaling = fully_sampled_img.amax((-1, -2), keepdim=True)
+
+        fully_sampled_img /= scaling
+        est_lambda_img = torch.clip(est_lambda_img/scaling, 0, 1)
+        est_inverse_img = torch.clip(est_inverse_img/scaling, 0, 1)
+        est_full_img = torch.clip(est_full_img/scaling, 0, 1)
+        
         wandb_logger = self.logger
         assert isinstance(wandb_logger, WandbLogger)
 
@@ -257,9 +264,9 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
 
-            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*4, 0, 1), est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*4, 0, 1), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*4, 0, 1), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*10, 0, 1), est_lambda_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*10, 0, 1), est_inverse_img.shape[1], 0))
+            wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*10, 0, 1), est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
             wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
             wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
