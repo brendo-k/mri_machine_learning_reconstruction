@@ -24,11 +24,11 @@ class UndersampledDataModule(pl.LightningDataModule):
             R_hat: float = 2.0,
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),
-            line_constrained: bool = True,
+            line_constrained: bool = False,
             num_workers: int = 0,
             norm_method: str = 'k',
             self_supervsied: bool = False,
-            is_variable_density: bool = False
+            is_variable_density: bool = True 
             ):
 
         super().__init__()
