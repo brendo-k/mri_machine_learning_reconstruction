@@ -19,7 +19,7 @@ Examples:
     train.py --num_workers 3 --max_epochs 50 --contrasts t1 t2 flair
 """
 def main(args):
-    wandb_logger = WandbLogger(project='SSL Characterization', name=args.run_name, log_model=True)
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True)
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',  # Directory to save the checkpoints
         filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
