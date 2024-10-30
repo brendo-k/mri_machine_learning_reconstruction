@@ -53,6 +53,7 @@ def main(args):
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
             self_supervsied=args.self_supervised,
+            is_variable_density=args.pi_sampling, 
             contrasts=args.contrasts
             ) 
 
@@ -82,7 +83,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--model', type=str, default='unet')
-    parser.add_argument('--max_epochs', type=int, default=50)
+    parser.add_argument('--max_epochs', type=int, default=10)
     parser.add_argument('--line_constrained', action='store_true')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -93,13 +94,14 @@ if __name__ == '__main__':
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--self_supervised', action='store_true')
-    parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
+    parser.add_argument('--data_dir', type=str, default='/home/brenden/Documents/data/simulated_subset_random_phase')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--chans', type=int, default=32)
     parser.add_argument('--cascades', type=int, default=6)
     parser.add_argument('--dataset_name', type=str, default='brats')
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
+    parser.add_argument('--pi_sampling', action='store_false')
     
     args = parser.parse_args()
 

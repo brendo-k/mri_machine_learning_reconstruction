@@ -20,7 +20,7 @@ class UndersampleDecorator(Dataset):
         self, 
         dataset: Dataset, 
         R: float = 4, 
-        line_constrained: bool = True, 
+        line_constrained: bool = False, 
         is_variable_density: bool = True,
         poly_order: int = 8,
         acs_lines: int = 10,
