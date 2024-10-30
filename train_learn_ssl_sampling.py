@@ -69,7 +69,8 @@ def main(args):
             supervised=args.supervised,
             channels=args.chans,
             learn_sampling=args.learn_sampling,
-            image_loss_function=args.image_loss
+            image_loss_function=args.image_loss,
+            cascades=args.cascades
             )
 
     if args.checkpoint: 
@@ -120,6 +121,7 @@ if __name__ == '__main__':
     model_group.add_argument('--R_seeding', type=float, nargs='+', default=[])
     model_group.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     model_group.add_argument('--chans', type=int, default=32)
+    model_group.add_argument('--cascades', type=int, default=5)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
