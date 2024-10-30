@@ -101,7 +101,7 @@ class pl_VarNet(plReconModel):
 
         ssim = 0
         for contrast in range(est_img.shape[1]):
-            ssim = ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
+            ssim += ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
         ssim /= est_img.shape[1]
 
         self.log('val/ssim', ssim, on_epoch=True, logger=True)
