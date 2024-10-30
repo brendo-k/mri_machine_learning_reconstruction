@@ -68,7 +68,8 @@ def main(args):
             pass_inverse_data=args.pass_inverse_data,
             supervised=args.supervised,
             channels=args.chans,
-            learn_sampling=args.learn_sampling
+            learn_sampling=args.learn_sampling,
+            image_loss_function=args.image_loss
             )
 
     if args.checkpoint: 
@@ -129,6 +130,7 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
     model_group.add_argument('--supervised', action='store_true')
+    model_group.add_argument('--image_loss', type=str, default='ssim')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

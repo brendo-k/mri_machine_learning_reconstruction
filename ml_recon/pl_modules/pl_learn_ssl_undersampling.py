@@ -6,7 +6,7 @@ from typing import List
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR, StepLR
 from pytorch_lightning.loggers import WandbLogger
 
-from torchmetrics.functional.image import structural_similarity_index_measure as ssim 
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 from ml_recon.losses import L1L2Loss
 from ml_recon.utils.undersample_tools import gen_pdf_bern
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
@@ -32,6 +32,7 @@ class LearnedSSLLightning(plReconModel):
             ssim_scaling_set = 1e-4,
             ssim_scaling_full = 1e-4,
             ssim_scaling_inverse = 1e-4,
+            image_loss_function: str = 'ssim',
             normalize_k_space_energy: float = 0.0,
             lambda_scaling: float = 0.0, 
             pass_all_data: bool = False,
@@ -64,6 +65,23 @@ class LearnedSSLLightning(plReconModel):
         self.R_freeze = [False for _ in range(len(contrast_order))]
 
         self.loss_func = L1L2Loss
+        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
+        if image_loss_function == 'ssim':
+            self.image_loss_func = lambda targ, pred: 1 - self.ssim_func(targ, pred)
+        elif image_loss_function == 'l1':
+            l1_loss = torch.nn.L1Loss()
+            image_loss = lambda targ, pred: l1_loss(targ, pred)
+            self.image_loss_func = image_loss
+        elif image_loss_function == 'l1_grad':
+            l1_loss = torch.nn.L1Loss()
+            grad_x = lambda targ, pred: l1_loss(targ.diff(dim=-1), pred.diff(dim=-1))
+            grad_y = lambda targ, pred: l1_loss(targ.diff(dim=-2), pred.diff(dim=-2))
+            image_loss = lambda targ, pred: (
+                    2*l1_loss(targ, pred) + 
+                    grad_x(targ, pred) + 
+                    grad_y(targ, pred)
+            )
+            self.image_loss_func = image_loss
 
         if self.learn_R: 
             self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
@@ -123,7 +141,7 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             inverse_image = inverse_image.reshape(b * c, 1, h, w)
-            ssim_loss = torch.tensor(1, device=self.device) - ssim(lambda_image, inverse_image, data_range=(0, 1))
+            ssim_loss = self.image_loss_func(lambda_image, inverse_image)
 
             lambda_image = lambda_image.reshape(b, c, h, w)
             inverse_image = inverse_image.reshape(b, c, h, w)
@@ -147,14 +165,14 @@ class LearnedSSLLightning(plReconModel):
             b, c, h, w = lambda_image.shape
             lambda_image = lambda_image.reshape(b * c, 1, h, w)
             image_full = image_full.reshape(b * c, 1, h, w)
-            ssim_loss_full = torch.tensor(1, device=self.device) - ssim(lambda_image, image_full, data_range=(0, 1))
+            ssim_loss_full = self.image_loss_func(lambda_image, image_full)
             ssim_loss_full *= self.ssim_scaling_full
             self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False, on_epoch=True)
             
             if self.pass_inverse_data:
                 assert inverse_image is not None, "should exist!"
                 inverse_image = inverse_image.reshape(b * c, 1, h, w)
-                ssim_loss_full_inverse = torch.tensor(1, device=self.device) - ssim(inverse_image, image_full, data_range=(0, 1))
+                ssim_loss_full_inverse = self.image_loss_func(inverse_image, image_full)
                 inverse_image.reshape(b, c, h, w)
                 ssim_loss_inverse_full = ssim_loss_full_inverse * self.ssim_scaling_inverse_full
                 loss += ssim_loss_inverse_full
@@ -241,7 +259,7 @@ class LearnedSSLLightning(plReconModel):
         assert isinstance(wandb_logger, WandbLogger)
 
         self.calculate_metrics(fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img)
-
+    
         if batch_idx == 0:
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
             est_inverse_plot = est_inverse_img[0].cpu().numpy()
@@ -272,12 +290,12 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
 
     def calculate_metrics(self, fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img):
-        ssim_full_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_full_img)
-        ssim_lambda_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_lambda_img)
-        ssim_inverse_gt = evaluate_over_contrasts(ssim, fully_sampled_img, est_inverse_img)
-        ssim_lambda_estimate = evaluate_over_contrasts(ssim, est_full_img, est_lambda_img)
-        ssim_inverse_estimate = evaluate_over_contrasts(ssim, est_full_img, est_inverse_img)
-        ssim_lambda_inverse = evaluate_over_contrasts(ssim, est_lambda_img, est_inverse_img)
+        ssim_full_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_full_img)
+        ssim_lambda_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_lambda_img)
+        ssim_inverse_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_inverse_img)
+        ssim_lambda_estimate = evaluate_over_contrasts(self.ssim_func, est_full_img, est_lambda_img)
+        ssim_inverse_estimate = evaluate_over_contrasts(self.ssim_func, est_full_img, est_inverse_img)
+        ssim_lambda_inverse = evaluate_over_contrasts(self.ssim_func, est_lambda_img, est_inverse_img)
 
         self.log("val/ssim_gt_full", ssim_full_gt, on_epoch=True)
         self.log("val/ssim_inverse_lambda", ssim_lambda_inverse, on_epoch=True)
