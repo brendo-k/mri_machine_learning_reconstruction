@@ -1,0 +1,163 @@
+Tue Oct 29 23:26:59 2024       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.129.03             Driver Version: 535.129.03   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  Tesla P100-PCIE-12GB           Off | 00000000:04:00.0 Off |                    0 |
+| N/A   41C    P0              27W / 250W |      0MiB / 12288MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   1  Tesla P100-PCIE-12GB           Off | 00000000:83:00.0 Off |                    0 |
+| N/A   37C    P0              27W / 250W |      0MiB / 12288MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+created virtual environment CPython3.11.5.final.0-64 in 2525ms
+  creator CPython3Posix(dest=/local/kadotab.26299144.0/env, clear=False, no_vcs_ignore=False, global=False)
+  seeder FromAppData(download=False, pip=bundle, setuptools=bundle, wheel=bundle, via=copy, app_data_dir=/home/kadotab/.local/share/virtualenv)
+    added seed packages: pip==24.2, setuptools==72.2.0, wheel==0.44.0
+  activators BashActivator,CShellActivator,FishActivator,NushellActivator,PowerShellActivator,PythonActivator
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/generic, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Requirement already satisfied: pip in /local/kadotab.26299144.0/env/lib/python3.11/site-packages (24.2)
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/pip-24.2+computecanada-py3-none-any.whl
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 24.2
+    Uninstalling pip-24.2:
+      Successfully uninstalled pip-24.2
+Successfully installed pip-24.2+computecanada
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/generic, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/absl_py-2.1.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 1))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/aiohttp-3.9.1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 2))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/aiosignal-1.3.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 3))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/appdirs-1.4.4+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 4))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/attrs-23.2.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 5))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/cachetools-5.3.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 6))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/certifi-2023.7.22+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 7))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/charset_normalizer-3.2.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 8))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/click-8.1.7+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 9))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/contourpy-1.2.0+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 10))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/cycler-0.12.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 11))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/docker_pycreds-0.4.0+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 12))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/einops-0.7.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 13))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/filelock-3.13.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 14))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/fonttools-4.47.2+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 15))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/frozenlist-1.4.1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 16))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/fsspec-2024.2.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 17))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/gitdb-4.0.11+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 18))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/GitPython-3.1.40+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 19))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/google_auth-2.25.2+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 20))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/google_auth_oauthlib-1.2.0+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 21))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/grpcio-1.57.0+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 22))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/h5py-3.10.0+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 23))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/idna-3.4+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 24))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/Jinja2-3.1.3+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 25))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/kiwisolver-1.4.5+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 26))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/lightning_utilities-0.10.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 27))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/Markdown-3.5.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 28))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/MarkupSafe-2.1.3+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 29))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/matplotlib-3.7.2+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 30))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/monai-1.3.0+computecanada-202310121228-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 31))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/mpmath-1.3.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 32))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/multidict-6.0.5+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 33))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/networkx-3.2.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 34))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/nibabel-5.2.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 35))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/generic/numpy-1.25.2+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 36))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/oauthlib-3.2.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 37))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/packaging-23.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 38))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/pillow-10.2.0+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 39))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/Pillow_SIMD-9.0.0.post1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 40))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/protobuf-4.23.4+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 41))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/psutil-5.9.8-cp310-abi3-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 42))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/pyasn1-0.5.1+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 43))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/pyasn1_modules-0.3.0+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 44))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/pyparsing-3.0.9+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 45))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/python_dateutil-2.8.2+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 46))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/pytorch_lightning-2.1.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 47))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/PyYAML-6.0.1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 48))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/requests-2.31.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 49))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/requests_oauthlib-1.3.1+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 50))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/rsa-4.9+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 51))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/generic/scipy-1.11.2+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 52))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/sentry_sdk-1.38.0+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 53))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/setproctitle-1.3.2+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 54))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/six-1.16.0+computecanada-py2.py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 55))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/smmap-5.0.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 56))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/sympy-1.12+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 57))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/tensorboard-2.15.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 58))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/tensorboard_data_server-0.7.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 59))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/torch-2.2.1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 60))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/torchmetrics-1.2.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 61))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/generic/torchvision-0.17.1+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 62))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/tqdm-4.66.2+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 63))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/typing_extensions-4.10.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 64))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/urllib3-2.1.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 65))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/wandb-0.16.0+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 66))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic/werkzeug-3.0.1+computecanada-py3-none-any.whl (from -r /home/kadotab/requirements2.txt (line 67))
+Processing /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/gentoo2023/x86-64-v3/yarl-1.9.3+computecanada-cp311-cp311-linux_x86_64.whl (from -r /home/kadotab/requirements2.txt (line 68))
+Requirement already satisfied: setuptools in /local/kadotab.26299144.0/env/lib/python3.11/site-packages (from lightning_utilities==0.10.0+computecanada->-r /home/kadotab/requirements2.txt (line 27)) (72.2.0)
+Installing collected packages: mpmath, appdirs, urllib3, typing_extensions, tqdm, tensorboard_data_server, sympy, smmap, six, setproctitle, PyYAML, pyparsing, pyasn1, psutil, protobuf, Pillow_SIMD, pillow, packaging, oauthlib, numpy, networkx, multidict, MarkupSafe, Markdown, kiwisolver, idna, grpcio, fsspec, frozenlist, fonttools, filelock, einops, cycler, click, charset_normalizer, certifi, cachetools, attrs, absl_py, yarl, werkzeug, sentry_sdk, scipy, rsa, requests, python-dateutil, pyasn1_modules, nibabel, lightning_utilities, Jinja2, h5py, gitdb, docker-pycreds, contourpy, aiosignal, torch, requests_oauthlib, matplotlib, google_auth, GitPython, aiohttp, wandb, torchvision, torchmetrics, monai, google_auth_oauthlib, tensorboard, pytorch_lightning
+Successfully installed GitPython-3.1.40+computecanada Jinja2-3.1.3+computecanada Markdown-3.5.2+computecanada MarkupSafe-2.1.3+computecanada Pillow_SIMD-9.0.0.post1+computecanada PyYAML-6.0.1+computecanada absl_py-2.1.0+computecanada aiohttp-3.9.1+computecanada aiosignal-1.3.1+computecanada appdirs-1.4.4+computecanada attrs-23.2.0+computecanada cachetools-5.3.2+computecanada certifi-2023.7.22+computecanada charset_normalizer-3.2.0+computecanada click-8.1.7+computecanada contourpy-1.2.0+computecanada cycler-0.12.1+computecanada docker-pycreds-0.4.0+computecanada einops-0.7.0+computecanada filelock-3.13.1+computecanada fonttools-4.47.2+computecanada frozenlist-1.4.1+computecanada fsspec-2024.2.0+computecanada gitdb-4.0.11+computecanada google_auth-2.25.2+computecanada google_auth_oauthlib-1.2.0+computecanada grpcio-1.57.0+computecanada h5py-3.10.0+computecanada idna-3.4+computecanada kiwisolver-1.4.5+computecanada lightning_utilities-0.10.0+computecanada matplotlib-3.7.2+computecanada monai-1.3.0+computecanada mpmath-1.3.0+computecanada multidict-6.0.5+computecanada networkx-3.2.1+computecanada nibabel-5.2.0+computecanada numpy-1.25.2+computecanada oauthlib-3.2.2+computecanada packaging-23.2+computecanada pillow-10.2.0+computecanada protobuf-4.23.4+computecanada psutil-5.9.8 pyasn1-0.5.1+computecanada pyasn1_modules-0.3.0+computecanada pyparsing-3.0.9+computecanada python-dateutil-2.8.2+computecanada pytorch_lightning-2.1.2+computecanada requests-2.31.0+computecanada requests_oauthlib-1.3.1+computecanada rsa-4.9+computecanada scipy-1.11.2+computecanada sentry_sdk-1.38.0+computecanada setproctitle-1.3.2+computecanada six-1.16.0+computecanada smmap-5.0.1+computecanada sympy-1.12+computecanada tensorboard-2.15.1+computecanada tensorboard_data_server-0.7.0+computecanada torch-2.2.1+computecanada torchmetrics-1.2.1+computecanada torchvision-0.17.1+computecanada tqdm-4.66.2+computecanada typing_extensions-4.10.0+computecanada urllib3-2.1.0+computecanada wandb-0.16.0+computecanada werkzeug-3.0.1+computecanada yarl-1.9.3+computecanada
+/localscratch/kadotab.26299144.0/data
+Done extracting
+W&B offline. Running your script from this directory will only write metadata locally. Use wandb disabled to completely turn off W&B.
+usage: train_learn_ssl_sampling.py [-h] [--num_workers NUM_WORKERS]
+                                   [--max_epochs MAX_EPOCHS]
+                                   [--batch_size BATCH_SIZE] [--lr LR]
+                                   [--checkpoint CHECKPOINT] [--R R]
+                                   [--dataset DATASET]
+                                   [--contrasts CONTRASTS [CONTRASTS ...]]
+                                   [--nx NX] [--ny NY]
+                                   [--limit_batches LIMIT_BATCHES]
+                                   [--line_constrained] [--pi_sampling]
+                                   [--R_hat R_HAT] [--learn_R] [--warm_start]
+                                   [--data_dir DATA_DIR]
+                                   [--R_seeding R_SEEDING [R_SEEDING ...]]
+                                   [--R_freeze R_FREEZE [R_FREEZE ...]]
+                                   [--chans CHANS]
+                                   [--ssim_scaling_full SSIM_SCALING_FULL]
+                                   [--ssim_scaling_set SSIM_SCALING_SET]
+                                   [--ssim_scaling_inverse SSIM_SCALING_INVERSE]
+                                   [--lambda_scaling LAMBDA_SCALING]
+                                   [--k_space_regularizer K_SPACE_REGULARIZER]
+                                   [--sigmoid_slope2 SIGMOID_SLOPE2]
+                                   [--pass_inverse_data] [--pass_all_data]
+                                   [--learn_sampling] [--supervised]
+                                   [--project PROJECT] [--run_name RUN_NAME]
+train_learn_ssl_sampling.py: error: unrecognized arguments: --norm_method k --pass_full
+usage: train_learn_ssl_sampling.py [-h] [--num_workers NUM_WORKERS]
+                                   [--max_epochs MAX_EPOCHS]
+                                   [--batch_size BATCH_SIZE] [--lr LR]
+                                   [--checkpoint CHECKPOINT] [--R R]
+                                   [--dataset DATASET]
+                                   [--contrasts CONTRASTS [CONTRASTS ...]]
+                                   [--nx NX] [--ny NY]
+                                   [--limit_batches LIMIT_BATCHES]
+                                   [--line_constrained] [--pi_sampling]
+                                   [--R_hat R_HAT] [--learn_R] [--warm_start]
+                                   [--data_dir DATA_DIR]
+                                   [--R_seeding R_SEEDING [R_SEEDING ...]]
+                                   [--R_freeze R_FREEZE [R_FREEZE ...]]
+                                   [--chans CHANS]
+                                   [--ssim_scaling_full SSIM_SCALING_FULL]
+                                   [--ssim_scaling_set SSIM_SCALING_SET]
+                                   [--ssim_scaling_inverse SSIM_SCALING_INVERSE]
+                                   [--lambda_scaling LAMBDA_SCALING]
+                                   [--k_space_regularizer K_SPACE_REGULARIZER]
+                                   [--sigmoid_slope2 SIGMOID_SLOPE2]
+                                   [--pass_inverse_data] [--pass_all_data]
+                                   [--learn_sampling] [--supervised]
+                                   [--project PROJECT] [--run_name RUN_NAME]
+train_learn_ssl_sampling.py: error: unrecognized arguments: --norm_method k --pass_full
+srun: error: gra855: tasks 0-1: Exited with exit code 2
+srun: Terminating StepId=26299144.0

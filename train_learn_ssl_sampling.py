@@ -15,7 +15,7 @@ import numpy as np
 
 def main(args):
         
-    wandb_logger = WandbLogger(project='MRI Reconstruction', log_model=True, name=args.run_name)
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',  # Directory to save the checkpoints
         filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
