@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from typing import Union, Callable, Collection
+from typing import Union, Callable, List
 import torchvision.transforms.functional as F
 import torch
 import h5py
@@ -18,7 +18,7 @@ class M4Raw(Dataset):
             nx:int = 256,
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
-            contrasts: Collection[str] = ['t1', 't2', 'flair']
+            contrasts: List[str] = ['t1', 't2', 'flair']
             ):
 
         # call super constructor
@@ -78,14 +78,25 @@ class M4Raw(Dataset):
         
         k_space = []
         
-        for file in cur_files:
+        for i, file in enumerate(cur_files):
+            contrast = self.contrast_order[i]
             with h5py.File(file) as fr:
                 dataset = fr['kspace']
                 assert isinstance(dataset, h5py.Dataset)
-                k_space.append((dataset[slice_index]))
+                contrast_k = dataset[slice_index]
+                contrast_k = self.center_k_space(contrast_k)
+                    
+                k_space.append(contrast_k)
 
         k_space = np.stack(k_space, axis=0)
         return k_space 
+
+    def center_k_space(self, contrast_k):
+        _, h_center, w_center = np.unravel_index(np.argmax(contrast_k), contrast_k.shape)
+        diff_h = h_center - contrast_k.shape[-2]//2
+        diff_w = w_center - contrast_k.shape[-1]//2
+        contrast_k = np.roll(contrast_k, (-diff_h, -diff_w), axis=(-2, -1))
+        return contrast_k
 
     def resample_or_pad(self, k_space):
         """Takes k-space data and resamples data to desired height and width. If 
