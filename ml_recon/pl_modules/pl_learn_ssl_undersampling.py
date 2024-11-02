@@ -103,11 +103,12 @@ class LearnedSSLLightning(plReconModel):
             return self.train_supervised_step(batch)
 
         undersampled = batch['input']
+        fs_k_space = batch['fs_k_space']
         initial_mask = (undersampled != 0).to(torch.float32)
         nbatch, contrast, coil, h, w = undersampled.shape
 
         lambda_set, inverse_set = self.split_into_lambda_loss_sets(initial_mask, nbatch)
-        estimate_lambda = self.pass_through_model(undersampled, lambda_set)
+        estimate_lambda = self.pass_through_model(undersampled, lambda_set, fs_k_space)
 
         loss_lambda = self.loss_func(
                 torch.view_as_real(undersampled*inverse_set), 
@@ -128,7 +129,7 @@ class LearnedSSLLightning(plReconModel):
             mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
             mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
 
-            estimate_inverse = self.pass_through_model(undersampled, mask_inverse_w_acs)
+            estimate_inverse = self.pass_through_model(undersampled, mask_inverse_w_acs, fs_k_space)
             inverse_image = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)/scaling_factor
             
             # calculate loss
@@ -159,7 +160,7 @@ class LearnedSSLLightning(plReconModel):
 
 
         if self.pass_all_data:
-            estimate_full = self.pass_through_model(undersampled, initial_mask)
+            estimate_full = self.pass_through_model(undersampled, initial_mask, fs_k_space)
 
             image_full = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)/scaling_factor
 
@@ -194,6 +195,7 @@ class LearnedSSLLightning(plReconModel):
             with torch.no_grad():
                 lambda_image = lambda_image.detach().cpu()
                 wandb_logger = self.logger
+                assert isinstance(wandb_logger, WandbLogger)
                 initial_mask = initial_mask[0, :, 0, :, :]
                 lambda_set_plot = lambda_set[0, :, 0, : ,:]
                 inverse_set = inverse_set[0, :, 0, : ,:]
@@ -229,9 +231,9 @@ class LearnedSSLLightning(plReconModel):
         mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
 
-        estimate_lambda = self.pass_through_model(under, mask_lambda)
-        estimate_inverse = self.pass_through_model(under, mask_inverse_w_acs)
-        estimate_full = self.pass_through_model(under, initial_mask)
+        estimate_lambda = self.pass_through_model(under, mask_lambda, fs_k_space)
+        estimate_inverse = self.pass_through_model(under, mask_inverse_w_acs, fs_k_space)
+        estimate_full = self.pass_through_model(under, initial_mask, fs_k_space)
 
         loss_inverse = self.loss_func(
                 torch.view_as_real(under * mask_lambda_wo_acs),
@@ -320,7 +322,7 @@ class LearnedSSLLightning(plReconModel):
         self.log("val/nmse_lambda_full", nmse_lambda_estimate, on_epoch=True)
 
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_index):
         undersampled = batch['input']
         k_space = batch['fs_k_space']
 
@@ -329,38 +331,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model(undersampled, inital_undersampling)
         estimate_k = estimate_k * ~inital_undersampling + undersampled
 
-        super().test_step((estimate_k, k_space, 'pass full'), batch_idx)
-
-        initial_mask = undersampled != 0 
-        nbatch = undersampled.shape[0]
-        mask_lambda, mask_inverse = self.split_into_lambda_loss_sets(initial_mask, nbatch)
-        b, contrast, c, h, w = undersampled.shape
-
-        mask_inverse_w_acs = mask_inverse.clone()
-        mask_lambda_wo_acs = mask_lambda.clone()
-        mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
-        mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
-
-        estimate_lambda = self.pass_through_model(undersampled, mask_lambda)
-        estimate_lambda = estimate_lambda * ~initial_mask + undersampled 
-        estimate_inverse = self.pass_through_model(undersampled, mask_inverse_w_acs)
-        estimate_inverse = estimate_inverse * ~initial_mask + undersampled
-
-        mean_lambda_inverse = torch.stack([estimate_lambda, estimate_inverse]).mean(0)
-        mean_all_3 = torch.stack([estimate_lambda, estimate_inverse, estimate_k]).mean(0)
-        mean_full_lambda = torch.stack([estimate_lambda, estimate_k]).mean(0)
-
-        super().test_step((mean_lambda_inverse, k_space, 'pass lambda+inverse'), batch_idx)
-        super().test_step((mean_all_3, k_space, 'pass all 3'), batch_idx)
-        super().test_step((mean_full_lambda, k_space, 'pass all lambda+full'), batch_idx)
-
-        lambda_img = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2) 
-        inverse_img = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2) 
-        full_img = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2) 
-
-        variance_map = torch.stack([lambda_img, inverse_img, full_img]).std(0)
-        wandb_logger = self.logger
-        wandb_logger.log_image('test/std of 3 images', np.split(np.clip(variance_map[0].cpu(), 0, 1), variance_map.shape[1], 0))
+        super().test_step((estimate_k, k_space, 'pass full'), batch_index)
 
 
     
@@ -539,7 +510,7 @@ class LearnedSSLLightning(plReconModel):
         mask = undersampled != 0
         fully_sampled = batch['fs_k_space']
 
-        estimate = self.pass_through_model(undersampled, mask.to(torch.float32))
+        estimate = self.pass_through_model(undersampled, mask.to(torch.float32), fully_sampled)
         loss = self.loss_func(torch.view_as_real(fully_sampled), torch.view_as_real(estimate)) 
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -552,10 +523,11 @@ class LearnedSSLLightning(plReconModel):
         lambda_mask = self.get_mask(batch_size, mask_center=True)
         return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
 
-    def pass_through_model(self, undersampled, mask):
+    def pass_through_model(self, undersampled, mask, fully_sampled):
+        zero_pad_mask = fully_sampled != 0
         estimate = self.recon_model(undersampled*mask, mask)
         estimate = self.final_dc_step(undersampled, estimate, mask)
-        return estimate
+        return estimate * zero_pad_mask
 
     def final_dc_step(self, undersampled, estimated, mask):
         return estimated * (1 - mask) + undersampled * mask
