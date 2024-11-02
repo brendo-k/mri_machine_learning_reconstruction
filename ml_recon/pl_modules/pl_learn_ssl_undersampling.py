@@ -325,11 +325,13 @@ class LearnedSSLLightning(plReconModel):
     def test_step(self, batch, batch_index):
         undersampled = batch['input']
         k_space = batch['fs_k_space']
+        zero_pad_mask = k_space != 0 
 
         inital_undersampling = undersampled != 0
 
         estimate_k = self.recon_model(undersampled, inital_undersampling)
         estimate_k = estimate_k * ~inital_undersampling + undersampled
+        estimate_k *= zero_pad_mask
 
         super().test_step((estimate_k, k_space, 'pass full'), batch_index)
 
