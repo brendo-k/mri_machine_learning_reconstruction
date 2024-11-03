@@ -63,7 +63,7 @@ def main(args):
             model_name=args.model, 
             contrast_order=data_module.contrast_order,
             lr = args.lr, 
-            num_cascades=args.cascades, 
+            cascades=args.cascades, 
             chans=args.chans
             )
 

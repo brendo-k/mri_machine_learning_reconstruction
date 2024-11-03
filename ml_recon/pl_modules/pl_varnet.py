@@ -24,7 +24,7 @@ class pl_VarNet(plReconModel):
             self, 
             contrast_order,
             model_name: str = 'unet',
-            num_cascades: int = 5, 
+            cascades: int = 5, 
             sense_chans: int = 8,
             lr: float = 1e-3,
             chans = 18, 
@@ -68,7 +68,7 @@ class pl_VarNet(plReconModel):
         self.model = VarNet_mc(
             backbone,
             contrasts=len(contrast_order),
-            num_cascades=num_cascades, 
+            num_cascades=cascades, 
             sens_chans=sense_chans
         )
         self.lr = lr
