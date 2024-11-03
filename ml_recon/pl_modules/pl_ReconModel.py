@@ -27,7 +27,7 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        mask = ground_truth_image > 0.00
+        mask = ground_truth_image > scaling_factor * 0.04
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor

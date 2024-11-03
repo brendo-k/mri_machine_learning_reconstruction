@@ -10,11 +10,11 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 
 
 def main():
-    data_dir = '/home/brenden/Documents/data/simulated_subset_random_phase'
-    logger = WandbLogger(project='SSL Characterization', name='t1 Supervised, R=8')
-    artifact = logger.use_artifact('chiew-lab/MRI Reconstruction/model-4tm8ebtd:v0')
+    data_dir = '/home/kadotab/scratch/simulated_brats_1e-3_10/'
+    logger = WandbLogger(project='SSL Characterization', name='mc ssl, 1e-3')
+    artifact = logger.use_artifact('chiew-lab/MRI Reconstruction/model-pe7ert72:v1')
     artifact_dir = artifact.download()
-    model = LearnedSSLLightning.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'))
+    model = pl_VarNet.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'))
     datamodule = UndersampledDataModule.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'), data_dir=data_dir, batch_size=10)
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
