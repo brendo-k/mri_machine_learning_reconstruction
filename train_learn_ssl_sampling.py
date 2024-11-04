@@ -22,7 +22,6 @@ def main(args):
         save_top_k=1,  # Save the top 3 models
         monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
         mode='min',  # Save the model with the minimum val_loss
-        save_weights_only=True,  # Save only the model weights, not the entire model
     )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 

@@ -26,7 +26,6 @@ def main(args):
         monitor="val/val_loss", 
         mode="min", 
         save_last=True, 
-        save_weights_only=True
         )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
