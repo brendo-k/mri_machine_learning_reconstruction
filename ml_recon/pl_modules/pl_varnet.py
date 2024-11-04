@@ -141,6 +141,11 @@ class pl_VarNet(plReconModel):
             masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(under_k))
             masked_k = masked_k[0, 0, [0], :, :].abs()**0.2
 
+            input = batch['input'][0, 0, [0], :, :].abs()**0.2
+            target = batch['target'][0, 0, [0], :, :].abs()**0.2
+
             wandb_logger = self.logger
             wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
             wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
+            wandb_logger.log_image(mode + '/target', [target.clamp(0, 1).cpu().numpy()])
+            wandb_logger.log_image(mode + '/input', [input.clamp(0, 1).cpu().numpy()])

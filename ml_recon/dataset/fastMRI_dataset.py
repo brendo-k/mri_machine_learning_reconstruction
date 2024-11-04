@@ -62,7 +62,7 @@ class FastMRIDataset(Dataset):
         k_space = self.resample_or_pad(k_space)
 
         # add contrast dimension
-        k_space = k_space.unsqueeze(0)
+        k_space = k_space.unsqueeze(0).numpy()
 
         if self.transforms:
             k_space = self.transforms(k_space)
@@ -77,7 +77,7 @@ class FastMRIDataset(Dataset):
             assert isinstance(dataset, h5py.Dataset)
             k_space = torch.as_tensor(dataset[slice_index])
 
-        return k_space 
+        return k_space
 
     def resample_or_pad(self, k_space, reduce_fov=True):
         """Takes k-space data and resamples data to desired height and width. If 

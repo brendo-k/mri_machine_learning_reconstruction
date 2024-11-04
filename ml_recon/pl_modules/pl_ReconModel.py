@@ -39,13 +39,13 @@ class plReconModel(pl.LightningModule):
         assert isinstance(wandb_logger, WandbLogger)
         contrasts = estimated_image.shape[1]
 
-        if batch_index % 20 == 0:
-            current_step = batch_index * estimated_image.shape[0]
-            for i in range(estimated_image.shape[0]):
-                wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0), step=current_step+i)
-                wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step + i)
-                wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*4, 0, 1), contrasts, 0), step=current_step + i)
-                wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step+i)
+        #if batch_index %  == 0:
+        current_step = batch_index * estimated_image.shape[0]
+        for i in range(estimated_image.shape[0]):
+            wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0), step=current_step+i)
+            wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step + i)
+            wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*8, 0, 1), contrasts, 0), step=current_step + i)
+            wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0), step=current_step+i)
 
         total_ssim = 0
         total_psnr = 0
