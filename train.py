@@ -66,6 +66,8 @@ def main(args):
             cascades=args.cascades, 
             chans=args.chans,
             norm_all_k=args.norm_all_k
+            image_loss_function=args.image_space_loss,
+            image_space_scaling=args.image_loss_scaling
             )
 
 
@@ -105,6 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--pi_sampling', action='store_false')
     parser.add_argument('--ssdu_partioning', action='store_false')
     parser.add_argument('--norm_all_k', action='store_true')
+    parser.add_argument('--image_space_loss', type=str, default='')
+    parser.add_argument('--image_loss_scaling', type=float, default=0)
     
     args = parser.parse_args()
 
