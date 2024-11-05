@@ -28,7 +28,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             num_workers: int = 0,
             norm_method: str = 'k',
             self_supervsied: bool = False,
-            is_variable_density: bool = True 
+            is_variable_density: bool = True, 
+            ssdu_partioning: bool = False,
             ):
 
         super().__init__()
@@ -52,6 +53,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.R_hat = R_hat
         self.self_supervised = self_supervsied
         self.is_variable_density = is_variable_density
+        self.ssdu_partioning = ssdu_partioning
         
         if norm_method == 'img':
             self.transforms = Compose([normalize_image_max(), convert_dataclass_to_dict()])
@@ -106,6 +108,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
                 self_supervised=self.self_supervised,
+                original_ssdu_partioning=self.ssdu_partioning,
                 **undersample_keywords
                 )
 

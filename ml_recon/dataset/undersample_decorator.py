@@ -6,7 +6,7 @@ import math
 from torch.utils.data import Dataset
 
 from typing import Union, Callable
-from ml_recon.utils.undersample_tools import apply_undersampling_from_dist, gen_pdf, scale_pdf, calc_k
+from ml_recon.utils.undersample_tools import apply_undersampling_from_dist, gen_pdf, scale_pdf, calc_k, ssdu_gaussian_selection
 from ml_recon.dataset.dataset_output_type import TrainingSample
 
 class UndersampleDecorator(Dataset):
@@ -27,6 +27,7 @@ class UndersampleDecorator(Dataset):
         transforms: Union[Callable, None] = None, 
         self_supervised: bool = False, 
         R_hat: float = math.nan,
+        original_ssdu_partioning: bool = False,
     ):
         super().__init__()
 
@@ -37,6 +38,10 @@ class UndersampleDecorator(Dataset):
         self.is_variable_density = is_variable_density
         self.R = R
         self.acs_lines = acs_lines
+        self.original_ssdu_partioning = original_ssdu_partioning
+        
+        assert not (self.original_ssdu_partioning and self.is_variable_density), 'can not both be true!'
+        assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
         self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
         # create omega probability the same size as number of contrasts
@@ -91,25 +96,46 @@ class UndersampleDecorator(Dataset):
 
         if self.self_supervised:
 
-            # scale pdf
-            scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
-            doub_under, mask_lambda = apply_undersampling_from_dist(
-                    index,
-                    scaled_new_prob,
-                    under,
-                    deterministic=False,
-                    line_constrained=self.line_constrained,
+            if self.original_ssdu_partioning:
+                input_mask = []
+                loss_mask = []
+                for i in range(mask_omega.shape[0]):
+                    input, loss = ssdu_gaussian_selection(mask_omega[i])
+                    input_mask.append(input)
+                    loss_mask.append(loss)
+
+                input_mask = np.stack(input_mask, axis=0)
+                loss_mask = np.stack(loss_mask, axis=0)
+
+                output = TrainingSample(
+                    input = torch.from_numpy(under * input_mask), 
+                    target = torch.from_numpy(under * loss_mask), 
+                    fs_k_space = torch.from_numpy(k_space).clone(),
+                    mask = torch.from_numpy(input_mask),
+                    loss_mask = torch.from_numpy(loss_mask)
                     )
-            
-            # loss mask is what is not in double undersampled
-            target = under * ~mask_lambda
-            output = TrainingSample(
-                input = torch.from_numpy(doub_under), 
-                target = torch.from_numpy(target), 
-                fs_k_space = torch.from_numpy(k_space).clone(),
-                mask = torch.from_numpy(mask_lambda & mask_omega),
-                loss_mask = torch.from_numpy(~mask_lambda & mask_omega)
-                )
+
+                
+            else:
+                # scale pdf
+                scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
+                doub_under, mask_lambda = apply_undersampling_from_dist(
+                        index,
+                        scaled_new_prob,
+                        under,
+                        deterministic=False,
+                        line_constrained=self.line_constrained,
+                        )
+                
+                # loss mask is what is not in double undersampled
+                target = under * ~mask_lambda
+                output = TrainingSample(
+                    input = torch.from_numpy(doub_under), 
+                    target = torch.from_numpy(target), 
+                    fs_k_space = torch.from_numpy(k_space).clone(),
+                    mask = torch.from_numpy(mask_lambda & mask_omega),
+                    loss_mask = torch.from_numpy(~mask_lambda & mask_omega)
+                    )
 
         if self.transforms: 
             output = self.transforms(output)

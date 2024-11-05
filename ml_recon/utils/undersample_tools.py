@@ -267,8 +267,31 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
 
     return prob_map
 
-import matplotlib.pyplot as plt
-if __name__ == '__main__': 
-   pdf = gen_pdf_columns(256, 256, 1/8, 8, 10) 
-   plt.imshow(pdf)
-   plt.show()
+def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
+
+    ncol, nrow = input_mask.shape
+    
+
+    center_kx = nrow//2
+    center_ky = ncol//2
+
+    acs_shape = 10
+    temp_mask = np.copy(input_mask)
+    temp_mask[center_kx - acs_shape // 2:center_kx + acs_shape // 2,
+    center_ky - acs_shape // 2:center_ky + acs_shape // 2] = 0
+
+    loss_mask = np.zeros_like(input_mask)
+    count = 0
+
+    while count <= int(np.ceil(np.sum(input_mask[:]) * rho)):
+
+        indx = int(np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale)))
+        indy = int(np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale)))
+
+        if (0 <= indx < nrow and 0 <= indy < ncol and temp_mask[indx, indy] == 1 and loss_mask[indx, indy] != 1):
+            loss_mask[indx, indy] = 1
+            count = count + 1
+
+    trn_mask = input_mask ^ loss_mask
+
+    return trn_mask, loss_mask

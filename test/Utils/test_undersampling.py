@@ -1,7 +1,14 @@
 import numpy as np
 import torch
 
-from ml_recon.utils.undersample_tools import gen_pdf_columns, gen_pdf_bern, get_mask_from_distribution, get_mask_from_segregated_sampling, scale_pdf
+from ml_recon.utils.undersample_tools import (
+    gen_pdf_columns, 
+    gen_pdf_bern, 
+    get_mask_from_distribution, 
+    get_mask_from_segregated_sampling, 
+    scale_pdf,
+    ssdu_gaussian_selection
+    )
 
 def test_line_probability_mask():
     pdf = gen_pdf_columns(300, 600, 1/4, 8, 10)
@@ -51,3 +58,8 @@ def test_scaling_multiple_dims():
     #ensure no inplace operations took place
     np.testing.assert_allclose(pdf_R8, pdf_R8_copy) 
     
+def test_ssdu_selection():
+    mask = np.random.randn(128, 128) > 0
+    input, loss = ssdu_gaussian_selection(mask)
+
+    torch.testing.assert_close(input ^ loss, mask)

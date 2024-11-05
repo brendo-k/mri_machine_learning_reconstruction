@@ -96,6 +96,8 @@ class pl_VarNet(plReconModel):
                     grad_y(targ, pred)
             )
             self.image_loss_func = image_loss
+        else:
+            self.image_loss_func = None
 
 
 
@@ -108,7 +110,8 @@ class pl_VarNet(plReconModel):
         gt_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
         images = root_sum_of_squares(ifft_2d_img(estimate_target), coil_dim=1)
         
-        loss += self.image_loss_func(gt_img, images) * self.image_space_scaling
+        if self.image_loss_func: 
+            loss += self.image_loss_func(gt_img, images) * self.image_space_scaling
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
 
