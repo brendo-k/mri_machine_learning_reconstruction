@@ -54,7 +54,7 @@ def main(args):
             self_supervsied=args.self_supervised,
             is_variable_density=args.pi_sampling, 
             contrasts=args.contrasts, 
-            ssdu_partioning=args.ssdu_partioning
+            ssdu_partioning=args.ssdu_partioning, 
             ) 
 
     data_module.setup('train')
@@ -64,7 +64,8 @@ def main(args):
             contrast_order=data_module.contrast_order,
             lr = args.lr, 
             cascades=args.cascades, 
-            chans=args.chans
+            chans=args.chans,
+            norm_all_k=args.norm_all_k
             )
 
 
@@ -103,6 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
     parser.add_argument('--pi_sampling', action='store_false')
     parser.add_argument('--ssdu_partioning', action='store_false')
+    parser.add_argument('--norm_all_k', action='store_true')
     
     args = parser.parse_args()
 

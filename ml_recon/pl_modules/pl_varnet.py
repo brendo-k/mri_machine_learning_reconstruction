@@ -30,7 +30,8 @@ class pl_VarNet(plReconModel):
             lr: float = 1e-3,
             chans = 18, 
             image_loss_function: str = '', 
-            image_space_scaling: float = 0
+            image_space_scaling: float = 0,
+            norm_all_k=False
             ):
 
         super().__init__(contrast_order)
@@ -77,7 +78,7 @@ class pl_VarNet(plReconModel):
         )
         self.lr = lr
         self.contrast_order = contrast_order
-        self.loss = lambda target, prediction: L1L2Loss(torch.view_as_real(target), torch.view_as_real(prediction))
+        self.loss = lambda target, prediction: L1L2Loss(torch.view_as_real(target), torch.view_as_real(prediction), norm_all_k)
 
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
         if image_loss_function == 'ssim':

@@ -60,15 +60,18 @@ class SSIMLoss(nn.Module):
         else:
             return 1 - S
 
-def L1L2Loss(target: torch.Tensor, predicted: torch.Tensor):
+def L1L2Loss(target: torch.Tensor, predicted: torch.Tensor, norm_all_k):
     assert not torch.isnan(target).any()
     assert not torch.isnan(predicted).any()
     target = torch.view_as_complex(target)
     predicted = torch.view_as_complex(predicted)
-    l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=(3, 4))
-    l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=(3, 4))
-    l2_norm = (torch.linalg.vector_norm(target, 2, dim=(3, 4)) + 1e-6)
-    l1_norm = (torch.linalg.vector_norm(target, 1, dim=(3, 4)) + 1e-6)
+    norm_dims = (3, 4)
+    if norm_all_k:
+        norm_dims = (2, ) + norm_dims
+    l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=norm_dims)
+    l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=norm_dims)
+    l2_norm = (torch.linalg.vector_norm(target, 2, dim=norm_dims) + 1e-20)
+    l1_norm = (torch.linalg.vector_norm(target, 1, dim=norm_dims) + 1e-20)
 
     if torch.isnan(l2_component).any():
         print(target)
