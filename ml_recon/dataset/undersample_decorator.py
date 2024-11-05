@@ -40,7 +40,6 @@ class UndersampleDecorator(Dataset):
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
         
-        assert not (self.original_ssdu_partioning and self.is_variable_density), 'can not both be true!'
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
         self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
