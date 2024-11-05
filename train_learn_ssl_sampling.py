@@ -69,7 +69,8 @@ def main(args):
             channels=args.chans,
             learn_sampling=args.learn_sampling,
             image_loss_function=args.image_loss,
-            cascades=args.cascades
+            cascades=args.cascades, 
+            warmup_training=args.warmup_training
             )
 
 
@@ -130,6 +131,7 @@ if __name__ == '__main__':
     model_group.add_argument('--learn_sampling', action='store_true')
     model_group.add_argument('--supervised', action='store_true')
     model_group.add_argument('--image_loss', type=str, default='ssim')
+    model_group.add_argument('--warmup_training', action='store_true')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

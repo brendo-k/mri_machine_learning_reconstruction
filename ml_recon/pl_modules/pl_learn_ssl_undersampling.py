@@ -39,7 +39,8 @@ class LearnedSSLLightning(plReconModel):
             pass_all_data: bool = False,
             pass_inverse_data: bool = False,
             supervised: bool = False,
-            learn_sampling: bool = True
+            learn_sampling: bool = True, 
+            warmup_training: bool = False
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
@@ -61,6 +62,7 @@ class LearnedSSLLightning(plReconModel):
         self.pass_all_data = pass_all_data
         self.supervised = supervised
         self.pass_inverse_data = pass_inverse_data
+        self.warmup_training = warmup_training
 
         self.R_value = torch.full((image_size[0],), float(self.R))
         self.R_freeze = [False for _ in range(len(contrast_order))]
@@ -95,6 +97,9 @@ class LearnedSSLLightning(plReconModel):
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
             init_prob = torch.zeros(image_size) + 0.5
+            
+        if self.warmup_training: 
+            learn_sampling = False
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
 
 
@@ -112,8 +117,9 @@ class LearnedSSLLightning(plReconModel):
 
         loss_lambda = self.loss_func(
                 torch.view_as_real(undersampled*inverse_set), 
-                torch.view_as_real(estimate_lambda*inverse_set)
-                               ) 
+                torch.view_as_real(estimate_lambda*inverse_set),
+                False
+                ) 
 
         zero_filled = root_sum_of_squares(ifft_2d_img(undersampled), coil_dim=2) 
         scaling_factor = zero_filled.amax((-1, -2), keepdim=True)
@@ -136,7 +142,8 @@ class LearnedSSLLightning(plReconModel):
 
             loss_inverse = self.loss_func(
                     torch.view_as_real(undersampled*mask_lambda_wo_acs), 
-                    torch.view_as_real(estimate_inverse*mask_lambda_wo_acs)
+                    torch.view_as_real(estimate_inverse*mask_lambda_wo_acs),
+                    False,
                     )
             loss_inverse *= self.lambda_scaling # scale inverse loss by lambda_scaling
 
@@ -238,10 +245,12 @@ class LearnedSSLLightning(plReconModel):
         loss_inverse = self.loss_func(
                 torch.view_as_real(under * mask_lambda_wo_acs),
                 torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), 
+                False
                 ) 
         loss_lambda = self.loss_func(
                 torch.view_as_real(under * mask_inverse),
-                torch.view_as_real(estimate_lambda*mask_inverse)
+                torch.view_as_real(estimate_lambda*mask_inverse),
+                False
                 ) 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)
@@ -292,6 +301,10 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
             wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
 
+    def on_train_epoch_start(self):
+        if self.current_epoch >= 50 and self.warmup_training:
+            self.sampling_weights.requires_grad = True
+    
     def calculate_metrics(self, fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img):
         ssim_full_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_full_img)
         ssim_lambda_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_lambda_img)
@@ -513,7 +526,7 @@ class LearnedSSLLightning(plReconModel):
         fully_sampled = batch['fs_k_space']
 
         estimate = self.pass_through_model(undersampled, mask.to(torch.float32), fully_sampled)
-        loss = self.loss_func(torch.view_as_real(fully_sampled), torch.view_as_real(estimate)) 
+        loss = self.loss_func(torch.view_as_real(fully_sampled), torch.view_as_real(estimate), False) 
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
