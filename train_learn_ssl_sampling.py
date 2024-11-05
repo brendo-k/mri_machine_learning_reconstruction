@@ -72,8 +72,6 @@ def main(args):
             cascades=args.cascades
             )
 
-    if args.checkpoint: 
-        model = LearnedSSLLightning.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))
 
     if not args.learn_sampling:
         model.sampling_weights.requires_grad = False
@@ -86,7 +84,7 @@ def main(args):
     #wandb_logger.experiment.config.update(model.hparams)
 
     print(model.hparams)
-    trainer.fit(model=model, datamodule=data_module)
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
 
