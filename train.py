@@ -65,7 +65,7 @@ def main(args):
             lr = args.lr, 
             cascades=args.cascades, 
             chans=args.chans,
-            norm_all_k=args.norm_all_k
+            norm_all_k=args.norm_all_k,
             image_loss_function=args.image_space_loss,
             image_space_scaling=args.image_loss_scaling
             )
