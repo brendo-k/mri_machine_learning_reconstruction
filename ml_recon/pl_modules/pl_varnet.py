@@ -80,6 +80,18 @@ class pl_VarNet(plReconModel):
         estimate_target = self.forward(batch)
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
+        gt_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
+        images = root_sum_of_squares(ifft_2d_img(estimate_target), coil_dim=1)
+        l1_loss = torch.nn.L1Loss()
+        grad_x = lambda targ, pred: l1_loss(targ.diff(dim=-1), pred.diff(dim=-1))
+        grad_y = lambda targ, pred: l1_loss(targ.diff(dim=-2), pred.diff(dim=-2))
+        image_loss = lambda targ, pred: (
+                2*l1_loss(targ, pred) + 
+                grad_x(targ, pred) + 
+                grad_y(targ, pred)
+        )
+        
+        loss += image_loss(gt_img, images) * 1e-6
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
 
