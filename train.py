@@ -7,6 +7,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
+from datetime import datetime
 
 
 """
@@ -20,9 +21,11 @@ Examples:
 """
 def main(args):
     wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True)
+    unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    file_name = 'pl_varnet-' + unique_id
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',  # Directory to save the checkpoints
-        filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+        filename=file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
         monitor="val/val_loss", 
         mode="min", 
         save_last=True, 

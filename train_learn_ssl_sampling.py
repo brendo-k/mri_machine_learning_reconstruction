@@ -12,13 +12,16 @@ from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.callbacks import Callback
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 import numpy as np
+from datetime import datetime
 
 def main(args):
         
     wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
+    unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    file_name = 'pl_learn_ssl-' + unique_id
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',  # Directory to save the checkpoints
-        filename='mri-reconstruction-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+        filename=file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
         save_top_k=1,  # Save the top 3 models
         monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
         mode='min',  # Save the model with the minimum val_loss
