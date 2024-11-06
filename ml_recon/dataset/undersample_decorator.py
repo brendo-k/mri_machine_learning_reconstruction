@@ -99,9 +99,9 @@ class UndersampleDecorator(Dataset):
                 input_mask = []
                 loss_mask = []
                 for i in range(mask_omega.shape[0]):
-                    input, loss = ssdu_gaussian_selection(mask_omega[i])
-                    input_mask.append(input)
-                    loss_mask.append(loss)
+                    input, loss = ssdu_gaussian_selection(mask_omega[i, 0])
+                    input_mask.append(np.expand_dims(input, 0))
+                    loss_mask.append(np.expand_dims(loss, 0))
 
                 input_mask = np.stack(input_mask, axis=0)
                 loss_mask = np.stack(loss_mask, axis=0)
