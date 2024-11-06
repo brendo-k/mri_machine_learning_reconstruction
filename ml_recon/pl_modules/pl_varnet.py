@@ -114,7 +114,7 @@ class pl_VarNet(plReconModel):
         if self.image_loss_func: 
             loss += self.image_loss_func(gt_img, images) * self.image_space_scaling
 
-        self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True)
+        self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
 
         if batch_idx == 0: 
             self.plot_images(batch, 'train')
@@ -126,7 +126,7 @@ class pl_VarNet(plReconModel):
         estimate_target = self.forward(batch)
 
         loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
-        self.log('val/val_loss', loss, on_epoch=True, logger=True)
+        self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
         ssim_func = structural_similarity_index_measure
         est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
@@ -137,7 +137,7 @@ class pl_VarNet(plReconModel):
             ssim += ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
         ssim /= est_img.shape[1]
 
-        self.log('val/ssim', ssim, on_epoch=True, logger=True)
+        self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
         if batch_idx == 0: 
             self.plot_images(batch, 'val')
         return loss
