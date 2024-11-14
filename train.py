@@ -7,6 +7,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.tuner.tuning import Tuner
+from pytorch_lightning.profilers import PyTorchProfiler, AdvancedProfiler
+from torch.profiler import ProfilerActivity, schedule
 from datetime import datetime
 
 
@@ -30,13 +32,18 @@ def main(args):
         mode="min", 
         save_last=True, 
         )
+
+    profiler = PyTorchProfiler(
+            filename='prof',
+            export_to_chrome=True
+            )
+
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[checkpoint_callback],
-                         devices="auto", 
-                         strategy="auto"
+                         profiler=profiler
                          )
 
 
@@ -108,7 +115,7 @@ if __name__ == '__main__':
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
     parser.add_argument('--pi_sampling', action='store_false')
-    parser.add_argument('--ssdu_partioning', action='store_false')
+    parser.add_argument('--ssdu_partioning', action='store_true')
     parser.add_argument('--norm_all_k', action='store_true')
     parser.add_argument('--image_space_loss', type=str, default='')
     parser.add_argument('--image_loss_scaling', type=float, default=0)

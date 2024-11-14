@@ -79,12 +79,9 @@ class M4Raw(Dataset):
         k_space = []
         
         for i, file in enumerate(cur_files):
-            contrast = self.contrast_order[i]
-            with h5py.File(file) as fr:
+            with h5py.File(file, 'r') as fr:
                 dataset = fr['kspace']
-                assert isinstance(dataset, h5py.Dataset)
                 contrast_k = dataset[slice_index]
-                contrast_k = self.center_k_space(contrast_k)
                     
                 k_space.append(contrast_k)
 

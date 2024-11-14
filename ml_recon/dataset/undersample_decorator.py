@@ -72,6 +72,7 @@ class UndersampleDecorator(Dataset):
 
     def __getitem__(self, index):
         k_space:NDArray[np.complex_] = self.dataset[index] #[con, chan, h, w] 
+        fs_k_space = k_space.copy()
         if self.is_variable_density: 
             under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
                                         self.omega_prob, 
@@ -85,13 +86,14 @@ class UndersampleDecorator(Dataset):
             w = mask_omega.shape[-1]
             mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1
             under = k_space * mask_omega
-        output = TrainingSample(
-                input = torch.from_numpy(under), 
-                target = torch.from_numpy(k_space), 
-                fs_k_space = torch.from_numpy(k_space).clone(),
-                mask = torch.from_numpy(mask_omega),
-                loss_mask = torch.ones_like(torch.from_numpy(mask_omega))
-                )
+
+        output = {
+                'input': under, 
+                'target': k_space, 
+                'fs_k_space': fs_k_space,
+                'mask': mask_omega,
+                'loss_mask': np.ones_like(mask_omega)
+                }
 
         if self.self_supervised:
 
@@ -106,13 +108,12 @@ class UndersampleDecorator(Dataset):
                 input_mask = np.stack(input_mask, axis=0)
                 loss_mask = np.stack(loss_mask, axis=0)
 
-                output = TrainingSample(
-                    input = torch.from_numpy(under * input_mask), 
-                    target = torch.from_numpy(under * loss_mask), 
-                    fs_k_space = torch.from_numpy(k_space).clone(),
-                    mask = torch.from_numpy(input_mask),
-                    loss_mask = torch.from_numpy(loss_mask)
-                    )
+                output.update({
+                    'input': under * input_mask, 
+                    'target': under * loss_mask, 
+                    'mask': input_mask,
+                    'loss_mask': loss_mask
+                    })
 
                 
             else:
@@ -128,13 +129,15 @@ class UndersampleDecorator(Dataset):
                 
                 # loss mask is what is not in double undersampled
                 target = under * ~mask_lambda
-                output = TrainingSample(
-                    input = torch.from_numpy(doub_under), 
-                    target = torch.from_numpy(target), 
-                    fs_k_space = torch.from_numpy(k_space).clone(),
-                    mask = torch.from_numpy(mask_lambda & mask_omega),
-                    loss_mask = torch.from_numpy(~mask_lambda & mask_omega)
-                    )
+                output.update({
+                    'input': doub_under, 
+                    'target': target, 
+                    'mask': mask_lambda & mask_omega,
+                    'loss_mask': ~mask_lambda & mask_omega
+                    })
+        
+        for keys in output:
+            output[keys] = torch.from_numpy(output[keys])
 
         if self.transforms: 
             output = self.transforms(output)

@@ -56,13 +56,13 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.ssdu_partioning = ssdu_partioning
         
         if norm_method == 'img':
-            self.transforms = Compose([normalize_image_max(), convert_dataclass_to_dict()])
+            self.transforms = Compose([normalize_image_max()])
         elif norm_method == 'k': 
-            self.transforms = Compose([normalize_k_max(), convert_dataclass_to_dict()]) 
+            self.transforms = Compose([normalize_k_max()]) 
         elif norm_method == 'image_mean':
-            self.transforms = Compose([normalize_image_mean(), convert_dataclass_to_dict()]) 
+            self.transforms = Compose([normalize_image_mean()]) 
         elif norm_method == 'image_mean2':
-            self.transforms = Compose([normalize_image_mean2(), convert_dataclass_to_dict()]) 
+            self.transforms = Compose([normalize_image_mean2()]) 
 
     def setup(self, stage):
         super().setup(stage)
@@ -153,49 +153,45 @@ class UndersampledDataModule(pl.LightningDataModule):
 
 
 class normalize_image_max(object):
-    def __call__(self, data: TrainingSample):
-        input = data.input
+    def __call__(self, data: dict):
+        input = data['input']
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        data.input /= scaling_factor
-        data.target /= scaling_factor
-        data.fs_k_space /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
+        data['fs_k_space'] /= scaling_factor
         return data
 
 class normalize_k_max(object):
-    def __call__(self, data: TrainingSample):
-        input = data.input
+    def __call__(self, data):
+        input = data['input']
         undersample_max = input.abs().amax((1, 2, 3), keepdim=True)
         
-        data.input /= undersample_max
-        data.target /= undersample_max
-        data.fs_k_space /= undersample_max
+        data['input'] /= undersample_max
+        data['target'] /= undersample_max
+        data['fs_k_space'] /= undersample_max
         return data
 
 class normalize_image_mean(object):
-    def __call__(self, data: TrainingSample):
-        input = data.input
+    def __call__(self, data):
+        input = data['input']
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data.input /= scaling_factor
-        data.target /= scaling_factor
-        data.fs_k_space /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
+        data['fs_k_space'] /= scaling_factor
         return data
 
 class normalize_image_mean2(object):
-    def __call__(self, data: TrainingSample):
-        input = data.input
+    def __call__(self, data):
+        input = data['input']
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data.input /= scaling_factor
-        data.target /= scaling_factor
-        data.fs_k_space /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
+        data['fs_k_space'] /= scaling_factor
         return data
 
-class convert_dataclass_to_dict(object):
-    def __call__(self, data: TrainingSample):
-        return asdict(data)
-        
