@@ -122,7 +122,7 @@ if __name__ == '__main__':
     model_group.add_argument('--R_seeding', type=float, nargs='+', default=[])
     model_group.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     model_group.add_argument('--chans', type=int, default=32)
-    model_group.add_argument('--cascades', type=int, default=5)
+    model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)

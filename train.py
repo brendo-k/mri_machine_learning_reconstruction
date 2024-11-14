@@ -61,7 +61,7 @@ def main(args):
             R=args.R,
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
-            self_supervsied=args.self_supervised,
+            supervised=args.supervised,
             is_variable_density=args.pi_sampling, 
             contrasts=args.contrasts, 
             ssdu_partioning=args.ssdu_partioning, 
@@ -74,7 +74,7 @@ def main(args):
             contrast_order=data_module.contrast_order,
             lr = args.lr, 
             cascades=args.cascades, 
-            chans=args.chans,
+            channels=args.chans,
             norm_all_k=args.norm_all_k,
             image_loss_function=args.image_space_loss,
             image_space_scaling=args.image_loss_scaling
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     parser.add_argument('--nx', type=int, default=128)
     parser.add_argument('--ny', type=int, default=128)
     parser.add_argument('--norm_method', type=str, default='k')
-    parser.add_argument('--self_supervised', action='store_true')
+    parser.add_argument('--supervised', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/brenden/Documents/data/simulated_subset_random_phase')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--chans', type=int, default=32)

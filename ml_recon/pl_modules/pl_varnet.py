@@ -28,7 +28,7 @@ class pl_VarNet(plReconModel):
             cascades: int = 5, 
             sense_chans: int = 8,
             lr: float = 1e-3,
-            chans = 18, 
+            channels = 18, 
             image_loss_function: str = '', 
             image_space_scaling: float = 0,
             norm_all_k=False

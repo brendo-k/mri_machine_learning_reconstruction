@@ -27,7 +27,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             line_constrained: bool = False,
             num_workers: int = 0,
             norm_method: str = 'k',
-            self_supervsied: bool = False,
+            supervised: bool = False,
             is_variable_density: bool = True, 
             ssdu_partioning: bool = False,
             ):
@@ -51,7 +51,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.line_constrained = line_constrained
         self.R = R
         self.R_hat = R_hat
-        self.self_supervised = self_supervsied
+        self.supervised = supervised
         self.is_variable_density = is_variable_density
         self.ssdu_partioning = ssdu_partioning
         
@@ -107,7 +107,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                self_supervised=self.self_supervised,
+                self_supervised=bool(~self.supervised),
                 original_ssdu_partioning=self.ssdu_partioning,
                 **undersample_keywords
                 )
