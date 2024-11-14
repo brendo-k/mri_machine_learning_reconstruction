@@ -39,23 +39,35 @@ class pl_VarNet(plReconModel):
 
         self.save_hyperparameters()
         if model_name == 'unet':
-            backbone = partial(Unet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans)
+            backbone = partial(
+                    Unet, 
+                    in_chan=2*len(contrast_order), 
+                    out_chan=2*len(contrast_order), 
+                    chans=channels
+                    )
         elif model_name == 'resnet':
-            backbone = partial(ResNet, in_chan=2*len(contrast_order), out_chan=2*len(contrast_order), chans=chans, itterations=15)
+            backbone = partial(
+                    ResNet, 
+                    in_chan=2*len(contrast_order), 
+                    out_chan=2*len(contrast_order), 
+                    chans=channels, 
+                    itterations=15
+                    )
         elif model_name == 'se_jd':
-            backbone = partial(SingleEncoderJointDecoder,
-                               in_chan=2*len(contrast_order),
-                               encoder_chan=16, 
-                               encoder_depth=4, 
-                               decoder_chan=chans, 
-                               decoder_depth=4
-                               )
+            backbone = partial(
+                    SingleEncoderJointDecoder,
+                    in_chan=2*len(contrast_order),
+                    encoder_chan=16, 
+                    encoder_depth=4, 
+                    decoder_chan=channels, 
+                    decoder_depth=4
+                    )
         elif model_name == 'unetr':
             backbone = partial(
                     UnetR, 
                     in_chan=2*len(contrast_order), 
                     out_chan=2*len(contrast_order), 
-                    hidden_size=chans,
+                    hidden_size=channels,
                     img_size=128
                     )
         elif model_name == 'swin_unetr':
@@ -63,7 +75,7 @@ class pl_VarNet(plReconModel):
                     SwinUNETR, 
                     in_channels=2*len(contrast_order), 
                     out_channels=2*len(contrast_order), 
-                    feature_size=chans, 
+                    feature_size=channels, 
                     img_size=128,
                     spatial_dims=2
                     )
