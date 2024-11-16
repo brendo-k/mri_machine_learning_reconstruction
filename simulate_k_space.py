@@ -8,7 +8,7 @@ from itertools import repeat
 from ml_recon.utils import fft_2d_img, ifft_2d_img
 import sys
 
-IMAGE_SIZE = (128, 128)
+IMAGE_SIZE = (240, 240)
 
 # Define a function to process a single file
 def process_file(file, out_path, seed, noise, coils):
@@ -48,7 +48,7 @@ def process_file(file, out_path, seed, noise, coils):
                                         center_region=20, noise_std=noise, coil_size=coils
                                         )
 
-    k_space = np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64)
+    k_space = np.ascontiguousarray(np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64))
 
     try:
         os.makedirs(os.path.join(out_path, patient_name))
@@ -57,8 +57,9 @@ def process_file(file, out_path, seed, noise, coils):
 
     try:
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
+        chunk_size = (1, 1, int(coils), IMAGE_SIZE[0], IMAGE_SIZE[1])
         with h5py.File(save_file, 'w') as fr:
-            dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64)
+            dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64, chunks=chunk_size)
             dset[...] = k_space
             dset = fr.create_dataset("contrasts", data=modality_name)
         print(f'saved to file: {save_file}')

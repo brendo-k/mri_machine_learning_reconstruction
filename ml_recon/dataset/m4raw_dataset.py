@@ -29,28 +29,27 @@ class M4Raw(Dataset):
         self.transforms = transforms
 
         files = os.listdir(data_dir)
-        patient_id = list(set([file.split('_')[0] for file in files]))
-        patient_id.sort()
-        
-        slices = []
         self.file_names = []
+        slices = []
+        contrast_order = []
 
-        for patient in patient_id:
-            patient_files = [] 
-            for contrast in contrasts: 
-                con_label = contrast.upper()
-                file_label = f'{patient}_{con_label}.h5'
-                patient_files.append(os.path.join(data_dir, file_label))
+        for file in files:
+            file_path = os.path.join(data_dir, file)
+            self.file_names.append(file_path)
 
-            self.file_names.append(patient_files)
-
-            with h5py.File(patient_files[0], 'r') as fr:
+            with h5py.File(file_path, 'r') as fr:
                 dataset = fr['kspace']
                 assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[0])
+                contrast_dataset = fr['contrasts']
+                assert isinstance(contrast_dataset, h5py.Dataset)
+                contrast_order = np.char.lower(contrast_dataset[:].astype('U'))
 
-
-        self.contrast_order = contrasts
+        contrasts = np.array(contrasts)
+        print(contrasts)
+        print(contrast_order)
+        self.contrast_order_indexes = np.isin(contrast_order, contrasts)
+        self.contrast_order = contrast_order[self.contrast_order_indexes] # type: ignore
 
         self.slice_cumulative_sum = np.cumsum(slices) 
         self.length = self.slice_cumulative_sum[-1]
@@ -74,18 +73,17 @@ class M4Raw(Dataset):
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
-        cur_files = self.file_names[volume_index]
+        cur_file = self.file_names[volume_index]
         
         k_space = []
         
-        for i, file in enumerate(cur_files):
-            with h5py.File(file, 'r') as fr:
-                dataset = fr['kspace']
-                contrast_k = dataset[slice_index]
-                    
-                k_space.append(contrast_k)
+        with h5py.File(cur_file, 'r') as fr:
+            dataset = fr['kspace']
+            contrast_k = dataset[self.contrast_order_indexes, slice_index]
+                
+            k_space.append(contrast_k)
 
-        k_space = np.stack(k_space, axis=0)
+        k_space = np.stack(k_space)
         return k_space 
 
     def center_k_space(self, contrast_k):

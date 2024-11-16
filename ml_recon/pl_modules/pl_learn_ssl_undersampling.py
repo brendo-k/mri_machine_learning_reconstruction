@@ -270,7 +270,16 @@ class LearnedSSLLightning(plReconModel):
         wandb_logger = self.logger
         assert isinstance(wandb_logger, WandbLogger)
 
-        self.calculate_metrics(fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img)
+        self.log_metrics(
+                fs_k_space, 
+                estimate_lambda, 
+                estimate_inverse, 
+                estimate_full, 
+                fully_sampled_img, 
+                est_lambda_img, 
+                est_inverse_img, 
+                est_full_img
+                )
     
         if batch_idx == 0:
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
@@ -305,7 +314,17 @@ class LearnedSSLLightning(plReconModel):
         if self.current_epoch >= 50 and self.warmup_training:
             self.sampling_weights.requires_grad = True
     
-    def calculate_metrics(self, fs_k_space, estimate_lambda, estimate_inverse, estimate_full, fully_sampled_img, est_lambda_img, est_inverse_img, est_full_img):
+    def log_metrics(
+            self, 
+            fs_k_space, 
+            estimate_lambda, 
+            estimate_inverse, 
+            estimate_full, 
+            fully_sampled_img, 
+            est_lambda_img, 
+            est_inverse_img, 
+            est_full_img
+            ):
         ssim_full_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_full_img)
         ssim_lambda_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_lambda_img)
         ssim_inverse_gt = evaluate_over_contrasts(self.ssim_func, fully_sampled_img, est_inverse_img)

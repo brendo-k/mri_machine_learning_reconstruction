@@ -213,6 +213,35 @@
                     "userUnhandled": ""
                 }
             }
+        },
+        "Debug learn sampling ssl": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "train_learn_ssl_sampling.py",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                    "--nx", "240", 
+                    "--ny", "240", 
+                    "--max_epochs", "1",
+                    "--data_dir", "/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_averaged/",
+                    "--dataset", "m4raw",
+                    "--contrasts", "t1", "t2", "flair"
+
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
         }
     }
 }
