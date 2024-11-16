@@ -76,9 +76,7 @@ def main(args):
             warmup_training=args.warmup_training
             )
 
-
-    if not args.learn_sampling:
-        model.sampling_weights.requires_grad = False
+    wandb_logger.watch(model, log_graph=True)
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)

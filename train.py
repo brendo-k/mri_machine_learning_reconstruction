@@ -33,17 +33,12 @@ def main(args):
         save_last=True, 
         )
 
-    profiler = PyTorchProfiler(
-            filename='prof',
-            export_to_chrome=True
-            )
 
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[checkpoint_callback],
-                         profiler=profiler
                          )
 
 
@@ -81,7 +76,7 @@ def main(args):
             )
 
 
-
+    wandb_logger.watch(model, log_graph=True)
     #wandb_logger.experiment.config.update(model.hparams)
    
     #wandb_logger.experiment.config.update(model.hparams)

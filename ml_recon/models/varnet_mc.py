@@ -61,7 +61,7 @@ class VarNet_mc(nn.Module):
             # gradient descent step
             current_regularization = self.lambda_reg[i]
             current_regularization = current_regularization[None, :, None, None, None]
-            current_k = current_k + (current_regularization * data_consistency) + refined_k
+            current_k = current_k - (current_regularization * data_consistency) - refined_k
         return current_k
 
 

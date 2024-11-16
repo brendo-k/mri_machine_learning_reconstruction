@@ -74,28 +74,22 @@ class SensetivityModel_mc(nn.Module):
         center_y = center_mask.shape[-2] // 2
         
         # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
-        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
-        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
+        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.90).to(torch.int8)
+        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x] > 0.90).to(torch.int8)
 
-        assert (squeezed_mask_hor == True).any(dim=-1).all(), "The squeeze mask is all zero! Can't estimate coil sensetivities"
-        assert (squeezed_mask_vert == True).any(dim=-1).all(), "The squeeze mask is all zero! Can't estimate coil sensetivities"
         # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
         left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
         right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
         top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
         bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
 
-        if (squeezed_mask_hor == 1).all():
-            left = torch.full(left.shape, 5)
-            right = torch.full(right.shape, 5)
-
+        # minimum acs size is 10x10
         left[left == 0] =  5
         right[right == 0] = 5
         top[top == 0] = 5
         bottom[bottom== 0] = 5
-        assert (left != 0).any(), 'Left mask bounds should have at least one 0'
-        assert (right != 0).any(), 'Right mask bounds should have at least one 0!'
 
+        # if pe lines, aquire whole line for acs calculations
         if (squeezed_mask_vert == 1).all():
             top = torch.full(top.shape, center_y)
             bottom = torch.full(top.shape, center_y)
@@ -119,7 +113,7 @@ class SensetivityModel_mc(nn.Module):
         x = x.view(b, 2, c // 2 * h * w)
 
         mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1) + 1e-6
+        std = x.std(dim=2).view(b, 2, 1, 1) + 1e-20
 
         x = x.view(b, c, h, w)
 
