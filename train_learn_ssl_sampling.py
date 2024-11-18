@@ -47,7 +47,7 @@ def main(args):
             contrasts=args.contrasts,
             line_constrained=args.line_constrained,
             is_variable_density=args.pi_sampling, 
-            supervised=True,
+            supervised_dataset=True,
             R=args.R
             ) 
 

@@ -56,7 +56,7 @@ def main(args):
             R=args.R,
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
-            supervised=args.supervised,
+            supervised_dataset=args.supervised,
             is_variable_density=args.pi_sampling, 
             contrasts=args.contrasts, 
             ssdu_partioning=args.ssdu_partioning, 
