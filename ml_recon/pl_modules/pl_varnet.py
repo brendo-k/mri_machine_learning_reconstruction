@@ -139,13 +139,13 @@ class pl_VarNet(plReconModel):
 
             input = batch['input'][0, 0, [0], :, :].abs()**0.2
             target = batch['target'][0, 0, [0], :, :].abs()**0.2
-
-            wandb_logger = self.logger
-            assert isinstance(wandb_logger, WandbLogger)
-            wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-            wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
-            wandb_logger.log_image(mode + '/target', [target.clamp(0, 1).cpu().numpy()])
-            wandb_logger.log_image(mode + '/input', [input.clamp(0, 1).cpu().numpy()])
+            if self.logger:
+                wandb_logger = self.logger
+                assert isinstance(wandb_logger, WandbLogger)
+                wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
+                wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
+                wandb_logger.log_image(mode + '/target', [target.clamp(0, 1).cpu().numpy()])
+                wandb_logger.log_image(mode + '/input', [input.clamp(0, 1).cpu().numpy()])
 
     def _set_image_loss_func(self):
         if self.config.image_loss_function == 'ssim':

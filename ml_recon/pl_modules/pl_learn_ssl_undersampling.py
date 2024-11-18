@@ -196,7 +196,7 @@ class LearnedSSLLightning(plReconModel):
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/loss_lambda", loss_lambda, on_step=True, on_epoch=True, prog_bar=True)
 
-        if batch_idx == 0:
+        if batch_idx == 0 and self.logger:
             with torch.no_grad():
                 lambda_image = lambda_image.detach().cpu()
                 wandb_logger = self.logger
@@ -263,8 +263,6 @@ class LearnedSSLLightning(plReconModel):
         est_inverse_img = torch.clip(est_inverse_img/scaling, 0, 1)
         est_full_img = torch.clip(est_full_img/scaling, 0, 1)
         
-        wandb_logger = self.logger
-        assert isinstance(wandb_logger, WandbLogger)
 
         self.log_metrics(
                 fs_k_space, 
@@ -277,7 +275,9 @@ class LearnedSSLLightning(plReconModel):
                 est_full_img
                 )
     
-        if batch_idx == 0:
+        if batch_idx == 0 and self.logger:
+            wandb_logger = self.logger
+            assert isinstance(wandb_logger, WandbLogger)
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
             est_inverse_plot = est_inverse_img[0].cpu().numpy()
             est_full_plot = est_full_img[0].cpu().numpy()

@@ -80,7 +80,7 @@ class L1L2Loss():
         if torch.isnan(l2_component).any():
             print(target)
         
-        loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)/target.numel()
+        loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)
         return loss
 
 class L1ImageGradLoss():

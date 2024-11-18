@@ -108,11 +108,12 @@ class plReconModel(pl.LightningModule):
             diff = diff.clamp(0, 1)
             under_k = under_k.clamp(0, 1)
             k_space_scaled = k_space_scaled.clamp(0, 1)
-            wandb_logger = self.logger
-            assert isinstance(wandb_logger, WandbLogger)
+            if self.logger:
+                wandb_logger = self.logger
+                assert isinstance(wandb_logger, WandbLogger)
 
-            contrasts = estimated_image.shape[0]
-            wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/fully_sampled', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))
+                contrasts = estimated_image.shape[0]
+                wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+                wandb_logger.log_image(mode + '/fully_sampled', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+                wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
+                wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))
