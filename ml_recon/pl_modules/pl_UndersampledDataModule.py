@@ -107,7 +107,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                self_supervised=bool(~self.supervised),
+                self_supervised=(not self.supervised),
                 original_ssdu_partioning=self.ssdu_partioning,
                 **undersample_keywords
                 )

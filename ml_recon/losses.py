@@ -60,21 +60,36 @@ class SSIMLoss(nn.Module):
         else:
             return 1 - S
 
-def L1L2Loss(target: torch.Tensor, predicted: torch.Tensor, norm_all_k):
-    assert not torch.isnan(target).any()
-    assert not torch.isnan(predicted).any()
-    target = torch.view_as_complex(target)
-    predicted = torch.view_as_complex(predicted)
-    norm_dims = (3, 4)
-    if norm_all_k:
-        norm_dims = (2, ) + norm_dims
-    l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=norm_dims)
-    l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=norm_dims)
-    l2_norm = (torch.linalg.vector_norm(target, 2, dim=norm_dims) + 1e-20)
-    l1_norm = (torch.linalg.vector_norm(target, 1, dim=norm_dims) + 1e-20)
+class L1L2Loss():
+    def __init__(self, norm_all_k):
+        self.norm_all_k = norm_all_k
+        
+    def __call__(self, target: torch.Tensor, predicted: torch.Tensor):
+        assert not torch.isnan(target).any()
+        assert not torch.isnan(predicted).any()
+        target = torch.view_as_complex(target)
+        predicted = torch.view_as_complex(predicted)
+        norm_dims = (3, 4)
+        if self.norm_all_k:
+            norm_dims = (2, ) + norm_dims
+        l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=norm_dims)
+        l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=norm_dims)
+        l2_norm = (torch.linalg.vector_norm(target, 2, dim=norm_dims) + 1e-20)
+        l1_norm = (torch.linalg.vector_norm(target, 1, dim=norm_dims) + 1e-20)
 
-    if torch.isnan(l2_component).any():
-        print(target)
+        if torch.isnan(l2_component).any():
+            print(target)
+        
+        loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)/target.numel()
+        return loss
+
+class L1ImageGradLoss():
+    def __init__(self, grad_scaling):
+        self.grad_scaling = grad_scaling
     
-    loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)/target.numel()
-    return loss
+    def __call__(self, targ, pred):
+        l1_loss = torch.nn.L1Loss()
+        grad_x = lambda targ, pred: l1_loss(targ.diff(dim=-1), pred.diff(dim=-1))
+        grad_y = lambda targ, pred: l1_loss(targ.diff(dim=-2), pred.diff(dim=-2))
+
+        return l1_loss(targ, pred) + self.grad_scaling(grad_x(targ, pred) + grad_y(targ, pred))

@@ -10,7 +10,7 @@ from ml_recon.utils.undersample_tools import scale_pdf, gen_pdf_bern, gen_pdf_co
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluate import nmse, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.pl_modules.pl_varnet import pl_VarNet
+from ml_recon.models.varnet_mc import VarNet_mc
 
 class LOUPE(plReconModel):
     def __init__(
@@ -29,12 +29,13 @@ class LOUPE(plReconModel):
             self_supervised:bool = False,
             R_seeding: List[float] = [], 
             R_freeze: List[bool] = [],
-            chans: int = 32
+            channels: int = 32,
+            cascades: int = 6
             ):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
 
-        self.recon_model = pl_VarNet(contrast_order=contrast_order, chans=chans)
+        self.recon_model = VarNet_mc(contrasts=len(contrast_order), chans=channels, num_cascades=cascades)
         self.image_size = image_size
         self.contrast_order = contrast_order
         self.R = R
@@ -94,7 +95,7 @@ class LOUPE(plReconModel):
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(batch, 'train') 
+            self.plot_example_images(batch, 'train') 
         return loss
 
 
@@ -116,7 +117,7 @@ class LOUPE(plReconModel):
         self.log("val/ssim", ssim_val/img.shape[1], on_epoch=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            self.plot_images(batch, 'val') 
+            self.plot_example_images(batch, 'val') 
 
 
     def test_step(self, batch, batch_idx):
@@ -351,11 +352,11 @@ class LOUPE(plReconModel):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-2) 
         return [optimizer], [scheduler]
 
-    def plot_images(self, batch, mode='train'):
+    def plot_example_images(self, batch, mode='train'):
         k_space = batch['fs_k_space']
         with torch.no_grad():
             sampling_mask, loss_mask, target, estimate_k = self.pass_through_model(k_space)
-            super().plot_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
+            super().plot_example_images(k_space*sampling_mask, estimate_k, target, k_space, sampling_mask, mode)
 
             probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
             R_value = self.norm_R(self.R_value)

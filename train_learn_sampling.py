@@ -54,7 +54,7 @@ def main(args):
             self_supervised=args.self_supervised,
             R_seeding=args.R_seeding,
             R_freeze=args.R_freeze, 
-            chans=args.chans
+            channels=args.chans
             )
 
     if args.checkpoint: 

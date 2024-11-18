@@ -5,9 +5,10 @@ from torch import optim
 import pytorch_lightning as pl
 from torchmetrics.functional.image import structural_similarity_index_measure
 from torchmetrics.image import StructuralSimilarityIndexMeasure
+from pytorch_lightning.loggers import WandbLogger
 
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.losses import L1L2Loss
+from ml_recon.losses import L1L2Loss, L1ImageGradLoss
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.models import Unet
@@ -16,102 +17,50 @@ from ml_recon.models import UnetR
 from ml_recon.models import SingleEncoderJointDecoder
 from monai.networks.nets.swin_unetr import SwinUNETR
 
-from typing import Literal
+from typing import Literal, Optional
 from functools import partial
+from dataclasses import dataclass
+
+@dataclass
+class VarnetConfig:
+    contrast_order: list
+    model_name: str = 'unet'
+    cascades: int = 5
+    sense_chans: int = 8
+    lr: float = 1e-3
+    channels: int = 18
+    image_loss_function: Optional[str] = ''
+    image_loss_scaling: float = 0
+    k_loss_function: Optional[str] = 'norml1l2'
+    k_loss_scaling: float = 0
+    norm_all_k: bool = False
 
 # define the LightningModule
 class pl_VarNet(plReconModel):
     def __init__(
             self, 
-            contrast_order,
-            model_name: str = 'unet',
-            cascades: int = 5, 
-            sense_chans: int = 8,
-            lr: float = 1e-3,
-            channels = 18, 
-            image_loss_function: str = '', 
-            image_space_scaling: float = 0,
-            norm_all_k=False
+            config: VarnetConfig = VarnetConfig(['t1'])
             ):
 
-        super().__init__(contrast_order)
-        self.image_space_scaling = image_space_scaling
+        self.config = config
+
+        super().__init__(config.contrast_order)
 
         self.save_hyperparameters()
-        if model_name == 'unet':
-            backbone = partial(
-                    Unet, 
-                    in_chan=2*len(contrast_order), 
-                    out_chan=2*len(contrast_order), 
-                    chans=channels
-                    )
-        elif model_name == 'resnet':
-            backbone = partial(
-                    ResNet, 
-                    in_chan=2*len(contrast_order), 
-                    out_chan=2*len(contrast_order), 
-                    chans=channels, 
-                    itterations=15
-                    )
-        elif model_name == 'se_jd':
-            backbone = partial(
-                    SingleEncoderJointDecoder,
-                    in_chan=2*len(contrast_order),
-                    encoder_chan=16, 
-                    encoder_depth=4, 
-                    decoder_chan=channels, 
-                    decoder_depth=4
-                    )
-        elif model_name == 'unetr':
-            backbone = partial(
-                    UnetR, 
-                    in_chan=2*len(contrast_order), 
-                    out_chan=2*len(contrast_order), 
-                    hidden_size=channels,
-                    img_size=128
-                    )
-        elif model_name == 'swin_unetr':
-            backbone = partial(
-                    SwinUNETR, 
-                    in_channels=2*len(contrast_order), 
-                    out_channels=2*len(contrast_order), 
-                    feature_size=channels, 
-                    img_size=128,
-                    spatial_dims=2
-                    )
-        else:
-            raise ValueError(f'{model_name} not found!')
-
+        backbone = self._create_backbone()
+       
         self.model = VarNet_mc(
             backbone,
-            contrasts=len(contrast_order),
-            num_cascades=cascades, 
-            sens_chans=sense_chans
+            contrasts=len(self.contrast_order),
+            num_cascades=self.config.cascades, 
+            sens_chans=self.config.cascades
         )
-        self.lr = lr
-        self.contrast_order = contrast_order
-        self.loss = lambda target, prediction: L1L2Loss(torch.view_as_real(target), torch.view_as_real(prediction), norm_all_k)
+        self.lr = self.config.lr
+        
 
-        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
-        if image_loss_function == 'ssim':
-            self.image_loss_func = lambda targ, pred: 1 - self.ssim_func(targ, pred)
-        elif image_loss_function == 'l1':
-            l1_loss = torch.nn.L1Loss()
-            image_loss = lambda targ, pred: l1_loss(targ, pred)
-            self.image_loss_func = image_loss
-        elif image_loss_function == 'l1_grad':
-            l1_loss = torch.nn.L1Loss()
-            grad_x = lambda targ, pred: l1_loss(targ.diff(dim=-1), pred.diff(dim=-1))
-            grad_y = lambda targ, pred: l1_loss(targ.diff(dim=-2), pred.diff(dim=-2))
-            image_loss = lambda targ, pred: (
-                    2*l1_loss(targ, pred) + 
-                    grad_x(targ, pred) + 
-                    grad_y(targ, pred)
-            )
-            self.image_loss_func = image_loss
-        else:
-            self.image_loss_func = None
-
+        # Set loss functions
+        self.k_loss_func = self._set_k_loss_func()
+        self.image_loss_func = self._set_image_loss_func()
 
 
 
@@ -119,7 +68,7 @@ class pl_VarNet(plReconModel):
 
         estimate_target = self.forward(batch)
 
-        loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
+        loss = self.k_loss_func(batch['target'], estimate_target*batch['loss_mask'])
         gt_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
         images = root_sum_of_squares(ifft_2d_img(estimate_target), coil_dim=1)
         
@@ -129,7 +78,7 @@ class pl_VarNet(plReconModel):
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
 
         if batch_idx == 0: 
-            self.plot_images(batch, 'train')
+            self.plot_example_images(batch, 'train')
 
         return loss
 
@@ -137,7 +86,7 @@ class pl_VarNet(plReconModel):
     def validation_step(self, batch, batch_idx):
         estimate_target = self.forward(batch)
 
-        loss = self.loss(batch['target'], estimate_target*batch['loss_mask'])
+        loss = self.k_loss_func(batch['target'], estimate_target*batch['loss_mask'])
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
         ssim_func = structural_similarity_index_measure
@@ -146,17 +95,19 @@ class pl_VarNet(plReconModel):
 
         ssim = 0
         for contrast in range(est_img.shape[1]):
-            ssim += ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
+            ssim_val = ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
+            assert isinstance(ssim_val, torch.Tensor)
+            ssim += ssim_val
         ssim /= est_img.shape[1]
 
         self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
         if batch_idx == 0: 
-            self.plot_images(batch, 'val')
+            self.plot_example_images(batch, 'val')
         return loss
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_index):
         estimated_target = self.forward(batch)
-        super().test_step((estimated_target, batch['fs_k_space'], 'pass full'), batch_idx)
+        super().test_step((estimated_target, batch['fs_k_space'], 'pass full'), batch_index)
 
 
     def forward(self, data): 
@@ -172,7 +123,7 @@ class pl_VarNet(plReconModel):
         #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-3) 
         return optimizer
 
-    def plot_images(self, batch, mode='train'):
+    def plot_example_images(self, batch, mode='train'):
         #pass
         under_k = batch['input']
         with torch.no_grad():
@@ -190,7 +141,95 @@ class pl_VarNet(plReconModel):
             target = batch['target'][0, 0, [0], :, :].abs()**0.2
 
             wandb_logger = self.logger
+            assert isinstance(wandb_logger, WandbLogger)
             wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
             wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
             wandb_logger.log_image(mode + '/target', [target.clamp(0, 1).cpu().numpy()])
             wandb_logger.log_image(mode + '/input', [input.clamp(0, 1).cpu().numpy()])
+
+    def _set_image_loss_func(self):
+        if self.config.image_loss_function == 'ssim':
+            ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
+            return lambda targ, pred: 1 - ssim_func(targ, pred)
+        elif self.config.image_loss_function == 'l1':
+            return torch.nn.L1Loss()
+        elif self.config.image_loss_function == 'l1_grad':
+            return L1ImageGradLoss(self.config.i)
+        elif self.config.image_loss_function == 'l2':
+            loss_func = torch.nn.MSELoss()
+        else:
+            print('No image space loss!!')
+            return None
+    
+    def _set_k_loss_func(self):
+        if self.config.k_loss_function == 'norml1l2':
+            loss_func = L1L2Loss(self.config.norm_all_k)
+        elif self.config.image_loss_function == 'l1':
+            loss_func = torch.nn.L1Loss()
+        elif self.config.image_loss_function == 'l2':
+            loss_func = torch.nn.MSELoss()
+        else:
+            print('No k-space loss!!!')
+            return None
+
+        return lambda target, pred: loss_func(torch.view_as_real(target), torch.view_as_real(pred))
+        
+
+
+        
+    def _create_backbone(self):
+        contrast_len = 2 * len(self.config.contrast_order)
+        backbone_params = {
+            'in_chan': contrast_len,
+            'out_chan': contrast_len,
+            'chans': self.config.channels
+        }
+        
+        if self.config.model_name == 'unet':
+            return self._create_unet(backbone_params)
+        elif self.config.model_name == 'resnet':
+            return self._create_resnet(backbone_params)
+        elif self.config.model_name == 'se_jd':
+            return self._create_se_jd(backbone_params)
+        elif self.config.model_name == 'unetr':
+            return self._create_unetr(backbone_params)
+        elif self.config.model_name == 'swin_unetr':
+            return self._create_swin_unetr(backbone_params)
+        else:
+            raise ValueError(f"Model {self.config.model_name} not found!")
+        
+        
+    def _create_unet(self, backbone_params):
+        return partial(Unet, **backbone_params)
+    
+    def _create_resnet(self, backbone_params):
+        return partial(ResNet, **backbone_params, itterations=15)
+    
+    def _create_se_jd(self, backbone_params):
+        return partial(
+            SingleEncoderJointDecoder,
+            in_chan=backbone_params['in_chan'],
+            encoder_chan=16, 
+            encoder_depth=4, 
+            decoder_chan=backbone_params['chans'], 
+            decoder_depth=4
+        )
+    
+    def _create_unetr(self, backbone_params):
+        return partial(
+            UnetR,
+            in_chan=backbone_params['in_chan'],
+            out_chan=backbone_params['out_chan'],
+            hidden_size=backbone_params['chans'],
+            img_size=128
+        )
+
+    def _create_swin_unetr(self, backbone_params):
+        return partial(
+            SwinUNETR,
+            in_channels=backbone_params['in_chan'],
+            out_channels=backbone_params['out_chan'],
+            feature_size=backbone_params['chans'],
+            img_size=128,
+            spatial_dims=2
+        )

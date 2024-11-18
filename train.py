@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from ml_recon.pl_modules.pl_varnet import pl_VarNet
+from ml_recon.pl_modules.pl_varnet import pl_VarNet, VarnetConfig
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
 
@@ -63,16 +63,20 @@ def main(args):
             ) 
 
     data_module.setup('train')
-    
+
+    model_config = VarnetConfig(
+        model_name=args.model, 
+        contrast_order=data_module.contrast_order,
+        lr = args.lr, 
+        cascades=args.cascades, 
+        channels=args.chans,
+        norm_all_k=args.norm_all_k,
+        image_loss_function=args.image_space_loss,
+        image_loss_scaling=args.image_loss_scaling
+    )
+
     model = pl_VarNet(
-            model_name=args.model, 
-            contrast_order=data_module.contrast_order,
-            lr = args.lr, 
-            cascades=args.cascades, 
-            channels=args.chans,
-            norm_all_k=args.norm_all_k,
-            image_loss_function=args.image_space_loss,
-            image_space_scaling=args.image_loss_scaling
+                config=model_config
             )
 
 
