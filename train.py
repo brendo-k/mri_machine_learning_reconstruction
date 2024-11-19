@@ -80,7 +80,6 @@ def main(args):
             )
 
 
-    wandb_logger.watch(model, log_graph=True)
     #wandb_logger.experiment.config.update(model.hparams)
    
     #wandb_logger.experiment.config.update(model.hparams)

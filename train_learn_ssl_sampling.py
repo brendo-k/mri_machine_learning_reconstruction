@@ -77,7 +77,6 @@ def main(args):
             warmup_training=args.warmup_training
             )
 
-    wandb_logger.watch(model, log_graph=True)
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
