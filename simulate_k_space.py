@@ -11,7 +11,7 @@ import sys
 IMAGE_SIZE = (240, 240)
 
 # Define a function to process a single file
-def process_file(file, out_path, seed, noise, coils):
+def process_file(file, out_path, seed, noise, center_size):
     print(f'Starting file {file}, with seed: {seed}')
     patient_name = file.split('/')[-1]
 
@@ -26,7 +26,7 @@ def process_file(file, out_path, seed, noise, coils):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, int(coils), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, int(10), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -45,7 +45,7 @@ def process_file(file, out_path, seed, noise, coils):
             cur_images = np.transpose(cur_images, (0, 2, 1))
             k_space[..., (i-70)//3] = simulate_k_space(
                                         cur_images, seed+i,
-                                        center_region=20, noise_std=noise, coil_size=coils
+                                        center_region=center_size, noise_std=noise, coil_size=10, same_phase=SAME_PHASE
                                         )
 
     k_space = np.ascontiguousarray(np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64))
@@ -79,7 +79,8 @@ if __name__ == '__main__':
 
     save_dir = sys.argv[1]
     noise = float(sys.argv[2])
-    coils = sys.argv[3]
+    SAME_PHASE = bool(sys.argv[3])
+    center_size = int(sys.argv[4])
 
     # Create a pool of worker processes
     num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
@@ -110,5 +111,5 @@ if __name__ == '__main__':
                          repeat(os.path.join(save_dir, split)),
                          seeds,
                          repeat(noise),
-                         repeat(coils))
+                         repeat(center_size))
                      )

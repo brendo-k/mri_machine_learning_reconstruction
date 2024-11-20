@@ -3,7 +3,7 @@ import numpy as np
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
-def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=12):
+def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=12, same_phase=False):
     #simulate some random motion
     rng = np.random.default_rng(seed)
     x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
@@ -24,7 +24,7 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    sense_map = np.load('/home/brenden/Documents/data/compressed_maps_' + coil_size + '.npy')
+    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_maps_' + coil_size + '.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     print(sense_map.shape)
     sense_map = np.transpose(sense_map, (0, 2, 1))
@@ -94,10 +94,10 @@ def zero_pad_or_crop(arr, target_shape):
     return padded[tuple(slices)]
 
 
-def generate_and_apply_phase(data, seed, center_region=20):
-
-    #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
-    phase = build_phase_from_same_dist(data, seed)
+def generate_and_apply_phase(data, seed, center_region=20, same_phase=False):
+    nc = data.shape[1]
+    phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
+    #phase = build_phase_from_same_dist(data, seed)
     data = apply_phase_map(data, phase)
     return data
 
