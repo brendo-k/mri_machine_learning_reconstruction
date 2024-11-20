@@ -30,7 +30,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
-                         callbacks=[checkpoint_callback]
+                         limit_test_batches=args.limit_batches,
                          )
 
 

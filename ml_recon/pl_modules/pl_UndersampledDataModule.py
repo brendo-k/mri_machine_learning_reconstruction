@@ -87,7 +87,8 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
-                'is_variable_density': self.is_variable_density
+                'is_variable_density': self.is_variable_density,
+                'acs_lines': 20
         }
 
         self.train_dataset = self.dataset_class(
