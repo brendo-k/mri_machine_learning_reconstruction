@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+import torch
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
@@ -19,18 +20,19 @@ def main(args):
     wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
-    checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints/',  # Directory to save the checkpoints
-        filename=file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
-        save_top_k=1,  # Save the top 3 models
-        monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
-        mode='min',  # Save the model with the minimum val_loss
-    )
+    #checkpoint_callback = ModelCheckpoint(
+    #    dirpath='checkpoints/',  # Directory to save the checkpoints
+    #    filename=file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+    #    save_top_k=1,  # Save the top 3 models
+    #    monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
+    #    mode='min',  # Save the model with the minimum val_loss
+    #)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
+                         precision=16
                          )
 
 
@@ -63,6 +65,7 @@ def main(args):
             warm_start=args.warm_start,
             ssim_scaling_full=args.ssim_scaling_full,
             sigmoid_slope2=args.sigmoid_slope2,
+            sigmoid_slope1=args.sigmoid_slope1,
             ssim_scaling_set=args.ssim_scaling_set,
             ssim_scaling_inverse=args.ssim_scaling_inverse,
             lambda_scaling=args.lambda_scaling,
@@ -76,6 +79,7 @@ def main(args):
             cascades=args.cascades, 
             warmup_training=args.warmup_training
             )
+    torch.set_float32_matmul_precision('medium')
 
 
     ## AUTOMATIC HYPERPARAMETER TUNING
@@ -127,6 +131,7 @@ if __name__ == '__main__':
     model_group.add_argument('--lambda_scaling', type=float, default=0.0)
     model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
+    model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
