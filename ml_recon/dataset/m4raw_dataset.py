@@ -46,8 +46,6 @@ class M4Raw(Dataset):
                 contrast_order = np.char.lower(contrast_dataset[:].astype('U'))
 
         contrasts = np.array(contrasts)
-        print(contrasts)
-        print(contrast_order)
         self.contrast_order_indexes = np.isin(contrast_order, contrasts)
         self.contrast_order = contrast_order[self.contrast_order_indexes] # type: ignore
 
@@ -75,15 +73,12 @@ class M4Raw(Dataset):
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         cur_file = self.file_names[volume_index]
         
-        k_space = []
         
         with h5py.File(cur_file, 'r') as fr:
             dataset = fr['kspace']
-            contrast_k = dataset[self.contrast_order_indexes, slice_index]
+            k_space = dataset[self.contrast_order_indexes, slice_index]
                 
-            k_space.append(contrast_k)
 
-        k_space = np.stack(k_space)
         return k_space 
 
     def center_k_space(self, contrast_k):
