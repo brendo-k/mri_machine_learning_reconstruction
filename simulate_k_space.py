@@ -26,6 +26,7 @@ def process_file(file, out_path, seed, noise, center_size):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
+    images = images/np.max(images, axis=(1, 2), keepdims=True)
     k_space = np.zeros((4, int(10), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     for i in range(images.shape[-1]):
         if i < 70: 
@@ -57,7 +58,7 @@ def process_file(file, out_path, seed, noise, center_size):
 
     try:
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
-        chunk_size = (1, 1, int(coils), IMAGE_SIZE[0], IMAGE_SIZE[1])
+        chunk_size = (1, 1, 10, IMAGE_SIZE[0], IMAGE_SIZE[1])
         with h5py.File(save_file, 'w') as fr:
             dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64, chunks=chunk_size)
             dset[...] = k_space
