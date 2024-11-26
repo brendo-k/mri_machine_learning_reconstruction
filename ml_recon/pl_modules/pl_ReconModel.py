@@ -40,8 +40,7 @@ class plReconModel(pl.LightningModule):
         contrasts = estimated_image.shape[1]
 
         #if batch_index %  == 0:
-        current_step = batch_index * estimated_image.shape[0]
-        for i in range(estimated_image.shape[0]):
+        for i in range(0, estimated_image.shape[0], 20):
             wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
             wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
             wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*8, 0, 1), contrasts, 0))

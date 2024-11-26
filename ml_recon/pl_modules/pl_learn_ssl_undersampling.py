@@ -189,14 +189,14 @@ class LearnedSSLLightning(plReconModel):
             image_full = image_full.reshape(b, c, h, w)
 
             loss += ssim_loss_full 
-            if batch_idx == 0:
+            if batch_idx == 0 and self.current_epoch % 10 == 0:
                 self.logger.log_image('train/estimate_full', np.split(image_full[0].abs()/image_full[0].abs().max(),image_full.shape[1], 0))
 
         
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/loss_lambda", loss_lambda, on_step=True, on_epoch=True, prog_bar=True)
 
-        if batch_idx == 0 and self.logger:
+        if batch_idx == 0 and self.logger and self.current_epoch % 10 == 0 :
             with torch.no_grad():
                 lambda_image = lambda_image.detach().cpu()
                 wandb_logger = self.logger
@@ -275,36 +275,28 @@ class LearnedSSLLightning(plReconModel):
                 est_full_img
                 )
     
-        if batch_idx == 0 and self.logger:
+        if batch_idx == 0 and self.logger and self.current_epoch % 10 == 0:
             wandb_logger = self.logger
             assert isinstance(wandb_logger, WandbLogger)
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
-            est_inverse_plot = est_inverse_img[0].cpu().numpy()
             est_full_plot = est_full_img[0].cpu().numpy()
             fully_sampled_plot = fully_sampled_img[0].cpu().numpy()
             mask_lambda = mask_lambda[0, :, 0].cpu().numpy()
             mask_inverse = mask_inverse[0, :, 0].cpu().numpy()
             initial_mask = initial_mask[0, :, 0].cpu().numpy()
             est_lambda_plot /= np.max(est_lambda_plot, axis=(-1, -2), keepdims=True)
-            est_inverse_plot /= np.max(est_inverse_plot, (-1, -2), keepdims=True)
             est_full_plot /= np.max(est_full_plot, (-1, -2), keepdims=True)
             fully_sampled_plot /= np.max(fully_sampled_plot, (-1, -2), keepdims=True)
 
             diff_est_lambda_plot = np.abs(est_lambda_plot - fully_sampled_plot)
-            diff_est_inverse_plot = np.abs(est_inverse_plot - fully_sampled_plot)
             diff_est_full_plot = np.abs(est_full_plot - fully_sampled_plot)
 
             wandb_logger.log_image('val/estimate_lambda', np.split(est_lambda_plot, est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse', np.split(est_inverse_plot, est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/estimate_full', np.split(est_full_plot, est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/ground_truth', np.split(fully_sampled_plot, est_inverse_img.shape[1], 0))
 
             wandb_logger.log_image('val/estimate_lambda_diff', np.split(np.clip(diff_est_lambda_plot*10, 0, 1), est_lambda_img.shape[1], 0))
-            wandb_logger.log_image('val/estimate_inverse_diff', np.split(np.clip(diff_est_inverse_plot*10, 0, 1), est_inverse_img.shape[1], 0))
             wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*10, 0, 1), est_inverse_img.shape[1], 0))
-            wandb_logger.log_image('val/omega_lambda', np.split(mask_lambda, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/omega_(1-lambda)', np.split(mask_inverse, mask_lambda.shape[0], 0))
-            wandb_logger.log_image('val/initial_mask', np.split(initial_mask, initial_mask.shape[0], 0))
 
     def on_train_epoch_start(self):
         if self.current_epoch >= 50 and self.warmup_training:
