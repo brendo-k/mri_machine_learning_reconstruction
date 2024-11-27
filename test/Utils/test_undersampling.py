@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 
 from ml_recon.utils.undersample_tools import (
@@ -10,12 +11,14 @@ from ml_recon.utils.undersample_tools import (
     ssdu_gaussian_selection
     )
 
-def test_line_probability_mask():
-    pdf = gen_pdf_columns(300, 600, 1/4, 8, 10)
+
+@pytest.mark.parametrize("resolution", [[300, 600], [256, 256], [128, 128]])
+def test_line_probability_mask(resolution):
+    pdf = gen_pdf_columns(resolution[0], resolution[1], 1/8, 8, 10)
     
-    torch.testing.assert_close(np.mean(pdf), 1/4)
-    assert pdf.shape == (600, 300)
-    torch.testing.assert_close(pdf[:, 150 - 5: 150 + 5], np.ones((600, 10)))
+    torch.testing.assert_close(np.mean(pdf), 1/8)
+    assert pdf.shape == (resolution[1], resolution[0])
+    torch.testing.assert_close(pdf[:, resolution[0]//2 - 5: resolution[0]//2 + 5], np.ones((resolution[1], 10)))
 
 def test_bern_2d():
     

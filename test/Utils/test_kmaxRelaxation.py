@@ -6,11 +6,10 @@ from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
 
 def test_passthrough():
     kmax = KMaxSoftmaxFunction()
-    b, con, h, w, = 2, 4, 128, 128
+    b, nContrasts, h, w, = 2, 4, 320, 320
     R = 2
     slope = 100
-    R_values = torch.full(size=(con,), fill_value=R)
-    activations = torch.randn(b, con, h, w, dtype=torch.float32)
+    activations = torch.randn(b, nContrasts, h, w, dtype=torch.float32)
     mask = kmax.apply(activations, slope)
 
     average_mask = mask.mean((-1, -2)) 
@@ -22,12 +21,12 @@ def test_passthrough():
     assert torch.all((mask == 1) | (mask == 0)) # constrained to be 0 or 1 
 
     # no masks are the same
-    for i in range(b*con):
-        for j in range(i+1, b*con):
-            b_index1 = i//con
-            con_index1 = i%con
-            b_index2 = j//con
-            con_index2 = j%con
+    for i in range(b*nContrasts):
+        for j in range(i+1, b*nContrasts):
+            b_index1 = i//nContrasts
+            con_index1 = i%nContrasts
+            b_index2 = j//nContrasts
+            con_index2 = j%nContrasts
             assert not torch.equal(mask[b_index1, con_index1, :, :], mask[b_index2, con_index2, :, :])
 
 
