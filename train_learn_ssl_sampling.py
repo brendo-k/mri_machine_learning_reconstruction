@@ -81,6 +81,11 @@ def main(args):
             )
     torch.set_float32_matmul_precision('medium')
 
+    if args.checkpoint: 
+        print("Loading Checkpoint!")
+        model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
+        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint)
+        data_module.setup('train')
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)

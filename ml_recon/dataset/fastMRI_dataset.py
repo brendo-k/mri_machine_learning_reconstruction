@@ -40,7 +40,7 @@ class FastMRIDataset(Dataset):
         self.file_names = []
         for file in files:
             full_path = os.path.join(data_dir, file)
-            with h5py.File(full_path) as fr:
+            with h5py.File(full_path, 'r') as fr:
                 # loop through all the slices
                 dataset = fr['kspace']
                 assert isinstance(dataset, h5py.Dataset)
@@ -72,7 +72,7 @@ class FastMRIDataset(Dataset):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         file_name = self.file_names[volume_index]
-        with h5py.File(file_name) as fr:
+        with h5py.File(file_name, 'r') as fr:
             dataset = fr['kspace']
             assert isinstance(dataset, h5py.Dataset)
             k_space = torch.as_tensor(dataset[slice_index])
