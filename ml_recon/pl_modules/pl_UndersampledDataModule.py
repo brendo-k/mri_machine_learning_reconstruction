@@ -88,7 +88,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
                 'is_variable_density': self.is_variable_density,
-                'acs_lines': 20
+                'acs_lines': 10
         }
 
         self.train_dataset = self.dataset_class(
@@ -132,7 +132,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 self.train_dataset, 
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers,
-                shuffle=True,
+                shuffle=False,
                 pin_memory=True
                 )
 
