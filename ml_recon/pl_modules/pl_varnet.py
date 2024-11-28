@@ -164,9 +164,9 @@ class pl_VarNet(plReconModel):
     def _set_k_loss_func(self):
         if self.config.k_loss_function == 'norml1l2':
             loss_func = L1L2Loss(self.config.norm_all_k)
-        elif self.config.image_loss_function == 'l1':
+        elif self.config.k_loss_function == 'l1':
             loss_func = torch.nn.L1Loss()
-        elif self.config.image_loss_function == 'l2':
+        elif self.config.k_loss_function == 'l2':
             loss_func = torch.nn.MSELoss()
         else:
             print('No k-space loss!!!')

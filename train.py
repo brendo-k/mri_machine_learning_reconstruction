@@ -73,7 +73,9 @@ def main(args):
         channels=args.chans,
         norm_all_k=args.norm_all_k,
         image_loss_function=args.image_space_loss,
-        image_loss_scaling=args.image_loss_scaling
+        image_loss_scaling=args.image_loss_scaling,
+        k_loss_function=args.k_loss, 
+
     )
 
     model = pl_VarNet(
@@ -137,6 +139,7 @@ if __name__ == '__main__':
     parser.add_argument('--ssdu_partioning', action='store_true')
     parser.add_argument('--norm_all_k', action='store_true')
     parser.add_argument('--image_space_loss', type=str, default='')
+    parser.add_argument('--k_loss', type=str, default='norml1l2')
     parser.add_argument('--image_loss_scaling', type=float, default=0)
     parser.add_argument("--config", type=str, help="Path to the YAML configuration file.")
 
