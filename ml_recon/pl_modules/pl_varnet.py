@@ -77,7 +77,7 @@ class pl_VarNet(plReconModel):
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
 
-        if batch_idx == 0: 
+        if batch_idx % 10 == 0: 
             self.plot_example_images(batch, 'train')
 
         return loss
@@ -95,13 +95,18 @@ class pl_VarNet(plReconModel):
 
         ssim = 0
         for contrast in range(est_img.shape[1]):
-            ssim_val = ssim_func(est_img[:, [contrast], ...], targ_img[:, [contrast], ...])
+            data_range = targ_img.max().item()
+            ssim_val = ssim_func(
+                est_img[:, [contrast], ...], 
+                targ_img[:, [contrast], ...], 
+                data_range=data_range
+                )
             assert isinstance(ssim_val, torch.Tensor)
             ssim += ssim_val
         ssim /= est_img.shape[1]
 
         self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
-        if batch_idx == 0: 
+        if batch_idx % 10 == 0: 
             self.plot_example_images(batch, 'val')
         return loss
 
