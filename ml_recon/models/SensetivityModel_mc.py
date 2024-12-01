@@ -85,7 +85,7 @@ class SensetivityModel_mc(nn.Module):
         bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
 
 
-        # if pe lines, aquire whole line for acs calculations
+        # if phase encoding lines, acquire whole line for acs calculations
         if (top == 0).all():
             top = torch.full(top.shape, center_y)
             bottom = torch.full(top.shape, center_y)
@@ -98,7 +98,10 @@ class SensetivityModel_mc(nn.Module):
         # loop through num_low freq tensor and set acs lines to true
         for i in range(low_freq_x.shape[0]):
             for j in range(low_freq_y.shape[1]):
-                center_mask[i, j, :, center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], center_x-low_freq_x[i, j]:center_x + low_freq_x[i, j]] = True
+                center_mask[i, j, :, 
+                            center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], 
+                            center_x - low_freq_x[i, j]:center_x + low_freq_x[i, j]
+                            ] = True
 
         return masked_k_space * center_mask.unsqueeze(2)
 
