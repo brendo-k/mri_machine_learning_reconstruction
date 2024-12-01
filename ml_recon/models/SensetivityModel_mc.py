@@ -19,7 +19,16 @@ class SensetivityModel_mc(nn.Module):
             mask_center: bool = True, 
             batch_contrasts: bool = False,
             ):
-        
+
+        """Module used to estimate sensetivity maps based on masked center k-space
+
+        Args:
+            in_chans (int): _description_
+            out_chans (int): _description_
+            chans (int): Number of convolutional channels for U-Net estimator
+            mask_center (bool, optional): Mask k-space for estimation. Defaults to True.
+            batch_contrasts (bool, optional): Batch contrasts or pass along channel dimension. Defaults to False.
+        """
         super().__init__()
         self.batch_contrasts = batch_contrasts
         self.model = Unet(in_chans, out_chans, chans=chans)

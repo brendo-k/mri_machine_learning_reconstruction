@@ -47,14 +47,19 @@ class pl_VarNet(plReconModel):
         super().__init__(config.contrast_order)
 
         self.save_hyperparameters()
+
+        # get the VarNet backbone (refinement module)
         backbone = self._create_backbone()
        
+        # reconstruction model
         self.model = VarNet_mc(
             backbone,
             contrasts=len(self.contrast_order),
             num_cascades=self.config.cascades, 
             sens_chans=self.config.cascades
         )
+        
+        # set learning rate
         self.lr = self.config.lr
         
 
@@ -64,51 +69,58 @@ class pl_VarNet(plReconModel):
 
 
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, _):
+        """Training step for varnet
 
-        estimate_target = self.forward(batch)
+        Args:
+            batch (dict): dictionary containing: 'input', 'target', 'fs_k_space', 'mask', 'loss_mask'
+            batch_idx (int): current batch index
 
-        loss = self.k_loss_func(batch['target'], estimate_target*batch['loss_mask'])
-        gt_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
-        images = root_sum_of_squares(ifft_2d_img(estimate_target), coil_dim=1)
+        Returns:
+            float: loss value
+        """
+
+        prediction = self.forward(batch)
+
+        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
+        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
         
+        loss = torch.tensor([0])
+        
+        if self.k_loss_func:
+            loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
         if self.image_loss_func: 
-            loss += self.image_loss_func(gt_img, images) * self.image_space_scaling
+            loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
-
-        if batch_idx % 10 == 0: 
+        if self.current_epoch % 10 == 0: 
             self.plot_example_images(batch, 'train')
 
         return loss
 
 
-    def validation_step(self, batch, batch_idx):
-        estimate_target = self.forward(batch)
+    def validation_step(self, batch, _):
+        prediction = self.forward(batch)
 
-        loss = self.k_loss_func(batch['target'], estimate_target*batch['loss_mask'])
-        self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
+        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
+        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
 
-        ssim_func = structural_similarity_index_measure
-        est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
-        targ_img = root_sum_of_squares(ifft_2d_img(batch['fs_k_space'], axes=[-1, -2]), coil_dim=1)
+        loss = torch.tensor([0])
+        
+        if self.k_loss_func:
+            loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
+        if self.image_loss_func: 
+            loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
-        ssim = 0
-        for contrast in range(est_img.shape[1]):
-            data_range = targ_img.max().item()
-            ssim_val = ssim_func(
-                est_img[:, [contrast], ...], 
-                targ_img[:, [contrast], ...], 
-                data_range=data_range
-                )
-            assert isinstance(ssim_val, torch.Tensor)
-            ssim += ssim_val
-        ssim /= est_img.shape[1]
+        ssim = self.calculate_ssim(batch, prediction)
 
         self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
-        if batch_idx % 10 == 0: 
+        self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
+
+        if self.current_epoch % 10 == 0: 
             self.plot_example_images(batch, 'val')
         return loss
+
 
     def test_step(self, batch, batch_index):
         estimated_target = self.forward(batch)
@@ -159,7 +171,7 @@ class pl_VarNet(plReconModel):
         elif self.config.image_loss_function == 'l1':
             return torch.nn.L1Loss()
         elif self.config.image_loss_function == 'l1_grad':
-            return L1ImageGradLoss(self.config.i)
+            return L1ImageGradLoss(2)
         elif self.config.image_loss_function == 'l2':
             loss_func = torch.nn.MSELoss()
         else:
@@ -238,3 +250,22 @@ class pl_VarNet(plReconModel):
             img_size=128,
             spatial_dims=2
         )
+
+
+    def calculate_ssim(self, batch, estimate_target):
+        ssim_func = structural_similarity_index_measure
+        est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
+        targ_img = root_sum_of_squares(ifft_2d_img(batch['fs_k_space'], axes=[-1, -2]), coil_dim=1)
+
+        ssim = 0
+        for contrast in range(est_img.shape[1]):
+            data_range = targ_img.max().item()
+            ssim_val = ssim_func(
+                est_img[:, [contrast], ...], 
+                targ_img[:, [contrast], ...], 
+                data_range=data_range
+                )
+            assert isinstance(ssim_val, torch.Tensor)
+            ssim += ssim_val
+        ssim /= est_img.shape[1]
+        return ssim
