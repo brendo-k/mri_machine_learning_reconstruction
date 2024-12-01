@@ -48,7 +48,7 @@ def main(args):
     ny = args.ny
     
     data_module = UndersampledDataModule(
-            args.dataset_name, 
+            args.dataset, 
             data_dir, 
             batch_size=args.batch_size, 
             resolution=(ny, nx),
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
     parser.add_argument('--chans', type=int, default=32)
     parser.add_argument('--cascades', type=int, default=6)
-    parser.add_argument('--dataset_name', type=str, default='brats')
+    parser.add_argument('--dataset', type=str, default='brats')
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
     parser.add_argument('--pi_sampling', action='store_false')
