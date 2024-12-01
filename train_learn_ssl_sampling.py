@@ -32,7 +32,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         precision=16
+                         precision="bf16-mixed"
                          )
 
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
-    model_group.add_argument('--lambda_scaling', type=float, default=0.0)
+    model_group.add_argument('--lambda_scaling', type=float, default=1)
     model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
