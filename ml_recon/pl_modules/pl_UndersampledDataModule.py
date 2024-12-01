@@ -166,19 +166,19 @@ class normalize_image_max(object):
 
 class normalize_k_max(object):
     def __call__(self, data):
-        input = data['input']
-        undersample_max = input.abs().amax((1, 2, 3), keepdim=True)
+        fs_k_space = data['fs_k_space']
+        scaling_factor = fs_k_space.abs().amax((1, 2, 3), keepdim=True)
         
-        data['input'] /= undersample_max
-        data['target'] /= undersample_max
-        data['fs_k_space'] /= undersample_max
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
+        data['fs_k_space'] /= scaling_factor
         return data
 
 class normalize_image_mean(object):
     def __call__(self, data):
-        input = data['input']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
-        scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
+        input = data['fs_k_space']
+        fs_k_space = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        scaling_factor = fs_k_space.mean((1, 2), keepdim=True).unsqueeze(1)
         
         data['input'] /= scaling_factor
         data['target'] /= scaling_factor
@@ -187,9 +187,9 @@ class normalize_image_mean(object):
 
 class normalize_image_mean2(object):
     def __call__(self, data):
-        input = data['input']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
-        scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
+        fs_k_space = data['fs_k_space']
+        image = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=1)
+        scaling_factor = 2*image.mean((1, 2), keepdim=True).unsqueeze(1)
         
         data['input'] /= scaling_factor
         data['target'] /= scaling_factor
