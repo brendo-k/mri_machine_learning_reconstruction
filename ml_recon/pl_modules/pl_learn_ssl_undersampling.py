@@ -529,7 +529,7 @@ class LearnedSSLLightning(plReconModel):
 
     def train_supervised_step(self, batch): 
         undersampled = batch['input']
-        mask = undersampled != 0
+        mask = batch['mask']
         fully_sampled = batch['fs_k_space']
 
         estimate = self.pass_through_model(undersampled, mask.to(torch.float32), fully_sampled)
