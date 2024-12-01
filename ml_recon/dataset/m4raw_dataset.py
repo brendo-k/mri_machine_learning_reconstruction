@@ -40,7 +40,7 @@ class M4Raw(Dataset):
             with h5py.File(file_path, 'r') as fr:
                 dataset = fr['kspace']
                 assert isinstance(dataset, h5py.Dataset)
-                slices.append(dataset.shape[0])
+                slices.append(dataset.shape[1])
                 contrast_dataset = fr['contrasts']
                 assert isinstance(contrast_dataset, h5py.Dataset)
                 contrast_order = np.char.lower(contrast_dataset[:].astype('U'))
