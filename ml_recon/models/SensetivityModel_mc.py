@@ -75,22 +75,30 @@ class SensetivityModel_mc(nn.Module):
         center_y = center_mask.shape[-2] // 2
         
         # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
-        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.90).to(torch.int8)
+        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :]).to(torch.int8)
+        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x]).to(torch.int8)
 
         # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
         left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
         right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
+        top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
+        bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
+
+
+        # if pe lines, aquire whole line for acs calculations
+        if (top == 0).all():
+            top = torch.full(top.shape, center_y)
+            bottom = torch.full(top.shape, center_y)
 
         # force symmetric left and right acs boundries
-        num_low_frequencies = torch.max(
-                2 * torch.min(left, right), torch.full_like(left, 10, dtype=torch.int)
-            )
-
+        low_freq_x = torch.min(left, right)
+        low_freq_y = torch.min(top, bottom)
         masked_k_space = coil_k_spaces.clone()
-        center_mask = torch.zeros(masked_k_space[:, :, 0, :, :].shape, dtype=torch.bool, device=masked_k_space.device)
-        for i in range(masked_k_space.shape[0]):
-            for j in range(masked_k_space.shape[1]):
-                center_mask[i, j, :, center_x//2 - num_low_frequencies[i, j]//2:center_x//2 + num_low_frequencies[i, j]//2] = 1
+        center_mask = torch.zeros_like(masked_k_space, dtype=torch.bool)
+        # loop through num_low freq tensor and set acs lines to true
+        for i in range(low_freq_x.shape[0]):
+            for j in range(low_freq_y.shape[1]):
+                center_mask[i, j, :, center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], center_x-low_freq_x[i, j]:center_x + low_freq_x[i, j]] = True
 
         return masked_k_space * center_mask.unsqueeze(2)
 
