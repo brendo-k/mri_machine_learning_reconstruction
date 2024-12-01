@@ -69,7 +69,7 @@ class pl_VarNet(plReconModel):
 
 
 
-    def training_step(self, batch, _):
+    def training_step(self, batch, batch_idx):
         """Training step for varnet
 
         Args:
@@ -85,7 +85,7 @@ class pl_VarNet(plReconModel):
         target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
         
-        loss = torch.tensor([0])
+        loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
             loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
@@ -93,19 +93,19 @@ class pl_VarNet(plReconModel):
             loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
-        if self.current_epoch % 10 == 0: 
+        if self.current_epoch % 10 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'train')
 
         return loss
 
 
-    def validation_step(self, batch, _):
+    def validation_step(self, batch, batch_idx):
         prediction = self.forward(batch)
 
         target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
 
-        loss = torch.tensor([0])
+        loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
             loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
@@ -117,7 +117,7 @@ class pl_VarNet(plReconModel):
         self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
-        if self.current_epoch % 10 == 0: 
+        if self.current_epoch % 10 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'val')
         return loss
 
@@ -147,22 +147,21 @@ class pl_VarNet(plReconModel):
             estimate_k = self.forward(batch)
             estimate_k = estimate_k * (batch['input'] == 0) + batch['input']
             super().plot_images(under_k, estimate_k, batch['target'], batch['fs_k_space'], batch['mask'], mode) 
-            sampling_mask = under_k != 0
 
-            sense_maps = self.model.sens_model(under_k, under_k != 0)
+            sense_maps = self.model.sens_model(under_k, batch['mask'])
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
-            masked_k = self.model.sens_model.mask(under_k, sampling_mask.expand_as(under_k))
-            masked_k = masked_k[0, 0, [0], :, :].abs()**0.2
+            masked_k = self.model.sens_model.mask(under_k, batch['mask'])
+            masked_k = masked_k[0, :, [0], :, :].abs()**0.2
 
-            input = batch['input'][0, 0, [0], :, :].abs()**0.2
-            target = batch['target'][0, 0, [0], :, :].abs()**0.2
+            input = batch['input'][0, :, [0], :, :].abs()**0.2
+            target = batch['target'][0, :, [0], :, :].abs()**0.2
             if self.logger:
                 wandb_logger = self.logger
                 assert isinstance(wandb_logger, WandbLogger)
                 wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-                wandb_logger.log_image(mode + '/masked_k', [masked_k.clamp(0, 1).cpu().numpy()])
-                wandb_logger.log_image(mode + '/target', [target.clamp(0, 1).cpu().numpy()])
-                wandb_logger.log_image(mode + '/input', [input.clamp(0, 1).cpu().numpy()])
+                wandb_logger.log_image(mode + '/masked_k', np.split(masked_k.clamp(0, 1).cpu().numpy(), masked_k.shape[0], 0))
+                wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))
+                wandb_logger.log_image(mode + '/input', np.split(input.clamp(0, 1).cpu().numpy(), input.shape[0], 0))
 
     def _set_image_loss_func(self):
         if self.config.image_loss_function == 'ssim':
