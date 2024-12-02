@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 
 from typing import Union, Callable
 from ml_recon.utils.undersample_tools import apply_undersampling_from_dist, gen_pdf, scale_pdf, calc_k, ssdu_gaussian_selection
-from ml_recon.dataset.dataset_output_type import TrainingSample
 
 class UndersampleDecorator(Dataset):
     """Decorator class that can be used on all datasets present in the dataset folder.

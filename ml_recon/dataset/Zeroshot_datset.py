@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from ml_recon.utils.undersample_tools import gen_pdf, apply_undersampling_from_dist
 
-from ml_recon.dataset.dataset_output_type import TrainingSample
 import torchvision.transforms.functional as F
 
 class ZeroShotDataset(Dataset):
@@ -71,13 +70,14 @@ class ZeroShotDataset(Dataset):
         
         # test case: pass all data and see how well ouput against fully sampled data
         if self.is_test:
-            output = TrainingSample(
-                input = torch.from_numpy(under),
-                target = torch.from_numpy(k_space),
-                fs_k_space = torch.from_numpy(k_space),
-                mask = torch.from_numpy(mask_omega), 
-                loss_mask = torch.ones_like(torch.from_numpy(under))
-            )
+            output = {
+                "input": torch.from_numpy(under),
+                "target": torch.from_numpy(k_space),
+                "fs_k_space": torch.from_numpy(k_space),
+                "mask": torch.from_numpy(mask_omega),
+                "loss_mask": torch.ones_like(torch.from_numpy(under))
+            }
+       
             if self.transforms:
                 output = self.transforms(output)
             return output
@@ -87,14 +87,14 @@ class ZeroShotDataset(Dataset):
 
         # validation case: take a portion of undersampled data for validation
         if self.is_validation:
-            output = TrainingSample(
-                input = torch.from_numpy(training_mask * under),
-                target = torch.from_numpy(val_mask * under),
-                fs_k_space = torch.from_numpy(k_space),
-                mask = training_mask, 
-                loss_mask = val_mask
-            )
 
+            output = {
+                "input": torch.from_numpy(training_mask * under),
+                "target": torch.from_numpy(val_mask * under),
+                "fs_k_space": torch.from_numpy(k_space),
+                "mask": training_mask,
+                "loss_mask": val_mask
+                }
         # train case: sub-sample remaining set for training
         else:
             lambda_prob = gen_pdf(False, w, h, 1/self.R_hat, 8, 10)
@@ -108,14 +108,14 @@ class ZeroShotDataset(Dataset):
                                     )
             lambda_set = mask_lambda * training_mask
             loss_set = (~mask_lambda * training_mask)
-            output = TrainingSample(
-                input = torch.from_numpy(under * lambda_set),
-                target = torch.from_numpy(under * loss_set),
-                fs_k_space = torch.from_numpy(k_space),
-                mask = lambda_set, 
-                loss_mask = loss_set
-            )
-        
+            output = {
+                "input": torch.from_numpy(under * lambda_set),
+                "target": torch.from_numpy(under * loss_set),
+                "fs_k_space": torch.from_numpy(k_space),
+                "mask": lambda_set,
+                "loss_mask": loss_set
+            }
+
         if self.transforms: 
             output = self.transforms(output)
         

@@ -45,8 +45,8 @@ class M4Raw(Dataset):
                 assert isinstance(contrast_dataset, h5py.Dataset)
                 contrast_order = np.char.lower(contrast_dataset[:].astype('U'))
 
-        contrasts = np.array(contrasts)
-        self.contrast_order_indexes = np.isin(contrast_order, contrasts)
+        contrasts_arr = np.array(contrasts)
+        self.contrast_order_indexes = np.isin(contrast_order, contrasts_arr)
         self.contrast_order = contrast_order[self.contrast_order_indexes] # type: ignore
 
         self.slice_cumulative_sum = np.cumsum(slices) 
@@ -76,6 +76,7 @@ class M4Raw(Dataset):
         
         with h5py.File(cur_file, 'r') as fr:
             dataset = fr['kspace']
+            assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
                 
 
