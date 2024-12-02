@@ -47,7 +47,7 @@ class KMaxSoftmaxFunction1D(torch.autograd.Function):
         return mask.view_as(input)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output): # type: ignore
         # Retrieve the saved input
         input, = ctx.saved_tensors
         

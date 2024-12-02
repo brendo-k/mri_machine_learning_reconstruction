@@ -17,7 +17,7 @@ from datetime import datetime
 
 def main(args):
         
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -48,7 +48,7 @@ def main(args):
             num_workers=args.num_workers,
             contrasts=args.contrasts,
             line_constrained=args.line_constrained,
-            is_variable_density=args.pi_sampling, 
+            pi_sampling=args.pi_sampling, 
             supervised_dataset=True,
             R=args.R
             ) 

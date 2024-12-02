@@ -61,7 +61,6 @@ class pl_VarNet(plReconModel):
         
         # set learning rate
         self.lr = self.config.lr
-        
 
         # Set loss functions
         self.k_loss_func = self._set_k_loss_func()
@@ -112,7 +111,7 @@ class pl_VarNet(plReconModel):
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
-        ssim = self.calculate_ssim(batch, prediction)
+        ssim = self.calculate_ssim(batch['fs_k_space'], prediction)
 
         self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
@@ -166,13 +165,13 @@ class pl_VarNet(plReconModel):
     def _set_image_loss_func(self):
         if self.config.image_loss_function == 'ssim':
             ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
-            return lambda targ, pred: 1 - ssim_func(targ, pred)
+            return lambda targ, pred: torch.tensor([1], device=self.device) - ssim_func(targ, pred)
         elif self.config.image_loss_function == 'l1':
             return torch.nn.L1Loss()
         elif self.config.image_loss_function == 'l1_grad':
             return L1ImageGradLoss(2)
         elif self.config.image_loss_function == 'l2':
-            loss_func = torch.nn.MSELoss()
+            return torch.nn.MSELoss()
         else:
             print('No image space loss!!')
             return None
@@ -251,20 +250,30 @@ class pl_VarNet(plReconModel):
         )
 
 
-    def calculate_ssim(self, batch, estimate_target):
+    def calculate_ssim(self, fully_sampled_k, estimate_target):
+        """Calculates ssim between two MRI images, data range is set between each image
+
+        Args:
+            fully_sampled_k (torch.Tensor): fully sampled k-space
+            estimate_target (torch.Tensor): estimated k-space
+
+        Returns:
+            torch.Tensor: float value of ssim averaged over batch and contrasts
+        """
         ssim_func = structural_similarity_index_measure
         est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
-        targ_img = root_sum_of_squares(ifft_2d_img(batch['fs_k_space'], axes=[-1, -2]), coil_dim=1)
+        targ_img = root_sum_of_squares(ifft_2d_img(fully_sampled_k, axes=[-1, -2]), coil_dim=1)
 
         ssim = 0
         for contrast in range(est_img.shape[1]):
-            data_range = targ_img.max().item()
-            ssim_val = ssim_func(
-                est_img[:, [contrast], ...], 
-                targ_img[:, [contrast], ...], 
-                data_range=data_range
-                )
-            assert isinstance(ssim_val, torch.Tensor)
-            ssim += ssim_val
-        ssim /= est_img.shape[1]
+            for i in range(est_img.shape[0]):
+                data_range = targ_img[i, contrast, ...].max().item()
+                ssim_val = ssim_func(
+                    est_img[i, contrast, ...].unsqueeze(0).unsqueeze(0), 
+                    targ_img[i, contrast, ...].unsqueeze(0).unsqueeze(0), 
+                    data_range=data_range
+                    )
+                assert isinstance(ssim_val, torch.Tensor)
+                ssim += ssim_val
+        ssim /= (est_img.shape[1] * est_img.shape[0])
         return ssim

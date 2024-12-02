@@ -7,7 +7,7 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
-from ml_recon.utils.evaluate import nmse, psnr
+from ml_recon.utils.evaluation_functions import nmse, psnr
 
 
 class plReconModel(pl.LightningModule):
@@ -26,25 +26,28 @@ class plReconModel(pl.LightningModule):
 
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
+
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        mask = ground_truth_image > scaling_factor *0
+        image_background_mask = ground_truth_image > scaling_factor * 0
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
-        estimated_image *= mask
-        ground_truth_image *= mask
+
+        estimated_image *= image_background_mask
+        ground_truth_image *= image_background_mask
+
         diff = (ground_truth_image - estimated_image).abs()
 
         wandb_logger = self.logger
         assert isinstance(wandb_logger, WandbLogger)
-        contrasts = estimated_image.shape[1]
 
+        contrasts = estimated_image.shape[1]
         #if batch_index %  == 0:
         for i in range(0, estimated_image.shape[0], 20):
             wandb_logger.log_image(f'test/{label}_recon', np.split(np.clip(estimated_image[i].unsqueeze(1).cpu().numpy(), 0, 1), contrasts, 0))
             wandb_logger.log_image(f'test/{label}_target', np.split(ground_truth_image[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
             wandb_logger.log_image(f'test/{label}_diff', np.split(np.clip(diff[i].unsqueeze(1).cpu().numpy()*8, 0, 1), contrasts, 0))
-            wandb_logger.log_image(f'test/{label}_test_mask', np.split(mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(f'test/{label}_test_mask', np.split(image_background_mask[i].unsqueeze(1).cpu().numpy(), contrasts, 0))
 
         total_ssim = 0
         total_psnr = 0
@@ -62,12 +65,12 @@ class plReconModel(pl.LightningModule):
 
                 batch_nmse = nmse(contrast_ground_truth, contrast_estimated)
                 batch_ssim, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=contrast_ground_truth.max().item())
-                batch_psnr = psnr(contrast_ground_truth, contrast_estimated, mask)
+                batch_psnr = psnr(contrast_ground_truth, contrast_estimated, image_background_mask)
 
                 # remove mask points that would equal to 1 (possibly some estimated points
                 # will be removed here but only if matches completely in the kernel)
                                                         
-                batch_ssim = ssim_image[mask[i, contrast_index].unsqueeze(0).unsqueeze(0)].mean()
+                batch_ssim = ssim_image[image_background_mask[i, contrast_index].unsqueeze(0).unsqueeze(0)].mean()
 
                 #self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
             self.log(f"metrics/{label}nmse_" + self.contrast_order[contrast_index], batch_nmse, sync_dist=True, on_step=True)
@@ -82,11 +85,6 @@ class plReconModel(pl.LightningModule):
         self.log(f'metrics/{label}_mean_psnr', total_psnr/len(self.contrast_order), on_epoch=True, sync_dist=True)
         self.log(f'metrics/{label}_mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True, sync_dist=True)
         return estimated_image
-
-    def norm(self, image): 
-        normed_image = image/image.amax((-1, -2), keepdim=True)
-        return normed_image
-
 
     def plot_images(self, under_k, estimate_k, target, k_space, mask, mode='train'):
         with torch.no_grad():

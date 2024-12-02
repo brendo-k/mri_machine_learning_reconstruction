@@ -17,7 +17,7 @@ def define_datamodule():
             contrasts=['t1', 't2', 't1ce', 'flair'],
             line_constrained=False, 
             self_supervsied=False,
-            is_variable_density=True,
+            pi_sampling=True,
             R=4
             ) 
     data_module.setup('train')

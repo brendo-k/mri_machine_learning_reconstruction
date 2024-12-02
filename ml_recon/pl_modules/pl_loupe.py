@@ -8,7 +8,7 @@ from typing import List
 from ml_recon.losses import L1L2Loss
 from ml_recon.utils.undersample_tools import scale_pdf, gen_pdf_bern, gen_pdf_columns
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
-from ml_recon.utils.evaluate import nmse, psnr
+from ml_recon.utils.evaluation_functions import nmse, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.models.varnet_mc import VarNet_mc
 

@@ -27,7 +27,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             num_workers: int = 0,
             norm_method: str = 'k',
             supervised_dataset: bool = False,
-            is_variable_density: bool = True, 
+            pi_sampling: bool = True, 
             ssdu_partioning: bool = False,
             ):
 
@@ -51,7 +51,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.R = R
         self.R_hat = R_hat
         self.supervised_dataset = supervised_dataset
-        self.is_variable_density = is_variable_density
+        self.pi_sampling = pi_sampling
         self.ssdu_partioning = ssdu_partioning
         
         if norm_method == 'img':
@@ -86,7 +86,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
-                'is_variable_density': self.is_variable_density,
+                'is_variable_density': (not self.pi_sampling),
                 'acs_lines': 10
         }
 
@@ -138,7 +138,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
                 self.val_dataset, 
-                batch_size=self.batch_size, 
+                batch_size=self.batch_size*2, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
@@ -146,7 +146,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
                 self.test_dataset, 
-                batch_size=self.batch_size, 
+                batch_size=self.batch_size*2, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )

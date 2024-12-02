@@ -3,14 +3,12 @@ import os
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 from ml_recon.dataset.Zeroshot_datset import ZeroShotDataset
-from ml_recon.pl_modules.pl_UndersampledDataModule import normalize_k_max, convert_dataclass_to_dict
-from ml_recon.pl_modules.pl_varnet import pl_VarNet
+from ml_recon.pl_modules.pl_UndersampledDataModule import normalize_k_max
+from ml_recon.pl_modules.pl_varnet import pl_VarNet, VarnetConfig
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.tuner.tuning import Tuner
 from torch.utils.data import DataLoader
-import numpy as np
 
 from torchvision.transforms import Compose
 def main(args):
@@ -22,7 +20,7 @@ def main(args):
                          limit_val_batches=args.limit_batches,
                          )
 
-    transforms = Compose([normalize_k_max(), convert_dataclass_to_dict()])
+    transforms = Compose([normalize_k_max()])
     
     dataset_train = ZeroShotDataset(
         '/home/brenden/Documents/data/fastmri/train/file_brain_AXT1_201_6002688.h5',
@@ -59,7 +57,7 @@ def main(args):
         dataset_test, batch_size=args.batch_size, pin_memory=True, shuffle=False
     )
 
-    model = pl_VarNet(contrast_order=['t1'])
+    model = pl_VarNet(VarnetConfig(['t1']))
 
     if args.checkpoint: 
         model = LearnedSSLLightning.load_from_checkpoint(os.path.join(args.checkpoint, 'model.ckpt'))

@@ -51,7 +51,7 @@ def main(args):
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
             supervised=args.supervised,
-            is_variable_density=args.pi_sampling, 
+            pi_sampling=args.pi_sampling, 
             contrasts=args.contrasts, 
             ssdu_partioning=args.ssdu_partioning, 
             ) 
@@ -71,7 +71,7 @@ def main(args):
     
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
-            learned_R=args.R_hat, 
+            R_parameter=args.R_hat, 
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             supervised=False,

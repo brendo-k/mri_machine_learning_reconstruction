@@ -10,7 +10,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from ml_recon.losses import L1L2Loss
 from ml_recon.utils.undersample_tools import gen_pdf_bern
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
-from ml_recon.utils.evaluate import nmse
+from ml_recon.utils.evaluation_functions import nmse
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.models import VarNet_mc
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
