@@ -8,7 +8,7 @@ IMAGE_SIZE = (2, 128, 128)
 
 @pytest.fixture()
 def build_model() -> LearnedSSLLightning:
-    return LearnedSSLLightning(IMAGE_SIZE, learned_R=2, contrast_order=['t1', 't2'])
+    return LearnedSSLLightning(IMAGE_SIZE, R_parameter=2, contrast_order=['t1', 't2'])
 
 
 @torch.no_grad()
