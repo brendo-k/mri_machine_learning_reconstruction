@@ -16,7 +16,10 @@ def main():
     args = parser.parse_args()
 
     with h5py.File(args.filename) as fr:
-        kspace = fr['k_space'][:]
+        if 'k_space' in fr:
+            kspace = fr['k_space'][:]
+        if 'kspace' in fr:
+            kspace = fr['kspace'][:]
     kspace.astype(np.complex64)
     if args.slice_index:
         kspace = kspace[[args.slice_index]]
