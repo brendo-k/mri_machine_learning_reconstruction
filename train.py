@@ -1,16 +1,16 @@
 from argparse import ArgumentParser
+from datetime import datetime
 import yaml
+
+import torch
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet, VarnetConfig
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
-from pytorch_lightning.callbacks import ModelCheckpoint
+from ml_recon.utils import replace_args_from_config
 
-import pytorch_lightning as pl
-from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.tuner.tuning import Tuner
-from pytorch_lightning.profilers import PyTorchProfiler, AdvancedProfiler
-from torch.profiler import ProfilerActivity, schedule
-from datetime import datetime
 
 
 """
@@ -23,7 +23,7 @@ Examples:
     train.py --num_workers 3 --max_epochs 50 --contrasts t1 t2 flair
 """
 def main(args):
-    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, )
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_varnet-' + unique_id
     checkpoint_callback = ModelCheckpoint(
@@ -39,7 +39,7 @@ def main(args):
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
-                         callbacks=[checkpoint_callback],
+                         callbacks=[],
                          )
 
 
@@ -58,7 +58,7 @@ def main(args):
             R_hat=args.R_hat,
             line_constrained=args.line_constrained,
             supervised_dataset=args.supervised,
-            is_variable_density=args.pi_sampling, 
+            pi_sampling=args.pi_sampling, 
             contrasts=args.contrasts, 
             ssdu_partioning=args.ssdu_partioning, 
             ) 
@@ -77,40 +77,25 @@ def main(args):
         k_loss_function=args.k_loss, 
 
     )
+    torch.set_float32_matmul_precision('medium')
+
 
     model = pl_VarNet(
                 config=model_config
             )
 
-
-    #wandb_logger.experiment.config.update(model.hparams)
-   
-    #wandb_logger.experiment.config.update(model.hparams)
+    if args.checkpoint: 
+        print("Loading Checkpoint!")
+        model = pl_VarNet.load_from_checkpoint(args.checkpoint)
+        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint)
+        data_module.setup('train')
 
     print(data_module.hparams)
     print(model.hparams)
     trainer.fit(model=model, datamodule=data_module)
     trainer.test(model, datamodule=data_module)
-
-def read_yaml_config(config_file):
-    if not config_file: 
-        return {}
-
-    with open(config_file, "r") as yaml_file:
-        config_data = yaml.safe_load(yaml_file)
-    return config_data
-
-def replace_args_from_config(config_data, args):
-    for key, new_value in config_data.items():
-        if hasattr(args, key):
-            old_value = getattr(args, key)
-            if old_value != new_value:
-                setattr(args, key, new_value)
-                print(f"Updated '{key}': {old_value} -> {new_value}")
-        else:
-            print(f"Warning: Key '{key}' in the config file is not a recognized argument.")
-    return args
-
+    
+    
 
 if __name__ == '__main__': 
     parser = ArgumentParser()
@@ -135,18 +120,18 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='brats')
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--project', type=str, default='MRI Reconstruction')
-    parser.add_argument('--pi_sampling', action='store_false')
+    parser.add_argument('--pi_sampling', action='store_true')
     parser.add_argument('--ssdu_partioning', action='store_true')
     parser.add_argument('--norm_all_k', action='store_true')
     parser.add_argument('--image_space_loss', type=str, default='')
     parser.add_argument('--k_loss', type=str, default='norml1l2')
     parser.add_argument('--image_loss_scaling', type=float, default=0)
     parser.add_argument("--config", type=str, help="Path to the YAML configuration file.")
+    parser.add_argument('--checkpoint', type=str)
 
     args = parser.parse_args()
 
-    config_data = read_yaml_config(args.config)
-    args = replace_args_from_config(config_data, args)
+    args = replace_args_from_config(args.config, args)
 
 
     main(args)
