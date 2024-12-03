@@ -86,31 +86,30 @@ class plReconModel(pl.LightningModule):
         self.log(f'metrics/{label}_mean_nmse', total_nmse/len(self.contrast_order), on_epoch=True, sync_dist=True)
         return estimated_image
 
-    def plot_images(self, under_k, estimate_k, target, k_space, mask, mode='train'):
-        with torch.no_grad():
-            
-            estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
-            image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
-            target = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
+    @torch.no_grad()
+    def plot_images(self, undersampled_k, estimate_k, target, k_space, mask, mode='train'):
+        estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
+        fully_sampled_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
+        # in ssdu target is other set
+        target = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
 
-            estimated_image = estimated_image[0]/image[0].amax((-1, -2), keepdim=True)
-            image = image[0]/image[0].amax((-1, -2), keepdim=True)
-            target = target[0]/target[0].amax((-1, -2), keepdim=True)
-            diff = (estimated_image - image).abs()*10
-            k_space_scaled = k_space.abs()/(k_space.abs().max() / 50) 
-            under_k = under_k.abs()/(under_k.abs().max() / 50)
+        estimated_image = estimated_image[0]/fully_sampled_image[0].amax((-1, -2), keepdim=True)
+        fully_sampled_image = fully_sampled_image[0]/fully_sampled_image[0].amax((-1, -2), keepdim=True)
+        target = target[0]/target[0].amax((-1, -2), keepdim=True)
+        diff = (estimated_image - fully_sampled_image).abs()*10
+        k_space_scaled = k_space.abs()/(k_space.abs().max() / 50) 
+        undersampled_k = undersampled_k.abs()/(undersampled_k.abs().max() / 50)
 
-            estimated_image = estimated_image.clamp(0, 1)
-            image = image.clamp(0, 1)
-            diff = diff.clamp(0, 1)
-            under_k = under_k.clamp(0, 1)
-            k_space_scaled = k_space_scaled.clamp(0, 1)
-            if self.logger:
-                wandb_logger = self.logger
-                assert isinstance(wandb_logger, WandbLogger)
+        estimated_image = estimated_image.clamp(0, 1)
+        fully_sampled_image = fully_sampled_image.clamp(0, 1)
+        diff = diff.clamp(0, 1)
+        undersampled_k = undersampled_k.clamp(0, 1)
+        k_space_scaled = k_space_scaled.clamp(0, 1)
+        if self.logger and isinstance(self.logger, WandbLogger):
+            wandb_logger = self.logger
 
-                contrasts = estimated_image.shape[0]
-                wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-                wandb_logger.log_image(mode + '/fully_sampled', np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-                wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
-                wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            contrasts = estimated_image.shape[0]
+            wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/fully_sampled', np.split(fully_sampled_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
+            wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))

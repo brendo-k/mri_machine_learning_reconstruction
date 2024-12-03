@@ -69,7 +69,6 @@ def main(args):
             ssim_scaling_set=args.ssim_scaling_set,
             ssim_scaling_inverse=args.ssim_scaling_inverse,
             lambda_scaling=args.lambda_scaling,
-            normalize_k_space_energy=args.k_space_regularizer,
             pass_all_data=args.pass_all_data,
             pass_inverse_data=args.pass_inverse_data,
             supervised=args.supervised,

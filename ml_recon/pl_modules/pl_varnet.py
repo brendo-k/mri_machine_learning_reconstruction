@@ -154,9 +154,8 @@ class pl_VarNet(plReconModel):
 
             input = batch['input'][0, :, [0], :, :].abs()**0.2
             target = batch['target'][0, :, [0], :, :].abs()**0.2
-            if self.logger:
+            if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger
-                assert isinstance(wandb_logger, WandbLogger)
                 wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
                 wandb_logger.log_image(mode + '/masked_k', np.split(masked_k.clamp(0, 1).cpu().numpy(), masked_k.shape[0], 0))
                 wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))

@@ -138,7 +138,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
                 self.val_dataset, 
-                batch_size=self.batch_size*2, 
+                batch_size=self.batch_size*8, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
@@ -146,7 +146,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
                 self.test_dataset, 
-                batch_size=self.batch_size*2, 
+                batch_size=self.batch_size*8, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
