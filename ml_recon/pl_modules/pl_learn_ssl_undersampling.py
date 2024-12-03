@@ -113,7 +113,7 @@ class LearnedSSLLightning(plReconModel):
             loss += loss_inverse
             loss += image_loss_inverse_lambda
 
-        estimate_full = None
+        full_image = None
         if self.pass_all_data:
             estimate_full = self.pass_through_model(undersampled, initial_mask, fs_k_space)
 
@@ -157,10 +157,10 @@ class LearnedSSLLightning(plReconModel):
                 wandb_logger.log_image('train/omega_(1-lambda)', self.convert_image_to_plot(inverse_set))
                 wandb_logger.log_image('train/estimate_lambda', self.convert_image_to_plot(lambda_image[0]/lambda_image[0].max()))
                 wandb_logger.log_image('train/initial_mask', self.convert_image_to_plot(initial_mask))
-                if inverse_image:
+                if inverse_image is not None:
                     wandb_logger.log_image('train/estimate_inverse', self.convert_image_to_plot(inverse_image[0]/inverse_image[0].max()))
-                if estimate_full:
-                    wandb_logger.log_image('train/estimate_full', self.convert_image_to_plot(estimate_full[0]/estimate_full[0].max()))
+                if full_image is not None:
+                    wandb_logger.log_image('train/estimate_full', self.convert_image_to_plot(full_image[0]/full_image[0].max()))
                     
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
@@ -229,7 +229,7 @@ class LearnedSSLLightning(plReconModel):
                 est_full_img
                 )
     
-        if batch_idx == 0 and self.logger and self.current_epoch % 10 == 0:
+        if batch_idx == 0 and isinstance(self.logger, WandbLogger) and self.current_epoch % 10 == 0:
             wandb_logger = self.logger
             assert isinstance(wandb_logger, WandbLogger)
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
@@ -302,8 +302,15 @@ class LearnedSSLLightning(plReconModel):
         mask = batch['mask']
         estimate_k = self.pass_through_model(undersampled, mask, k_space)
 
+        return super().test_step((estimate_k, k_space), batch_index)
 
-        super().test_step((estimate_k, k_space, 'pass full'), batch_index)
+    def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
+        undersampled = batch['input']
+        k_space = batch['fs_k_space']
+        mask = batch['mask']
+        estimate_k = self.pass_through_model(undersampled, mask, k_space)
+
+        return super().on_test_batch_end(outputs, (estimate_k, k_space), batch_idx, dataloader_idx)
 
 
     

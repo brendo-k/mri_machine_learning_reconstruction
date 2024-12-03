@@ -1,18 +1,12 @@
 from argparse import ArgumentParser
-import os
 import torch
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from ml_recon.utils import replace_args_from_config
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.tuner.tuning import Tuner
-from pytorch_lightning.cli import LightningCLI
-from pytorch_lightning.callbacks import Callback
-from ml_recon.utils import root_sum_of_squares, ifft_2d_img
-import numpy as np
 from datetime import datetime
 
 def main(args):
@@ -32,7 +26,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         precision="bf16-mixed"
+                         precision="bf16-mixed", 
                          )
 
 
@@ -108,6 +102,7 @@ if __name__ == '__main__':
     training_group.add_argument('--batch_size', type=int, default=16)
     training_group.add_argument('--lr', type=float, default=1e-3)
     training_group.add_argument('--checkpoint', type=str)
+    training_group.add_argument("--config", type=str, help="Path to the YAML configuration file.")
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
@@ -118,22 +113,19 @@ if __name__ == '__main__':
     dataset_group.add_argument('--ny', type=int, default=128)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
     dataset_group.add_argument('--line_constrained', action='store_true')
-    dataset_group.add_argument('--pi_sampling', action='store_false')
+    dataset_group.add_argument('--pi_sampling', action='store_true')
 
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)
     model_group.add_argument('--learn_R', action='store_true')
     model_group.add_argument('--warm_start', action='store_true')
     model_group.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
-    model_group.add_argument('--R_seeding', type=float, nargs='+', default=[])
-    model_group.add_argument('--R_freeze', type=bool, nargs='+', default=[])
     model_group.add_argument('--chans', type=int, default=32)
     model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
     model_group.add_argument('--lambda_scaling', type=float, default=1)
-    model_group.add_argument('--k_space_regularizer', type=float, default=0.0)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--pass_inverse_data', action='store_true')
@@ -148,5 +140,7 @@ if __name__ == '__main__':
     logger_group.add_argument('--run_name', type=str)
     
     args = parser.parse_args()
+
+    args = replace_args_from_config(args.config, args)
 
     main(args)
