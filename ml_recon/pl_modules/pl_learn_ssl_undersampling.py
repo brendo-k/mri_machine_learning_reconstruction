@@ -34,8 +34,7 @@ class LearnedSSLLightning(plReconModel):
             ssim_scaling_full = 1e-4,
             ssim_scaling_inverse = 1e-4,
             image_loss_function: str = 'ssim',
-            normalize_k_space_energy: float = 0.0,
-            lambda_scaling: float = 0.0, 
+            lambda_scaling: float = 1, 
             pass_all_data: bool = False,
             pass_inverse_data: bool = False,
             supervised: bool = False,
@@ -47,7 +46,6 @@ class LearnedSSLLightning(plReconModel):
 
         self.recon_model = VarNet_mc(contrasts=len(contrast_order), chans=channels, num_cascades=cascades)
         self.image_size = image_size
-        self.contrast_order = contrast_order
         self.lr = lr
         self.center_region = center_region
         self.sigmoid_slope_1 = sigmoid_slope1
@@ -56,7 +54,6 @@ class LearnedSSLLightning(plReconModel):
         self.ssim_scaling_full = ssim_scaling_full
         self.ssim_scaling_inverse_full = ssim_scaling_inverse
         self.lambda_scaling = lambda_scaling
-        self.norm_k_space = normalize_k_space_energy
         self.pass_all_data = pass_all_data
         self.supervised = supervised
         self.pass_inverse_data = pass_inverse_data
@@ -72,6 +69,7 @@ class LearnedSSLLightning(plReconModel):
         self._setup_R_values(image_size, R_parameter, learn_R)
 
         self._setup_sampling_weights(image_size, center_region, warm_start, learn_sampling)
+        assert lambda_scaling >= 0 and lambda_scaling <= 1, 'Should be between 0-1'
 
 
 
@@ -198,7 +196,7 @@ class LearnedSSLLightning(plReconModel):
                     torch.view_as_real(estimate_inverse*mask_lambda_wo_acs),
                     )
 
-        loss_inverse = loss_inverse * self.lambda_scaling 
+        loss_inverse = loss_inverse * (1 - self.lambda_scaling)
         return estimate_inverse,loss_inverse
 
     def _create_inverted_masks(self, lambda_set, inverse_set):
@@ -216,6 +214,7 @@ class LearnedSSLLightning(plReconModel):
                 torch.view_as_real(undersampled*inverse_set), 
                 torch.view_as_real(estimate_lambda*inverse_set),
                 ) 
+        loss *= self.lambda_scaling
 
         lambda_image = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
         return loss, lambda_image
