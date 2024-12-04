@@ -7,7 +7,7 @@ class KMaxSoftmaxFunction(torch.autograd.Function):
         ctx.save_for_backward(input)
         ctx.slope = slope
 
-        mask = (input > 0)
+        mask = (input > 0).to(torch.float32)
         
         # Reshape the mask to the original input shape and return
         return mask

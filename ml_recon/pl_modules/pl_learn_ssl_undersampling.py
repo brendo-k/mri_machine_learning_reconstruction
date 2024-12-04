@@ -82,7 +82,7 @@ class LearnedSSLLightning(plReconModel):
 
         undersampled = batch['input']
         fs_k_space = batch['fs_k_space']
-        initial_mask = batch['mask']
+        initial_mask = batch['mask'].to(torch.float32)
         nbatch, contrast, coil, h, w = undersampled.shape
 
         zero_filled = root_sum_of_squares(ifft_2d_img(undersampled), coil_dim=2) 
@@ -179,7 +179,7 @@ class LearnedSSLLightning(plReconModel):
         under = batch['input']
 
         fs_k_space = batch['fs_k_space']
-        initial_mask = batch['mask']
+        initial_mask = batch['mask'].to(torch.float32)
 
         nbatch, contrast, coil, h, w = under.shape
         
@@ -299,7 +299,7 @@ class LearnedSSLLightning(plReconModel):
     def test_step(self, batch, batch_index):
         undersampled = batch['input']
         k_space = batch['fs_k_space']
-        mask = batch['mask']
+        mask = batch['mask'].to(torch.float32)
         estimate_k = self.pass_through_model(undersampled, mask, k_space)
 
         return super().test_step((estimate_k, k_space), batch_index)
@@ -307,7 +307,7 @@ class LearnedSSLLightning(plReconModel):
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         undersampled = batch['input']
         k_space = batch['fs_k_space']
-        mask = batch['mask']
+        mask = batch['mask'].to(torch.float32)
         estimate_k = self.pass_through_model(undersampled, mask, k_space)
 
         return super().on_test_batch_end(outputs, (estimate_k, k_space), batch_idx, dataloader_idx)
@@ -455,7 +455,7 @@ class LearnedSSLLightning(plReconModel):
         # test to make sure all sampling masks are close to desired R value 
         for i in range(sampling_mask.shape[0]):
             for j in range(sampling_mask.shape[1]):
-                assert (torch.isclose(sampling_mask[i, j].float().mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
+                assert (torch.isclose(sampling_mask[i, j].mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
         #ensure sampling mask has no nans
         assert not torch.isnan(sampling_mask).any()
         # Ensure sampling mask values are within [0, 1]
@@ -501,7 +501,7 @@ class LearnedSSLLightning(plReconModel):
 
     def split_into_lambda_loss_sets(self, omega_mask, batch_size): 
         lambda_mask = self.get_mask(batch_size, mask_center=True)
-        return omega_mask * lambda_mask, omega_mask * ~lambda_mask
+        return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
     
     def pass_through_model(self, undersampled, mask, fully_sampled):
         zero_pad_mask = fully_sampled != 0
@@ -510,7 +510,7 @@ class LearnedSSLLightning(plReconModel):
         return estimate * zero_pad_mask
 
     def final_dc_step(self, undersampled, estimated, mask):
-        return estimated * ~mask + undersampled * mask
+        return estimated * (1 - mask) + undersampled * mask
 
 
     def _setup_image_space_loss(self, image_loss_function):
