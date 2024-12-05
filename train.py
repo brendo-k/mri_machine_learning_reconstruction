@@ -24,7 +24,7 @@ Examples:
 def main(args):
     torch.set_float32_matmul_precision('medium')
 
-    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, )
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch/')
     #unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     #file_name = 'pl_varnet-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
