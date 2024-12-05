@@ -20,20 +20,21 @@ class LearnedSSLLightning(plReconModel):
     def __init__(
             self, 
             image_size, 
-            R_parameter: float, 
+            inital_R: float, 
             contrast_order: List[str], 
             channels: int = 32,
             cascades: int = 5,
             center_region:int = 10,
             sigmoid_slope1:float = 5.0,
             sigmoid_slope2:float = 200,
-            lr:float = 1e-2,
+            lr: float = 1e-2,
             warm_start:bool = False, 
             learn_R:bool = False,
             ssim_scaling_set = 1e-4,
             ssim_scaling_full = 1e-4,
             ssim_scaling_inverse = 1e-4,
             image_loss_function: str = 'ssim',
+            k_space_loss_function: str = 'l1l2',
             lambda_scaling: float = 1, 
             pass_all_data: bool = False,
             pass_inverse_data: bool = False,
@@ -62,13 +63,12 @@ class LearnedSSLLightning(plReconModel):
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
 
         self._setup_image_space_loss(image_loss_function)
-        self.k_space_loss = L1L2Loss(norm_all_k=False)
+        self._setup_k_space_loss(k_space_loss_function)
 
-        self._setup_R_values(image_size, R_parameter, learn_R)
+        self._setup_R_values(image_size, inital_R, learn_R)
 
         self._setup_sampling_weights(image_size, center_region, warm_start, learn_sampling)
         assert lambda_scaling >= 0 and lambda_scaling <= 1, 'Should be between 0-1'
-
 
 
     def training_step(self, batch, batch_idx):
@@ -138,12 +138,12 @@ class LearnedSSLLightning(plReconModel):
         self.log("train/loss_lambda", loss, on_step=True, on_epoch=True, prog_bar=True)
         
         # R-value
-        R_value = self.norm_R(self.R_value)
+        R_value = self.norm_R(self.learned_R_value)
         for i, contrast in enumerate(self.contrast_order):
             self.log(f'train/R_{contrast}', R_value[i])
         
         # percentage of k-space points in lambda set vs inverse set
-        for i in range(len(self.R_value)):
+        for i in range(len(self.learned_R_value)):
             self.log(f'train/lambda-over-inverse_{self.contrast_order[i]}', 
                      lambda_set[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
                      on_epoch=True, on_step=False)
@@ -473,7 +473,7 @@ class LearnedSSLLightning(plReconModel):
         assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
         assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
 
-        R_value = self.norm_R(self.R_value)
+        R_value = self.norm_R(self.learned_R_value)
         norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
         norm_probability = torch.stack(norm_probability, dim=0)
         return R_value,norm_probability
@@ -534,7 +534,7 @@ class LearnedSSLLightning(plReconModel):
             
     def _setup_sampling_weights(self, image_size, center_region, warm_start, learn_sampling):
         if warm_start: 
-            init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.R, 8, center_region).astype(np.float32)
+            init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.original_R, 8, center_region).astype(np.float32)
             init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
@@ -545,14 +545,14 @@ class LearnedSSLLightning(plReconModel):
 
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
 
-    def _setup_R_values(self, image_size, R, learn_R):
-        self.R = R
-        self.learn_R = learn_R
-        self.R_value = torch.full((image_size[0],), float(self.R))
+    def _setup_R_values(self, image_size, original_R, isLearn_R):
+        self.original_R = original_R
+        self.learn_R = isLearn_R
+        self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
         if self.learn_R: 
-            self.R_value = nn.Parameter(torch.full((image_size[0],), float(self.R)))
+            self.learned_R_value = nn.Parameter(torch.full((image_size[0],), float(self.original_R)))
         else: 
-            self.R_value = torch.full((image_size[0],), float(self.R))
+            self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
 
 
     def calculate_image_space_loss(self, image1, image2):
@@ -597,3 +597,13 @@ class LearnedSSLLightning(plReconModel):
 
         lambda_image = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
         return loss, lambda_image
+
+    def _setup_k_space_loss(self, k_space_loss_function):
+        if k_space_loss_function == 'l1l2':
+            self.k_space_loss = L1L2Loss(norm_all_k=False)
+        elif k_space_loss_function == 'l1':
+            self.k_space_loss = torch.nn.L1Loss()
+        elif k_space_loss_function == 'l2': 
+            self.k_space_loss = torch.nn.MSELoss()
+        else:
+            raise ValueError('No k-space loss!')

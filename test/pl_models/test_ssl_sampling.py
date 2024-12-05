@@ -8,7 +8,7 @@ IMAGE_SIZE = (2, 128, 128)
 
 @pytest.fixture()
 def build_model() -> LearnedSSLLightning:
-    return LearnedSSLLightning(IMAGE_SIZE, R_parameter=2, contrast_order=['t1', 't2'])
+    return LearnedSSLLightning(IMAGE_SIZE, inital_R=2, contrast_order=['t1', 't2'])
 
 
 @torch.no_grad()
@@ -17,7 +17,7 @@ def test_norm_prob(build_model: LearnedSSLLightning):
     probability = [torch.rand(IMAGE_SIZE[1:]) for _ in range(IMAGE_SIZE[0])]
     normed_prob = model.norm_2d_probability(
         probability, 
-        model.R_value, 
+        model.learned_R_value, 
         mask_center=True, 
         center_region=10, 
         image_shape=probability[0].shape
@@ -33,7 +33,7 @@ def test_norm_prob_1d(build_model: LearnedSSLLightning):
     probability = [torch.rand(IMAGE_SIZE[1]) for _ in range(IMAGE_SIZE[0])]
     normed_prob = model.norm_1d_probability(
         probability, 
-        model.R_value, 
+        model.learned_R_value, 
         mask_center=True,
         center_region=10, 
         image_shape=IMAGE_SIZE[1:],

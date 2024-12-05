@@ -11,7 +11,7 @@ from datetime import datetime
 
 def main(args):
         
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name,)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -52,7 +52,7 @@ def main(args):
 
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
-            R_parameter=args.R_hat, 
+            inital_R=args.R_hat, 
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             learn_R=args.learn_R,
@@ -70,7 +70,8 @@ def main(args):
             learn_sampling=args.learn_sampling,
             image_loss_function=args.image_loss,
             cascades=args.cascades, 
-            warmup_training=args.warmup_training
+            warmup_training=args.warmup_training,
+            k_space_loss_function=args.k_loss
             )
     torch.set_float32_matmul_precision('medium')
 
@@ -133,6 +134,7 @@ if __name__ == '__main__':
     model_group.add_argument('--learn_sampling', action='store_true')
     model_group.add_argument('--supervised', action='store_true')
     model_group.add_argument('--image_loss', type=str, default='ssim')
+    model_group.add_argument('--k_loss', type=str, default='l1l2')
     model_group.add_argument('--warmup_training', action='store_true')
 
     logger_group = parser.add_argument_group('Logging Parameters')

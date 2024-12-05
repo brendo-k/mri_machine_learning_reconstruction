@@ -71,7 +71,7 @@ def main(args):
     
     model = LearnedSSLLightning(
             (len(args.contrasts), ny, nx), 
-            R_parameter=args.R_hat, 
+            inital_R=args.R_hat, 
             contrast_order=data_module.contrast_order,
             lr = args.lr,
             supervised=False,
