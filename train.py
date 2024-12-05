@@ -44,45 +44,46 @@ def main(args):
                          callbacks=[],
                          )
 
-
-    data_module = UndersampledDataModule(
-            dataset_name=args.dataset, 
-            data_dir=args.data_dir, 
-            batch_size=args.batch_size, 
-            resolution=(args.ny, args.nx),
-            num_workers=args.num_workers,
-            norm_method=args.norm_method,
-            R=args.R,
-            R_hat=args.R_hat,
-            line_constrained=args.line_constrained,
-            supervised_dataset=args.supervised,
-            pi_sampling=args.pi_sampling, 
-            contrasts=args.contrasts, 
-            ssdu_partioning=args.ssdu_partioning, 
-            ) 
-    # this needs to be done to load contrast ordering for model
-    data_module.setup('train')
-
-    model_config = VarnetConfig(
-        model_name=args.model, 
-        contrast_order=data_module.contrast_order,
-        lr = args.lr, 
-        cascades=args.cascades, 
-        channels=args.chans,
-        norm_all_k=args.norm_all_k,
-        image_loss_function=args.image_space_loss,
-        image_loss_scaling=args.image_loss_scaling,
-        k_loss_function=args.k_loss, 
-
-    )
-    model = pl_VarNet(config=model_config)
-
-
     if args.checkpoint: 
         print("Loading Checkpoint!")
         model = pl_VarNet.load_from_checkpoint(args.checkpoint)
         data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=args.data_dir)
         data_module.setup('train')
+
+    else:
+        data_module = UndersampledDataModule(
+                dataset_name=args.dataset, 
+                data_dir=args.data_dir, 
+                batch_size=args.batch_size, 
+                resolution=(args.ny, args.nx),
+                num_workers=args.num_workers,
+                norm_method=args.norm_method,
+                R=args.R,
+                R_hat=args.R_hat,
+                line_constrained=args.line_constrained,
+                supervised_dataset=args.supervised,
+                pi_sampling=args.pi_sampling, 
+                contrasts=args.contrasts, 
+                ssdu_partioning=args.ssdu_partioning, 
+                ) 
+        # this needs to be done to load contrast ordering for model
+        data_module.setup('train')
+
+        model_config = VarnetConfig(
+            model_name=args.model, 
+            contrast_order=data_module.contrast_order,
+            lr = args.lr, 
+            cascades=args.cascades, 
+            channels=args.chans,
+            norm_all_k=args.norm_all_k,
+            image_loss_function=args.image_space_loss,
+            image_loss_scaling=args.image_loss_scaling,
+            k_loss_function=args.k_loss, 
+
+        )
+        model = pl_VarNet(config=model_config)
+
+
 
 
     print(data_module.hparams)
