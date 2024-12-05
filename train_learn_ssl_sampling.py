@@ -10,6 +10,7 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from datetime import datetime
 
 def main(args):
+    pl.seed_everything(8)
         
     wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name,)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -22,6 +22,7 @@ Examples:
     train.py --num_workers 3 --max_epochs 50 --contrasts t1 t2 flair
 """
 def main(args):
+    pl.seed_everything(8)
     torch.set_float32_matmul_precision('medium')
 
     wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch/')
