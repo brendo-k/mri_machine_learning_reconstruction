@@ -80,7 +80,7 @@ def main(args):
     if args.checkpoint: 
         print("Loading Checkpoint!")
         model = pl_VarNet.load_from_checkpoint(args.checkpoint)
-        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint)
+        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=args.data_dir)
         data_module.setup('train')
 
 
