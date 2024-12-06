@@ -15,3 +15,23 @@ def real_to_complex(images: torch.Tensor):
     images = images.contiguous()
     images = torch.view_as_complex(images)
     return images
+
+# Converts complex tensor to polar coordinates and concats the polar components to channels
+def complex_to_polar(images: torch.Tensor):
+    assert images.is_complex(), "Input tensor must be complex."
+    # images dims [B, C, H, W]
+    magnitude = torch.abs(images)  # Compute magnitude
+    phase = torch.angle(images)   # Compute phase
+    # Concatenate magnitude and phase along the channel dimension
+    images = torch.cat((magnitude, phase), dim=1)  # [B, 2*C, H, W]
+    return images
+
+# Converts polar coordinates (magnitude and phase) back to a complex tensor
+def polar_to_complex(images: torch.Tensor):
+    assert images.size(1) % 2 == 0, "Channel dimension must be even (magnitude and phase pairs)."
+    # images dims [B, 2*C, H, W]
+    c = images.size(1) // 2
+    magnitude, phase = images[:, :c, ...], images[:, c:, ...]  # Split into magnitude and phase
+    # Reconstruct complex tensor
+    complex_tensor = magnitude * torch.exp(1j * phase)
+    return complex_tensor

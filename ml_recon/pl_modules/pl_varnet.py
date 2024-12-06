@@ -34,6 +34,7 @@ class VarnetConfig:
     k_loss_function: Optional[str] = 'norml1l2'
     k_loss_scaling: float = 0
     norm_all_k: bool = False
+    split_contrast_by_phase: bool = False
 
 # define the LightningModule
 class pl_VarNet(plReconModel):
@@ -56,7 +57,8 @@ class pl_VarNet(plReconModel):
             backbone,
             contrasts=len(self.contrast_order),
             num_cascades=self.config.cascades, 
-            sens_chans=self.config.cascades
+            sens_chans=self.config.cascades, 
+            split_complex_by_phase = config.split_contrast_by_phase
         )
         
         # set learning rate
