@@ -550,7 +550,7 @@ class LearnedSSLLightning(plReconModel):
         self.learn_R = isLearn_R
         self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
         if self.learn_R: 
-            self.learned_R_value = nn.Parameter(torch.full((image_size[0],), float(self.original_R)))
+            self.learned_R_value = nn.Parameter(torch.full((image_size[0],), float(self.original_R - 1)))
         else: 
             self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
 

@@ -51,7 +51,12 @@ class plReconModel(pl.LightningModule):
 
 
                 nmse_contrast = nmse(contrast_ground_truth, contrast_estimated)
-                ssim_contrast, ssim_image = ssim(contrast_ground_truth, contrast_estimated, return_full_image=True, data_range=contrast_ground_truth.max().item())
+                ssim_contrast, ssim_image = ssim(
+                    contrast_ground_truth, 
+                    contrast_estimated, 
+                    return_full_image=True, 
+                    data_range=(0, contrast_ground_truth.max().item())
+                    )
                 psnr_contrast = psnr(contrast_ground_truth, contrast_estimated, image_background_mask)
 
                 # remove mask points that would equal to 1 (possibly some estimated points
@@ -86,13 +91,13 @@ class plReconModel(pl.LightningModule):
         estimate_k, k_space = batch
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
-        difference_image = (ground_truth_image - estimated_image).abs()
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
         image_background_mask = ground_truth_image > scaling_factor * 0
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
+        difference_image = (ground_truth_image - estimated_image).abs()
 
         estimated_image *= image_background_mask
         ground_truth_image *= image_background_mask

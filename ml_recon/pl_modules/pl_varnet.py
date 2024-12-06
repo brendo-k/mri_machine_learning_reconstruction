@@ -123,7 +123,13 @@ class pl_VarNet(plReconModel):
 
     def test_step(self, batch, batch_index):
         estimated_target = self.forward(batch)
-        super().test_step((estimated_target, batch['fs_k_space'], 'pass full'), batch_index)
+        return super().test_step((estimated_target, batch['fs_k_space']), batch_index)
+
+    def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
+
+        estimate_k = self.forward(batch)
+
+        return super().on_test_batch_end(outputs, (estimate_k, batch['fs_k_space']), batch_idx, dataloader_idx)
 
 
     def forward(self, data): 
@@ -156,8 +162,6 @@ class pl_VarNet(plReconModel):
             target = batch['target'][0, :, [0], :, :].abs()**0.2
             if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger
-                wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-                wandb_logger.log_image(mode + '/masked_k', np.split(masked_k.clamp(0, 1).cpu().numpy(), masked_k.shape[0], 0))
                 wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))
                 wandb_logger.log_image(mode + '/input', np.split(input.clamp(0, 1).cpu().numpy(), input.shape[0], 0))
 
@@ -266,11 +270,11 @@ class pl_VarNet(plReconModel):
         ssim = 0
         for contrast in range(est_img.shape[1]):
             for i in range(est_img.shape[0]):
-                data_range = targ_img[i, contrast, ...].max().item()
+                image_max = targ_img[i, contrast, ...].max().item()
                 ssim_val = ssim_func(
                     est_img[i, contrast, ...].unsqueeze(0).unsqueeze(0), 
                     targ_img[i, contrast, ...].unsqueeze(0).unsqueeze(0), 
-                    data_range=data_range
+                    data_range=(0, image_max)
                     )
                 assert isinstance(ssim_val, torch.Tensor)
                 ssim += ssim_val
