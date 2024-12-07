@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture
 def sensitivity_model():
     """Fixture to create a SensetivityModel_mc instance for testing."""
-    return SensetivityModel_mc(in_chans=2, out_chans=2, chans=18)
+    return SensetivityModel_mc(in_chans=2, out_chans=2, chans=18, contrasts=1)
 
 @torch.no_grad()
 def test_passthrough(sensitivity_model):
@@ -33,7 +33,7 @@ def test_mask(sensitivity_model):
     mask[2, :, :, :, 156:165] = 1
     mask = mask.to(torch.bool)
     
-    x_masked = sensitivity_model.mask(x, mask)
+    x_masked = sensitivity_model.mask_center(x, mask)
     
     x_masked_indecies = x_masked != 0
     real_mask = torch.zeros(3, 4, 20, 640, 320)
@@ -51,7 +51,7 @@ def test_scaling():
     mask[..., 150:170] = 1
     mask = mask.to(torch.bool)
 
-    sense_model = SensetivityModel_mc(2, 2, 4)
+    sense_model = SensetivityModel_mc(2, 2, 4, contrasts=1)
     x_masked = sense_model(x, mask)
 
     x_summed = (x_masked * x_masked.conj()).sum(2)
@@ -78,7 +78,7 @@ def test_mask_symmetric_mask(sensitivity_model):
     center_mask[..., height//2-10:height//2+10, width//2-20:width//2+20] = 1.0
     
     # Apply mask
-    masked_k_space = sensitivity_model.mask(coil_k_spaces, center_mask)
+    masked_k_space = sensitivity_model.mask_center(coil_k_spaces, center_mask)
     
     # Assertions
     assert masked_k_space.shape == coil_k_spaces.shape
@@ -114,7 +114,7 @@ def test_mask_minimum_low_frequencies(sensitivity_model):
     center_mask[..., height//2-1:height//2+1, width//2-1:width//2+1] = 1.0
     
     # Apply mask
-    masked_k_space = sensitivity_model.mask(coil_k_spaces, center_mask)
+    masked_k_space = sensitivity_model.mask_center(coil_k_spaces, center_mask)
     
     # Assertions
     assert masked_k_space.shape == coil_k_spaces.shape

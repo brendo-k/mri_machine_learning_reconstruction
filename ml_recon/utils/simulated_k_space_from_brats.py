@@ -24,44 +24,20 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_maps_' + coil_size + '.npy')
+    sense_map = np.load('/home/brenden/Documents/data/compressed_maps_10.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     print(sense_map.shape)
     sense_map = np.transpose(sense_map, (0, 2, 1))
-    sense_map = sense_map[:, 50:-50, 50:-50]
+    sense_map = sense_map[:, 25:-25, 25:-25]
     print(sense_map.shape)
     rng = np.random.default_rng()
-    x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
-    image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
     #image [Contrast height width]
-    
-
-    #mag_sense_map = np.abs(sense_map)
-    #mag_sense_phase = np.angle(sense_map)
-    #print(sense_map.shape)
-
-    #resampled_sense_mag = resample(mag_sense_map, image.shape[1], image.shape[2])
-    #resampled_sense_phase = resample(mag_sense_phase, image.shape[1], image.shape[2], 'nearest')
-    #
-    #resampled_sense = resampled_sense_mag * np.exp(resampled_sense_phase * 1j)
 
     mag_sense_real = np.real(sense_map)
     mag_sense_imag = np.imag(sense_map)
     resampled_sense_real = resample(mag_sense_real, image.shape[1], image.shape[2], 'nearest')
     resampled_sense_imag = resample(mag_sense_imag, image.shape[1], image.shape[2], 'nearest')
     resampled_sense = resampled_sense_real + 1j * resampled_sense_imag 
-
-    #kernels = fft_2d_img(sense_map, axes=[-1, -2])
-    #kernels = zero_pad_or_crop(kernels, (sense_map.shape[0], image.shape[1], image.shape[2]))
-
-    #plt.imshow(np.abs(kernels[0, :,:])**0.2)
-    #plt.show()
-    #resampled_sense = ifft_2d_img(kernels)
-    #resampled_sense[resampled_sense < 0.005] = 0
-    #resampled_sense = resampled_sense / np.sqrt(np.sum(resampled_sense * resampled_sense.conj() + 1e-20, 0, keepdims=True))
-
-    #plt.imshow(np.abs(np.sum(resampled_sense * resampled_sense.conj(), axis=0)))
-    #plt.show()
 
     sense_map = np.expand_dims(resampled_sense, 0)
     image_sense = sense_map * np.expand_dims(image, 1)

@@ -10,7 +10,7 @@ from ml_recon.utils.undersample_tools import scale_pdf, gen_pdf_bern, gen_pdf_co
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluation_functions import nmse, psnr
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.models.varnet_mc import VarNet_mc
+from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet
 
 class LOUPE(plReconModel):
     def __init__(
@@ -35,7 +35,7 @@ class LOUPE(plReconModel):
         super().__init__(contrast_order=contrast_order)
         self.save_hyperparameters(ignore='recon_model')
 
-        self.recon_model = VarNet_mc(contrasts=len(contrast_order), chans=channels, num_cascades=cascades)
+        self.recon_model = MultiContrastVarNet(contrasts=len(contrast_order), chans=channels, num_cascades=cascades)
         self.image_size = image_size
         self.contrast_order = contrast_order
         self.R = R

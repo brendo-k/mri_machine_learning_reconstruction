@@ -96,44 +96,7 @@ class UndersampleDecorator(Dataset):
 
         if self.self_supervised:
 
-            if self.original_ssdu_partioning:
-                input_mask = []
-                loss_mask = []
-                for i in range(mask_omega.shape[0]):
-                    input, loss = ssdu_gaussian_selection(mask_omega[i, 0])
-                    input_mask.append(np.expand_dims(input, 0))
-                    loss_mask.append(np.expand_dims(loss, 0))
-
-                input_mask = np.stack(input_mask, axis=0)
-                loss_mask = np.stack(loss_mask, axis=0)
-
-                output.update({
-                    'input': under * input_mask, 
-                    'target': under * loss_mask, 
-                    'mask': input_mask,
-                    'loss_mask': loss_mask
-                    })
-
-                
-            else:
-                # scale pdf
-                scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
-                doub_under, mask_lambda = apply_undersampling_from_dist(
-                        index,
-                        scaled_new_prob,
-                        under,
-                        deterministic=False,
-                        line_constrained=self.line_constrained,
-                        )
-                
-                # loss mask is what is not in double undersampled
-                target = under * ~mask_lambda
-                output.update({
-                    'input': doub_under, 
-                    'target': target, 
-                    'mask': mask_lambda & mask_omega,
-                    'loss_mask': ~mask_lambda & mask_omega
-                    })
+            self.gen_heuristic_ssl_masks(index, under, mask_omega, output)
         
         for keys in output:
             output[keys] = torch.from_numpy(output[keys])
@@ -142,4 +105,41 @@ class UndersampleDecorator(Dataset):
             output = self.transforms(output)
 
         return output
+
+    def gen_heuristic_ssl_masks(self, index, under, mask_omega, output):
+        if self.original_ssdu_partioning:
+            input_mask = []
+            loss_mask = []
+            for i in range(mask_omega.shape[0]):
+                input, loss = ssdu_gaussian_selection(mask_omega[i, 0])
+                input_mask.append(np.expand_dims(input, 0))
+                loss_mask.append(np.expand_dims(loss, 0))
+
+            input_mask = np.stack(input_mask, axis=0)
+            loss_mask = np.stack(loss_mask, axis=0)
+
+            output.update({
+                    'input': under * input_mask, 
+                    'target': under * loss_mask, 
+                    'mask': input_mask,
+                    'loss_mask': loss_mask
+                    })
+        else:
+            scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
+            doub_under, mask_lambda = apply_undersampling_from_dist(
+                        index,
+                        scaled_new_prob,
+                        under,
+                        deterministic=False,
+                        line_constrained=self.line_constrained,
+                        )
+                
+                # loss mask is what is not in double undersampled
+            target = under * ~mask_lambda
+            output.update({
+                    'input': doub_under, 
+                    'target': target, 
+                    'mask': mask_lambda & mask_omega,
+                    'loss_mask': ~mask_lambda & mask_omega
+                    })
 

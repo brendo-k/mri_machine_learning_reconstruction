@@ -12,155 +12,141 @@ from ml_recon.utils.undersample_tools import gen_pdf_bern
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluation_functions import nmse
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.models import VarNet_mc
+from ml_recon.models import LearnPartitioning, MultiContrastVarNet, TriplePathway
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
+from ml_recon.utils.undersample_tools import ssdu_gaussian_selection, scale_pdf, apply_undersampling_from_dist
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
             self, 
-            image_size, 
-            inital_R: float, 
-            contrast_order: List[str], 
-            channels: int = 32,
-            cascades: int = 5,
-            center_region:int = 10,
-            sigmoid_slope1:float = 5.0,
-            sigmoid_slope2:float = 200,
-            lr: float = 1e-2,
-            warm_start:bool = False, 
-            learn_R:bool = False,
-            ssim_scaling_set = 1e-4,
-            ssim_scaling_full = 1e-4,
-            ssim_scaling_inverse = 1e-4,
+            learn_partitioning_config: LearnPartitioning.LearnPartitionConfig,
+            varnet_config: MultiContrastVarNet.VarnetConfig,
+            dual_domain_config: TriplePathway.DualDomainConifg,
+            lr: float = 1e-3,
+            ssim_scaling_set: float = 1e-4,
+            ssim_scaling_full: float = 1e-4,
+            ssim_scaling_inverse: float = 1e-4,
+            lambda_scaling: float = 1, 
             image_loss_function: str = 'ssim',
             k_space_loss_function: str = 'l1l2',
-            lambda_scaling: float = 1, 
-            pass_all_data: bool = False,
-            pass_inverse_data: bool = False,
-            supervised: bool = False,
-            learn_sampling: bool = True, 
+            is_supervised_training: bool = False,
+            is_learn_partitioning: bool = True,  
             warmup_training: bool = False
             ):
-        super().__init__(contrast_order=contrast_order)
-        self.save_hyperparameters(ignore='recon_model')
+        super().__init__(contrast_order=varnet_config.contrast_order)
+        self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
 
-        self.recon_model = VarNet_mc(contrasts=len(contrast_order), chans=channels, num_cascades=cascades)
-        self.image_size = image_size
+        if is_learn_partitioning == 'learn':
+            self.partition_model = LearnPartitioning.LearnPartitioning(learn_partitioning_config)
+
+        self.recon_model = TriplePathway.TriplePathway(dual_domain_config, varnet_config)
+
         self.lr = lr
-        self.center_region = center_region
-        self.sigmoid_slope_1 = sigmoid_slope1
-        self.sigmoid_slope_2 = sigmoid_slope2
         self.image_scaling_lam_inv = ssim_scaling_set
         self.image_scaling_lam_full = ssim_scaling_full
         self.image_scaling_full_inv = ssim_scaling_inverse
-        self.lambda_scaling = lambda_scaling
-        self.pass_all_data = pass_all_data
-        self.supervised = supervised
-        self.pass_inverse_data = pass_inverse_data
-        self.warmup_training = warmup_training
+        self.lambda_loss_scaling = lambda_scaling
+        self.is_supervised_training = is_supervised_training
+        self.is_training_warmup = warmup_training
 
+        # loss function init
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
-
         self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
 
-        self._setup_R_values(image_size, inital_R, learn_R)
-
-        self._setup_sampling_weights(image_size, center_region, warm_start, learn_sampling)
-        assert lambda_scaling >= 0 and lambda_scaling <= 1, 'Should be between 0-1'
-
 
     def training_step(self, batch, batch_idx):
-        if self.supervised: 
-            return self.train_supervised_step(batch)
+        image_loss_full_lambda = torch.tensor([0]) 
+        image_loss_inverse_lambda = torch.tensor([0]) 
+        image_loss_inverse_full = torch.tensor([0]) 
+        k_loss_lambda = torch.tensor([0]) 
+        k_loss_inverse = torch.tensor([0])
+
+        input_mask, loss_mask = self.partition_k_space(batch)
 
         if isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
         else:
             wandb_logger = None
-
-        undersampled = batch['input']
-        fs_k_space = batch['fs_k_space']
-        initial_mask = batch['mask'].to(torch.float32)
-        nbatch, contrast, coil, h, w = undersampled.shape
-
-        zero_filled = root_sum_of_squares(ifft_2d_img(undersampled), coil_dim=2) 
-        scaling_factor = zero_filled.amax((-1, -2), keepdim=True)
-
-        lambda_set, inverse_set = self.split_into_lambda_loss_sets(initial_mask, nbatch)
-
-        loss, lambda_image = self.pass_through_lambda_path(undersampled, fs_k_space, lambda_set, inverse_set)
-
-        # scale to be around 0-1 (if not model will learn to maximize one pixel to lower ssim)
-        lambda_image = lambda_image / scaling_factor
         
         
-        inverse_image = None
-        if self.pass_inverse_data:
-            # create new masks with inverted acs lines
-            estimate_inverse, loss_inverse = self.pass_through_inverse_path(undersampled, fs_k_space, lambda_set, inverse_set)
+        estimates = self.recon_model.forward(batch['input'], batch['fs_k_space'], input_mask, loss_mask) 
 
-            inverse_image = root_sum_of_squares(ifft_2d_img(estimate_inverse), coil_dim=2)
-            inverse_image = inverse_image / scaling_factor
+        lambda_k = estimates['lambda_path']
+        full_k = estimates['full_path']
+        inverse_k = estimates['inverse_path']
+        zero_filled_k = batch['input']
 
-            image_loss_inverse_lambda = self.calculate_image_space_loss(lambda_image, inverse_image)
+        zero_filled_i = root_sum_of_squares(ifft_2d_img(zero_filled_k), coil_dim=2) 
+        image_scaling_factor = zero_filled_i.amax((-1, -2), keepdim=True)
+
+        lambda_images = root_sum_of_squares(ifft_2d_img(lambda_k), coil_dim=2) 
+        lambda_images /= image_scaling_factor
+
+        k_loss_lambda = self.calculate_k_loss(lambda_k, zero_filled_k, loss_mask)
+        k_loss_lambda *= self.lambda_loss_scaling
+
+        full_images = None
+        if full_k is not None:
+            full_images = root_sum_of_squares(ifft_2d_img(full_k), coil_dim=2) 
+            full_images /= image_scaling_factor
+
+            image_loss_full_lambda = self.calculate_image_space_loss(full_images, lambda_images)
+            image_loss_full_lambda *= self.image_scaling_lam_full
+        
+        inverse_images = None 
+        if inverse_k is not None:
+            lambda_k_wo_acs, inverse_k_wo_acs = TriplePathway.TriplePathway.create_inverted_masks(input_mask, loss_mask)
+            inverse_images = root_sum_of_squares(ifft_2d_img(inverse_k), coil_dim=2) 
+            inverse_images /= image_scaling_factor
+
+            k_loss_inverse = self.calculate_k_loss(inverse_k, zero_filled_k, lambda_k_wo_acs)
+            k_loss_inverse *= 1 - self.lambda_loss_scaling
+            image_loss_inverse_lambda = self.calculate_image_space_loss(lambda_images, inverse_images)
             image_loss_inverse_lambda *= self.image_scaling_lam_inv
 
-            self.log("train/ssim_loss_inverse_lambda", image_loss_inverse_lambda, on_epoch=True, on_step=False)
-            self.log("train/loss_inverse", loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
-
-            loss += loss_inverse
-            loss += image_loss_inverse_lambda
-
-        full_image = None
-        if self.pass_all_data:
-            estimate_full = self.pass_through_model(undersampled, initial_mask, fs_k_space)
-
-            full_image = root_sum_of_squares(ifft_2d_img(estimate_full), coil_dim=2)
-            full_image = full_image / scaling_factor
-
-            ssim_loss_full = self.calculate_image_space_loss(full_image, lambda_image)
-            ssim_loss_full *= self.image_scaling_lam_full
-            loss += ssim_loss_full 
-            
-            if self.pass_inverse_data:
-                assert inverse_image is not None, "should exist!"
-                ssim_loss_full_inverse = self.calculate_image_space_loss(inverse_image, full_image)
-                ssim_loss_inverse_full = ssim_loss_full_inverse * self.image_scaling_full_inv
-                loss += ssim_loss_inverse_full
-                self.log('train/ssim_loss_inverse_full', ssim_loss_inverse_full, on_step=False, on_epoch=True)
-
-            self.log('train/ssim_full_lambda', ssim_loss_full, on_step=False, on_epoch=True)
-                
+        if (inverse_images is not None) and (full_images is not None):
+            image_loss_inverse_full = self.calculate_image_space_loss(full_images, inverse_images)
+            image_loss_inverse_full *= self.image_scaling_full_inv
         
-        self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log("train/loss_lambda", loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        loss = k_loss_inverse + k_loss_lambda + image_loss_full_lambda + image_loss_inverse_full + image_loss_inverse_lambda
+
+        
+        
+        self.log("train/image_loss_inverse_lambda", image_loss_inverse_lambda, on_epoch=True, on_step=False)
+        self.log("train/image_loss_full_lambda", image_loss_full_lambda, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('train/image_loss_inverse_full', image_loss_inverse_full, on_step=False, on_epoch=True)
+        self.log("train/loss_lambda", k_loss_lambda, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/loss_inverse", k_loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
+
         
         # R-value
-        R_value = self.norm_R(self.learned_R_value)
+        R_value = self.partition_model.get_R()
         for i, contrast in enumerate(self.contrast_order):
             self.log(f'train/R_{contrast}', R_value[i])
         
+        initial_mask = input_mask + loss_mask
         # percentage of k-space points in lambda set vs inverse set
         for i in range(len(self.learned_R_value)):
             self.log(f'train/lambda-over-inverse_{self.contrast_order[i]}', 
-                     lambda_set[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
+                     input_mask[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
                      on_epoch=True, on_step=False)
 
         if batch_idx == 0 and self.current_epoch % 10 == 0 and wandb_logger:
             with torch.no_grad():
                 initial_mask = initial_mask[0, :, 0, :, :]
-                lambda_set_plot = lambda_set[0, :, 0, : ,:]
-                inverse_set = inverse_set[0, :, 0, : ,:]
+                lambda_set_plot = input_mask[0, :, 0, : ,:]
+                loss_mask = loss_mask[0, :, 0, : ,:]
                 wandb_logger.log_image('train/omega_lambda', self.convert_image_to_plot(lambda_set_plot))
-                wandb_logger.log_image('train/omega_(1-lambda)', self.convert_image_to_plot(inverse_set))
-                wandb_logger.log_image('train/estimate_lambda', self.convert_image_to_plot(lambda_image[0]/lambda_image[0].max()))
+                wandb_logger.log_image('train/omega_(1-lambda)', self.convert_image_to_plot(loss_mask))
+                wandb_logger.log_image('train/estimate_lambda', self.convert_image_to_plot(lambda_images[0]/lambda_images[0].max()))
                 wandb_logger.log_image('train/initial_mask', self.convert_image_to_plot(initial_mask))
-                if inverse_image is not None:
-                    wandb_logger.log_image('train/estimate_inverse', self.convert_image_to_plot(inverse_image[0]/inverse_image[0].max()))
-                if full_image is not None:
-                    wandb_logger.log_image('train/estimate_full', self.convert_image_to_plot(full_image[0]/full_image[0].max()))
+                if inverse_images is not None:
+                    wandb_logger.log_image('train/estimate_inverse', self.convert_image_to_plot(inverse_images[0]/inverse_images[0].max()))
+                if full_images is not None:
+                    wandb_logger.log_image('train/estimate_full', self.convert_image_to_plot(full_images[0]/full_images[0].max()))
                     
 
                 probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
@@ -169,6 +155,16 @@ class LearnedSSLLightning(plReconModel):
                 wandb_logger.log_image('train/probability', probability)
 
         return loss
+    
+    def partition_k_space(self, batch):
+        undersampled = batch['input']
+        initial_mask = batch['mask'].to(torch.float32)
+
+        if self.is_learned_partitioning: 
+            input_mask, loss_mask = self.partition_model(undersampled, initial_mask)
+        else: 
+            input_mask, loss_mask = self.get_masks_from_dataset(batch)
+        return input_mask, loss_mask
 
     def convert_image_to_plot(self, image):
         return np.split(image.cpu().detach().numpy(), image.shape[0], 0)
@@ -253,7 +249,7 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/estimate_full_diff', np.split(np.clip(diff_est_full_plot*10, 0, 1), est_inverse_img.shape[1], 0))
 
     def on_train_epoch_start(self):
-        if self.current_epoch >= 50 and self.warmup_training:
+        if self.current_epoch >= 50 and self.is_training_warmup:
             self.sampling_weights.requires_grad = True
     
     def log_metrics(
@@ -311,172 +307,6 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.pass_through_model(undersampled, mask, k_space)
 
         return super().on_test_batch_end(outputs, (estimate_k, k_space), batch_idx, dataloader_idx)
-
-
-    
-
-    # takes an array of R values and normalizes it to the desired R value
-
-    def norm_R(self, R) -> List[torch.Tensor]:
-        if self.learn_R:
-            cur_R = []
-            for R_val in R:
-                # no normalization of R, just ensure doesn't go less than 1
-                cur_R.append(1 + torch.nn.functional.softplus(R_val))
-                
-        else: 
-            cur_R = R
-                
-        return cur_R
-
-
-    def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
-        image_shape = probability[0].shape
-
-        probability = self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
-
-        # testing function to ensure probabilities are close to the set R value
-        for probs, R in zip(probability, cur_R):
-            assert torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) 
-             
-        return probability
-
-    
-    def norm_1d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
-        center = image_shape[1]//2
-        center_bb_x = [center-center_region//2,center+center_region//2]
-
-        probability_sum = []
-        center_mask = torch.ones(image_shape[1], device=probability[0].device)
-        if mask_center:
-            center_mask[center_bb_x[0]:center_bb_x[1]] = 0
-
-        for i in range(len(probability)):
-            probability[i] = probability[i] * center_mask
-            probability_sum.append(torch.sum(probability[i], dim=[-1]) - probability[i][center_bb_x[0]:center_bb_x[1]].sum())
-
-
-        for i in range(len(probability_sum)):
-            probability_total = image_shape[1] / cur_R[i]
-            if mask_center:
-                probability_total -= center_region
-            probability_total = torch.maximum(probability_total, torch.zeros_like(probability_total))
-
-                # if probability sum is greater than total scaling factor will 
-                # be less than 1 so we can multiply
-            if probability_sum[i] > probability_total: 
-                scaling_factor = probability_total/probability_sum[i]
-                probability[i] = probability[i] * scaling_factor
-            else:
-                # Scaling factor will be greater than 1 so we need to go into the 
-                # inverse of probs
-                inverse_total = image_shape[1]*(1 - 1/cur_R[i])
-                inverse_sum = image_shape[1] - probability_sum[i] 
-                if mask_center:
-                    inverse_sum -= center_region
-                scaling_factor = inverse_total / inverse_sum
-                inv_prob = (1 - probability[i])*scaling_factor
-                probability[i] = 1 - inv_prob
-
-        center_box = 1-center_mask
-        for i in range(len(probability)):
-            probability[i] = probability[i] + center_box
-        return probability
-
-    def norm_2d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
-        center = [image_shape[0]//2, image_shape[1]//2]
-
-        center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
-        center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
-            
-        probability_sum = torch.zeros((len(probability), 1), device=probability[0].device)
-
-        # create acs mask of zeros for acs box and zeros elsewhere
-        center_mask = torch.ones(image_shape, device=probability[0].device)
-        if mask_center:
-            center_mask[center_bb_y, center_bb_x] = 0
-
-        for i in range(len(probability)):
-            probability[i] = probability[i] * center_mask
-            probability_sum[i] = probability[i].sum(dim=[-1, -2])
-            
-        for i in range(len(probability)):
-            probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
-            if mask_center:
-                probability_total -= center_region ** 2
-
-            # we need to find cur_R * scaling_factor = R
-            # scaling down the values of 1
-            if probability_sum[i] > probability_total:
-                scaling_factor = probability_total / probability_sum[i]
-                assert scaling_factor <= 1 and scaling_factor >= 0
-
-                probability[i] = (probability[i] * scaling_factor)
-
-            # scaling down the complement probability (scaling down 0)
-            else:
-                inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
-                inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
-                if mask_center:
-                    inverse_sum -= center_region**2
-                inverse_total = torch.maximum(inverse_total, torch.zeros_like(inverse_sum))
-                scaling_factor = inverse_total / inverse_sum
-                assert scaling_factor <= 1 and scaling_factor >= 0
-
-                inv_prob = (1 - probability[i])*scaling_factor
-                probability[i] = 1 - inv_prob
-           
-            # acs box is now ones and everything else is zeros
-        if mask_center:
-            for i in range(len(probability)):
-                probability[i][center_bb_y, center_bb_x] = 1
-        return probability
-
-
-    def get_mask(self, batch_size, mask_center=False, deterministic=False):
-        # Calculate probability and normalize
-
-        R_value, norm_probability = self.get_probability(mask_center)
-        
-        # make sure nothing is nan 
-        assert not torch.isnan(norm_probability).any()
-        # make sure acs box is ones
-        if mask_center:
-            center_x, center_y = norm_probability.shape[1]//2, norm_probability.shape[2]//2
-            acs_x = slice(center_x-self.center_region//2, center_x+self.center_region//2)
-            acs_y = slice(center_y-self.center_region//2, center_y+self.center_region//2)
-            acs_box = norm_probability[:, acs_y, acs_x]
-            torch.testing.assert_close(acs_box, torch.ones(norm_probability.shape[0], self.center_region, self.center_region, device=self.device))
-
-        # get sampling using softamx relaxation
-        activation = norm_probability - torch.rand((batch_size,) + self.image_size, device=self.device)
-        sampling_mask = self.kMaxSampling(activation, self.sigmoid_slope_2)
-        
-        # test to make sure all sampling masks are close to desired R value 
-        for i in range(sampling_mask.shape[0]):
-            for j in range(sampling_mask.shape[1]):
-                assert (torch.isclose(sampling_mask[i, j].mean(), 1/R_value[j], atol=0.10, rtol=0.00)), f'Should be close! Got {sampling_mask[i, j].mean()} and {1/R_value[j]}'
-        #ensure sampling mask has no nans
-        assert not torch.isnan(sampling_mask).any()
-        # Ensure sampling mask values are within [0, 1]
-        assert sampling_mask.min() >= 0 and sampling_mask.max() <= 1
-    
-        return sampling_mask.unsqueeze(2)
-
-    def get_probability(self, mask_center):
-        sampling_weights = self.sampling_weights
-        assert not torch.isnan(sampling_weights).any(), "sampling weights shouldn't be nan!"
-        assert sampling_weights.shape == self.image_size, "sampling weights should match the image size" 
-
-        probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in sampling_weights]
-        
-        assert all((probs.min() >= 0 for probs in probability)), f'Probability should be greater than 1 but found {[prob.min() for prob in probability]}'
-        assert all((probs.max() <= 1 for probs in probability)), f'Probability should be less than 1 but found {[prob.max() for prob in probability]}'
-
-        R_value = self.norm_R(self.learned_R_value)
-        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
-        norm_probability = torch.stack(norm_probability, dim=0)
-        return R_value,norm_probability
         
 
     def configure_optimizers(self):
@@ -495,22 +325,6 @@ class LearnedSSLLightning(plReconModel):
 
         self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
-    
-    def kMaxSampling(self, input, slope) -> torch.Tensor:
-        return KMaxSoftmaxFunction.apply(input, slope) # type: ignore
-
-    def split_into_lambda_loss_sets(self, omega_mask, batch_size): 
-        lambda_mask = self.get_mask(batch_size, mask_center=True)
-        return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
-    
-    def pass_through_model(self, undersampled, mask, fully_sampled):
-        zero_pad_mask = fully_sampled != 0
-        estimate = self.recon_model(undersampled*mask, mask)
-        estimate = self.final_dc_step(undersampled, estimate, mask)
-        return estimate * zero_pad_mask
-
-    def final_dc_step(self, undersampled, estimated, mask):
-        return estimated * (1 - mask) + undersampled * mask
 
 
     def _setup_image_space_loss(self, image_loss_function):
@@ -531,29 +345,6 @@ class LearnedSSLLightning(plReconModel):
             )
             self.image_loss_func = image_loss
 
-            
-    def _setup_sampling_weights(self, image_size, center_region, warm_start, learn_sampling):
-        if warm_start: 
-            init_prob = gen_pdf_bern(image_size[1], image_size[2], 1/self.original_R, 8, center_region).astype(np.float32)
-            init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (image_size[0], 1, 1)))
-            init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
-        else:
-            init_prob = torch.zeros(image_size) + 0.5
-            
-        if self.warmup_training: 
-            learn_sampling = False
-
-        self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / self.sigmoid_slope_1, requires_grad=learn_sampling)
-
-    def _setup_R_values(self, image_size, original_R, isLearn_R):
-        self.original_R = original_R
-        self.learn_R = isLearn_R
-        self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
-        if self.learn_R: 
-            self.learned_R_value = nn.Parameter(torch.full((image_size[0],), float(self.original_R - 1)))
-        else: 
-            self.learned_R_value = torch.full((image_size[0],), float(self.original_R))
-
 
     def calculate_image_space_loss(self, image1, image2):
         b, c, h, w = image1.shape
@@ -570,33 +361,19 @@ class LearnedSSLLightning(plReconModel):
             
             # calculate loss
 
-        loss_inverse = self.k_space_loss(
-                    torch.view_as_real(undersampled*mask_lambda_wo_acs), 
-                    torch.view_as_real(estimate_inverse*mask_lambda_wo_acs),
-                    )
+        loss_inverse = self.calculate_k_loss(undersampled, mask_lambda_wo_acs, estimate_inverse)
 
-        loss_inverse = loss_inverse * (1 - self.lambda_scaling)
+        loss_inverse = loss_inverse * (1 - self.lambda_loss_scaling)
         return estimate_inverse,loss_inverse
 
-    def _create_inverted_masks(self, lambda_set, inverse_set):
-        _, _, _, h, w = lambda_set.shape
-        mask_inverse_w_acs = inverse_set.clone()
-        mask_lambda_wo_acs = lambda_set.clone()
-        mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
-        mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
-        return mask_inverse_w_acs,mask_lambda_wo_acs
+    def calculate_k_loss(self, estimate, undersampled, loss_mask):
+        loss_inverse = self.k_space_loss(
+                    torch.view_as_real(estimate * loss_mask), 
+                    torch.view_as_real(undersampled * loss_mask),
+                    )
+                    
+        return loss_inverse
 
-    def pass_through_lambda_path(self, undersampled, fs_k_space, lambda_set, inverse_set):
-        estimate_lambda = self.pass_through_model(undersampled, lambda_set, fs_k_space)
-
-        loss = self.k_space_loss(
-                torch.view_as_real(undersampled*inverse_set), 
-                torch.view_as_real(estimate_lambda*inverse_set),
-                ) 
-        loss *= self.lambda_scaling
-
-        lambda_image = root_sum_of_squares(ifft_2d_img(estimate_lambda), coil_dim=2)
-        return loss, lambda_image
 
     def _setup_k_space_loss(self, k_space_loss_function):
         if k_space_loss_function == 'l1l2':
@@ -607,3 +384,6 @@ class LearnedSSLLightning(plReconModel):
             self.k_space_loss = torch.nn.MSELoss()
         else:
             raise ValueError('No k-space loss!')
+
+    def get_masks_from_dataset(self, batch):
+        return batch['mask'], batch['loss_mask']

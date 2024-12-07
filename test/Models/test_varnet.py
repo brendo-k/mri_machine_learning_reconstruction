@@ -2,13 +2,13 @@ import torch
 import pytest
 from functools import partial
 
-from ml_recon.models.varnet_mc import VarNet_mc, VarnetBlock
-from ml_recon.models.unet import Unet
+from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetBlock, VarnetConfig
+from ml_recon.models import Unet
 
 
 @pytest.fixture
-def varnet_model() -> VarNet_mc:
-    return VarNet_mc(partial(Unet, 4, 4), contrasts=2)
+def varnet_model() -> MultiContrastVarNet:
+    return MultiContrastVarNet(VarnetConfig(contrast_order=['t1']))
 
 @pytest.fixture
 def unet_model() -> Unet:
@@ -17,8 +17,8 @@ def unet_model() -> Unet:
 @torch.no_grad()
 def test_varnet_forward(varnet_model):
     with torch.no_grad():
-        reference_k = torch.randn(1, 2, 10, 256, 256, dtype=torch.complex64)  # Example reference k-space input
-        mask = torch.rand(1, 2, 10, 256, 256) > 0.5 # Example mask input
+        reference_k = torch.randn(1, 1, 10, 256, 256, dtype=torch.complex64)  # Example reference k-space input
+        mask = torch.rand(1, 1, 10, 256, 256) > 0.5 # Example mask input
 
         output_k = varnet_model.forward(reference_k, mask)
 
@@ -39,9 +39,9 @@ def test_varnet_block_forward(unet_model):
 
 def test_varnet_backwards(varnet_model):
     # PREPARE
-    reference_k = torch.randn(1, 2, 4, 256, 256, dtype=torch.complex64)  # Example reference k-space input
-    mask = torch.ones(1, 2, 4, 256, 256, dtype=torch.bool)  # Example mask input
-    label = torch.rand(1, 2, 4, 256, 256, 2)
+    reference_k = torch.randn(1, 1, 4, 256, 256, dtype=torch.complex64)  # Example reference k-space input
+    mask = torch.ones(1, 1, 4, 256, 256, dtype=torch.bool)  # Example mask input
+    label = torch.rand(1, 1, 4, 256, 256, 2)
 
     # ARANGE
     output_k = varnet_model.forward(reference_k, mask)
@@ -71,21 +71,7 @@ def test_norm(unet_model):
     torch.testing.assert_close(x, x_through)
 
 
-def test_varnet_weight_sharing():
-    """Test weight sharing functionality"""
-    shared_backbone = Unet(in_chan=6, out_chan=6, chans=8)
-    
-    model = VarNet_mc(
-        model_backbone=shared_backbone,
-        contrasts=3,
-        num_cascades=4,
-        weight_sharing=True
-    )
-    
-    # Check that all cascades use the same backbone
-    first_backbone = model.cascades[0].model
-    for cascade in model.cascades[1:]:
-        assert cascade.model is first_backbone
+
 
 @torch.no_grad()
 @pytest.mark.parametrize("batch_size", [1, 2])
@@ -95,12 +81,9 @@ def test_varnet_different_sizes(batch_size, contrasts, height):
     """Test VarNet_mc with different input sizes"""
     channels = 4
     width = height
-    
-    model = VarNet_mc(
-        contrasts=contrasts,
-        num_cascades=2,
-        sens_chans=4,
-        chans=8
+    contrast_order = ['t1' for _ in range(contrasts)]
+    model = MultiContrastVarNet(
+        VarnetConfig(contrast_order=contrast_order)
     )
     
     k_space = torch.complex(
@@ -117,17 +100,17 @@ def test_varnet_different_sizes(batch_size, contrasts, height):
     
 def test_lambda_reg_gradient():
     """Test that lambda_reg parameters are properly updated during training"""
-    model = VarNet_mc(contrasts=2, num_cascades=3)
+    model = MultiContrastVarNet(VarnetConfig(['t1']))
     
     # Store initial lambda_reg values
     initial_lambda = model.lambda_reg.clone()
     
     # Create sample data
     k_space = torch.complex(
-        torch.randn(2, 2, 4, 32, 32),
-        torch.randn(2, 2, 4, 32, 32)
+        torch.randn(2, 1, 4, 32, 32),
+        torch.randn(2, 1, 4, 32, 32)
     )
-    mask = torch.ones(2, 2, 4, 32, 32)
+    mask = torch.ones(2, 1, 4, 32, 32)
     
     # Forward pass and backward pass with dummy loss
     output = model(k_space, mask)

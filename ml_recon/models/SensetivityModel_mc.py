@@ -16,8 +16,8 @@ class SensetivityModel_mc(nn.Module):
             in_chans: int, 
             out_chans: int, 
             chans: int, 
-            mask_center: bool = True, 
-            batch_contrasts: bool = False,
+            contrasts: int ,
+            sensetivity_estimation: str = 'first'
             ):
 
         """Module used to estimate sensetivity maps based on masked center k-space
@@ -30,27 +30,32 @@ class SensetivityModel_mc(nn.Module):
             batch_contrasts (bool, optional): Batch contrasts or pass along channel dimension. Defaults to False.
         """
         super().__init__()
-        self.batch_contrasts = batch_contrasts
+        self.sensetivty_estimation = sensetivity_estimation
+        valid_options = {'independent', 'joint', 'first'}
+        assert self.sensetivty_estimation in valid_options
+
+
+        if sensetivity_estimation == 'joint':
+            in_chans *= contrasts
         self.model = Unet(in_chans, out_chans, chans=chans)
-        self.mask_center = mask_center
 
     # recieve coil maps as [B, contrast, channels, H, W]
     def forward(self, images, mask):
-        assert not torch.isnan(images).any()
-        if self.mask_center:
-            images = self.mask(images, mask) 
-        assert not torch.isnan(images).any()
+        # mask k-space to only include center
+        images = self.mask_center(images, mask) 
+
         # get the first image for estimating coil sensetivites
-        images = images[:, [0], :, :, :]
+        if self.sensetivty_estimation == 'first': 
+            images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
 
         number_of_coils = images.shape[2]
         num_contrasts = images.shape[1]
 
-        if self.batch_contrasts:
+        if self.sensetivty_estimation == 'joint':
             images = einops.rearrange(images, 'b contrast c h w -> (b c) contrast h w')
-        else:
+        elif self.sensetivty_estimation == 'first' or self.sensetivty_estimation == 'independent':
             images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
         assert isinstance(images, torch.Tensor)
 
@@ -67,9 +72,9 @@ class SensetivityModel_mc(nn.Module):
         # convert back to complex
         images = real_to_complex(images)
         # rearange back to original format
-        if self.batch_contrasts:
+        if self.sensetivty_estimation == 'joint':
             images = einops.rearrange(images, '(b c) contrast h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
-        else:
+        elif self.sensetivty_estimation == 'first' or self.sensetivty_estimation == 'independent':
             images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
         rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2) + 1e-9
@@ -77,7 +82,7 @@ class SensetivityModel_mc(nn.Module):
         images = images / rss_norm
         return images
 
-    def mask(self, coil_k_spaces, center_mask):
+    def mask_center(self, coil_k_spaces, center_mask):
         # coil_k: [b cont chan height width]
 
         center_x = center_mask.shape[-1] // 2
@@ -102,6 +107,8 @@ class SensetivityModel_mc(nn.Module):
         # force symmetric left and right acs boundries
         low_freq_x = torch.min(left, right)
         low_freq_y = torch.min(top, bottom)
+        low_freq_x[low_freq_x < 5] = 5
+        low_freq_y[low_freq_y < 5] = 5
         center_mask = torch.zeros_like(coil_k_spaces[:, :, 0, :, :], dtype=torch.bool)
         # loop through num_low freq tensor and set acs lines to true
         for i in range(low_freq_x.shape[0]):
@@ -114,7 +121,6 @@ class SensetivityModel_mc(nn.Module):
         return coil_k_spaces * center_mask.unsqueeze(2)
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # group norm
         b, c, h, w = x.shape
         x = x.view(b, 2, c // 2 * h * w)
 

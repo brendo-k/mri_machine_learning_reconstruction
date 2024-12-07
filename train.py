@@ -25,7 +25,7 @@ def main(args):
     pl.seed_everything(8)
     torch.set_float32_matmul_precision('medium')
 
-    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True)
     #unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     #file_name = 'pl_varnet-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -69,20 +69,24 @@ def main(args):
         # this needs to be done to load contrast ordering for model
         data_module.setup('train')
 
-        model_config = VarnetConfig(
-            model_name=args.model, 
+        varnet_config = VarnetConfig(
             contrast_order=data_module.contrast_order,
-            lr = args.lr, 
             cascades=args.cascades, 
             channels=args.chans,
+            split_contrast_by_phase=args.split_contrast_by_phase,
+            sensetivity_estimation=args.sense_method
+
+        )
+
+        model = pl_VarNet(
+            config=varnet_config, 
+            lr = args.lr, 
             norm_all_k=args.norm_all_k,
             image_loss_function=args.image_space_loss,
             image_loss_scaling=args.image_loss_scaling,
             k_loss_function=args.k_loss, 
-            split_contrast_by_phase=args.split_contrast_by_phase,
-
-        )
-        model = pl_VarNet(config=model_config)
+            )
+            
 
 
 
@@ -129,6 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('--k_loss', type=str, default='norml1l2')
     parser.add_argument('--image_loss_scaling', type=float, default=0)
     parser.add_argument('--split_contrast_by_phase', action='store_true')
+    parser.add_argument('--sense_method', type=str, default='first')
 
     # loggin arguments
     parser.add_argument('--run_name', type=str)

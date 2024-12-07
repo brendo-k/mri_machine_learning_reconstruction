@@ -74,20 +74,18 @@ def process_file(file, out_path, seed, noise, center_size):
 
 
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/'
+    dir = '/home/brenden/Documents/data/subset'
+    save_dir = '/home/brenden/Documents/data/subset_sim'
     dataset_splits = ['train', 'test', 'val']
 
-    save_dir = sys.argv[1]
     noise = float(sys.argv[2])
     SAME_PHASE = bool(sys.argv[3])
     center_size = int(sys.argv[4])
 
     # Create a pool of worker processes
-    num_processes = int(os.getenv('SLURM_CPUS_PER_TASK'))  # Adjust as needed
     #num_processes = 1
-    print(num_processes)
-    pool = multiprocessing.Pool(processes=num_processes)
+    #print(num_processes)
+    #pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
@@ -106,11 +104,19 @@ if __name__ == '__main__':
         #ax[0, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 2, :, :, :]), 128)), coil_dim = 0))
         #ax[1, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 3, :, :, :]), 128)), coil_dim = 0))
         #plt.show()
-        pool.starmap(process_file, 
-                     zip(
-                         files.__iter__(), 
-                         repeat(os.path.join(save_dir, split)),
-                         seeds,
-                         repeat(noise),
-                         repeat(center_size))
-                     )
+        for file, seed in zip(files, seeds):
+            process_file(
+                file, 
+                os.path.join(save_dir, split),
+                seed, 
+                noise, 
+                center_size
+            )
+        #pool.starmap(process_file, 
+        #             zip(
+        #                 files.__iter__(), 
+        #                 repeat(os.path.join(save_dir, split)),
+        #                 seeds,
+        #                 repeat(noise),
+        #                 repeat(center_size))
+        #             )

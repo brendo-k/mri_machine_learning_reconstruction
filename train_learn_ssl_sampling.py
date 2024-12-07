@@ -3,6 +3,7 @@ import torch
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
 
 import pytorch_lightning as pl
@@ -49,6 +50,16 @@ def main(args):
             ) 
 
     data_module.setup('train')
+
+    
+    varnet_config = VarnetConfig(
+        contrast_order=data_module.contrast_order,
+        cascades=args.cascades, 
+        channels=args.chans,
+        split_contrast_by_phase=args.split_contrast_by_phase,
+        sensetivity_estimation=args.sense_method
+
+    )
     
 
     model = LearnedSSLLightning(
@@ -66,11 +77,9 @@ def main(args):
             lambda_scaling=args.lambda_scaling,
             pass_all_data=args.pass_all_data,
             pass_inverse_data=args.pass_inverse_data,
-            supervised=args.supervised,
-            channels=args.chans,
-            learn_sampling=args.learn_sampling,
+            is_supervised_training=args.supervised,
+            is_learn_partitioning=args.learn_sampling,
             image_loss_function=args.image_loss,
-            cascades=args.cascades, 
             warmup_training=args.warmup_training,
             k_space_loss_function=args.k_loss
             )

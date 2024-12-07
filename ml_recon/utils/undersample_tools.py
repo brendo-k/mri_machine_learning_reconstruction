@@ -17,9 +17,9 @@ def calc_k(lambda_probability, omega_probability):
     return K
     
 def apply_undersampling_from_dist(
-        index: int, 
-        prob_map: NDArray[np.float_], 
-        k_space: NDArray[np.complex_], 
+        index: int,  # index is neeed here to have determenistic (seed for rng)
+        prob_map, 
+        k_space, 
         line_constrained: bool, 
         deterministic: bool
 ) -> Tuple[NDArray[np.complex_], NDArray[np.bool_]]:
@@ -271,7 +271,6 @@ def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
 
     ncol, nrow = input_mask.shape
     
-
     center_kx = nrow//2
     center_ky = ncol//2
 

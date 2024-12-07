@@ -74,9 +74,9 @@ def main(args):
             inital_R=args.R_hat, 
             contrast_order=data_module.contrast_order,
             lr = args.lr,
-            supervised=False,
+            is_supervised_training=False,
             channels=args.chans,
-            learn_sampling=False,
+            is_learn_partitioning=False,
             cascades=args.cascades, 
             )
 
