@@ -34,13 +34,8 @@ class UndersampledDataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
         
-        dataset_name = str.lower(dataset_name)
-        if dataset_name == 'brats': 
-            self.dataset_class = BratsDataset
-        elif dataset_name == 'fastmri':
-            self.dataset_class = FastMRIDataset
-        elif dataset_name == 'm4raw':
-            self.dataset_class = M4Raw
+        self._setup_dataset_class(dataset_name.lower())
+        self._setup_norm_method(norm_method)
 
         self.data_dir = data_dir
         self.contrasts = contrasts
@@ -54,16 +49,31 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.pi_sampling = pi_sampling
         self.ssdu_partioning = ssdu_partioning
         
+
+    def _setup_norm_method(self, norm_method):
         if norm_method == 'img':
-            self.transforms = Compose([normalize_image_max()])
+            self.transforms = normalize_image_max()
         elif norm_method == 'k': 
-            self.transforms = Compose([normalize_k_max()]) 
+            self.transforms = normalize_k_max()
         elif norm_method == 'image_mean':
-            self.transforms = Compose([normalize_image_mean()]) 
+            self.transforms = normalize_image_mean()
         elif norm_method == 'image_mean2':
-            self.transforms = Compose([normalize_image_mean2()]) 
+            self.transforms = normalize_image_mean2()
+
+    def _setup_dataset_class(self, dataset_name):
+        if dataset_name == 'brats': 
+            self.dataset_class = BratsDataset
+        elif dataset_name == 'fastmri':
+            self.dataset_class = FastMRIDataset
+        elif dataset_name == 'm4raw':
+            self.dataset_class = M4Raw
 
     def setup(self, stage):
+        """Setup function that is run before training and testing
+
+        Args:
+            stage (str): name of the stage ie. train, test, val
+        """
         super().setup(stage)
         data_dir = os.listdir(self.data_dir)
 
@@ -126,6 +136,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.contrast_order = self.train_dataset.contrast_order
     
+    # dataloaders
     def train_dataloader(self):
         return DataLoader(
                 self.train_dataset, 
@@ -151,7 +162,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 pin_memory=True
                 )
 
-
+# normalization transforms
 class normalize_image_max(object):
     def __call__(self, data: dict):
         input = data['input']
