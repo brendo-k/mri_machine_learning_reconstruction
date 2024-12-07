@@ -50,24 +50,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.ssdu_partioning = ssdu_partioning
         
 
-    def _setup_norm_method(self, norm_method):
-        if norm_method == 'img':
-            self.transforms = normalize_image_max()
-        elif norm_method == 'k': 
-            self.transforms = normalize_k_max()
-        elif norm_method == 'image_mean':
-            self.transforms = normalize_image_mean()
-        elif norm_method == 'image_mean2':
-            self.transforms = normalize_image_mean2()
-
-    def _setup_dataset_class(self, dataset_name):
-        if dataset_name == 'brats': 
-            self.dataset_class = BratsDataset
-        elif dataset_name == 'fastmri':
-            self.dataset_class = FastMRIDataset
-        elif dataset_name == 'm4raw':
-            self.dataset_class = M4Raw
-
     def setup(self, stage):
         """Setup function that is run before training and testing
 
@@ -161,6 +143,24 @@ class UndersampledDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
+    def _setup_norm_method(self, norm_method):
+        if norm_method == 'img':
+            self.transforms = normalize_image_max()
+        elif norm_method == 'k': 
+            self.transforms = normalize_k_max()
+        elif norm_method == 'image_mean':
+            self.transforms = normalize_image_mean()
+        elif norm_method == 'image_mean2':
+            self.transforms = normalize_image_mean2()
+
+    def _setup_dataset_class(self, dataset_name):
+        if dataset_name == 'brats': 
+            self.dataset_class = BratsDataset
+        elif dataset_name == 'fastmri':
+            self.dataset_class = FastMRIDataset
+        elif dataset_name == 'm4raw':
+            self.dataset_class = M4Raw
+
 
 # normalization transforms
 class normalize_image_max(object):

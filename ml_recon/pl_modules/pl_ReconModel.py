@@ -39,11 +39,8 @@ class plReconModel(pl.LightningModule):
         average_ssim = 0
         average_psnr = 0
         average_nmse = 0
-        for contrast_index in range(len(self.contrast_order)):
-            nmse_contrast = 0
-            ssim_contrast = 0 
-            psnr_contrast = 0
-            for i in range(ground_truth_image.shape[0]):
+        for i in range(ground_truth_image.shape[0]):
+            for contrast_index in range(len(self.contrast_order)):
                 contrast_ground_truth = ground_truth_image[i, contrast_index, :, :]
                 contrast_estimated = estimated_image[i, contrast_index, :, :]
                 contrast_ground_truth = contrast_ground_truth[None, None, :, :]
@@ -64,18 +61,18 @@ class plReconModel(pl.LightningModule):
                                                         
                 ssim_contrast = ssim_image[image_background_mask[i, contrast_index].unsqueeze(0).unsqueeze(0)].mean()
 
-            self.log(f"metrics/nmse_" + self.contrast_order[contrast_index], nmse_contrast, sync_dist=True, on_step=True)
-            self.log(f"metrics/ssim_torch_" + self.contrast_order[contrast_index], ssim_contrast, sync_dist=True, on_step=True)
-            self.log(f"metrics/psnr_" + self.contrast_order[contrast_index], psnr_contrast, sync_dist=True, on_step=True)
+                self.log(f"metrics/nmse_" + self.contrast_order[contrast_index], nmse_contrast, sync_dist=True, on_step=True)
+                self.log(f"metrics/ssim_torch_" + self.contrast_order[contrast_index], ssim_contrast, sync_dist=True, on_step=True)
+                self.log(f"metrics/psnr_" + self.contrast_order[contrast_index], psnr_contrast, sync_dist=True, on_step=True)
 
-            average_ssim += ssim_contrast
-            average_psnr += psnr_contrast
-            average_nmse += nmse_contrast
+                average_ssim += ssim_contrast
+                average_psnr += psnr_contrast
+                average_nmse += nmse_contrast
 
 
-        average_nmse /= len(self.contrast_order)        
-        average_nmse /= len(self.contrast_order)
-        average_nmse /= len(self.contrast_order)
+        average_nmse /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
+        average_psnr /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
+        average_ssim /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
         self.log(f'metrics/mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
         self.log(f'metrics/mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
         self.log(f'metrics/mean_nmse', average_nmse, on_epoch=True, sync_dist=True)
@@ -103,15 +100,15 @@ class plReconModel(pl.LightningModule):
         ground_truth_image *= image_background_mask
 
         
-        estimated_image = estimated_image[0]
+        estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]
-        difference_image = difference_image[0]
+        difference_image = (difference_image[0]*8).clamp(0, 1)
         image_background_mask = image_background_mask[0]
         wandb_logger = self.logger
         if isinstance(wandb_logger, WandbLogger):
             wandb_logger.log_image(f'test/recon', self.convert_image_for_plotting(estimated_image))
             wandb_logger.log_image(f'test/target', self.convert_image_for_plotting(ground_truth_image))
-            wandb_logger.log_image(f'test/diff', self.convert_image_for_plotting((difference_image*8)))
+            wandb_logger.log_image(f'test/diff', self.convert_image_for_plotting((difference_image)))
             wandb_logger.log_image(f'test/test_mask', self.convert_image_for_plotting(image_background_mask))
 
 

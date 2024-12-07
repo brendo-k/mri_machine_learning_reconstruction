@@ -115,7 +115,8 @@ class pl_VarNet(plReconModel):
 
         ssim = self.calculate_ssim(batch['fs_k_space'], prediction)
 
-        self.log('val/ssim', ssim, on_epoch=True, logger=True, sync_dist=True)
+        for contrast, ssim_contrast in zip(self.contrast_order, ssim):
+            self.log(f'val/ssim_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
         if self.current_epoch % 10 == 0 and batch_idx == 0: 
@@ -269,8 +270,9 @@ class pl_VarNet(plReconModel):
         est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
         targ_img = root_sum_of_squares(ifft_2d_img(fully_sampled_k, axes=[-1, -2]), coil_dim=1)
 
-        ssim = 0
+        ssim_values = []
         for contrast in range(est_img.shape[1]):
+            ssim = 0
             for i in range(est_img.shape[0]):
                 image_max = targ_img[i, contrast, ...].max().item()
                 ssim_val = ssim_func(
@@ -280,5 +282,7 @@ class pl_VarNet(plReconModel):
                     )
                 assert isinstance(ssim_val, torch.Tensor)
                 ssim += ssim_val
-        ssim /= (est_img.shape[1] * est_img.shape[0])
-        return ssim
+            ssim /= est_img.shape[0]
+            ssim_values.append(ssim)
+
+        return ssim_values
