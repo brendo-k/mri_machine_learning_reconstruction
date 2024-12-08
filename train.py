@@ -88,9 +88,6 @@ def main(args):
             )
             
 
-
-
-
     print(data_module.hparams)
     print(model.hparams)
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)

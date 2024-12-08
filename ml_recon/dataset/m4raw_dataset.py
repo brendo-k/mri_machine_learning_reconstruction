@@ -79,7 +79,7 @@ class M4Raw(Dataset):
             assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
                 
-
+        k_space = np.stack([self.center_k_space(contrast) for contrast in k_space], axis=0)
         return k_space 
 
     def center_k_space(self, contrast_k):

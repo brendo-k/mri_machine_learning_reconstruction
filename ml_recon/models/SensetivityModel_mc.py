@@ -40,7 +40,7 @@ class SensetivityModel_mc(nn.Module):
         self.model = Unet(in_chans, out_chans, chans=chans)
 
     # recieve coil maps as [B, contrast, channels, H, W]
-    def forward(self, images, mask):
+    def forward(self, images:torch.Tensor, mask: torch.Tensor):
         # mask k-space to only include center
         images = self.mask_center(images, mask) 
 
@@ -54,26 +54,28 @@ class SensetivityModel_mc(nn.Module):
         num_contrasts = images.shape[1]
 
         if self.sensetivty_estimation == 'joint':
-            images = einops.rearrange(images, 'b contrast c h w -> (b c) contrast h w')
+            images = images.permute(0, 2, 1, 3, 4)
+            images = einops.rearrange(images, 'b c contrast h w -> (b c) contrast h w')
         elif self.sensetivty_estimation == 'first' or self.sensetivty_estimation == 'independent':
             images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
         assert isinstance(images, torch.Tensor)
 
-        # convert to real numbers [b * contrast * coils, cmplx, h, w]
-        images = complex_to_real(images)
         # norm 
         images, mean, std = self.norm(images)
+        # convert to real numbers [b * contrast * coils, cmplx, h, w]
+        images = complex_to_real(images)
         assert not torch.isnan(images).any()
         # pass through model
         images = self.model(images)
         assert not torch.isnan(images).any()
-        # unnorm
-        images = self.unnorm(images, mean, std)
         # convert back to complex
         images = real_to_complex(images)
+        # unnorm
+        images = self.unnorm(images, mean, std)
         # rearange back to original format
         if self.sensetivty_estimation == 'joint':
-            images = einops.rearrange(images, '(b c) contrast h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
+            images = einops.rearrange(images, '(b c) contrast h w -> b c contrast h w', c=number_of_coils, contrast=num_contrasts)
+            images = images.permute(0, 2, 1, 3, 4)
         elif self.sensetivty_estimation == 'first' or self.sensetivty_estimation == 'independent':
             images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
@@ -121,13 +123,8 @@ class SensetivityModel_mc(nn.Module):
         return coil_k_spaces * center_mask.unsqueeze(2)
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        b, c, h, w = x.shape
-        x = x.view(b, 2, c // 2 * h * w)
-
-        mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1) + 1e-20
-
-        x = x.view(b, c, h, w)
+        mean = x.abs().mean(dim=(-1, -2), keepdim=True)
+        std = x.abs().std(dim=(-1, -2), keepdim=True)
 
         return (x - mean) / std, mean, std
 
