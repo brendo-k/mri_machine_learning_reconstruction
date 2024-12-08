@@ -60,8 +60,8 @@ class pl_VarNet(plReconModel):
 
         prediction = self.forward(batch)
 
-        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
-        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
+        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=2)
+        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
         
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
@@ -166,9 +166,9 @@ class pl_VarNet(plReconModel):
         if k_loss_function == 'norml1l2':
             loss_func = L1L2Loss(norm_all_k)
         elif k_loss_function == 'l1':
-            loss_func = torch.nn.L1Loss(reduce='sum')
+            loss_func = torch.nn.L1Loss(reduction='sum')
         elif k_loss_function == 'l2':
-            loss_func = torch.nn.MSELoss(reduce='sum')
+            loss_func = torch.nn.MSELoss(reduction='sum')
         else:
             print('No k-space loss!!!')
             return None

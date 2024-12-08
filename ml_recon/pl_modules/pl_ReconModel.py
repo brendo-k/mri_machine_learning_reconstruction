@@ -102,7 +102,8 @@ class plReconModel(pl.LightningModule):
         
         estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]
-        difference_image = (difference_image[0]*8).clamp(0, 1)
+        difference_image = (difference_image*4).clamp(0, 1)
+        difference_image = difference_image[0]
         image_background_mask = image_background_mask[0]
         wandb_logger = self.logger
         if isinstance(wandb_logger, WandbLogger):
