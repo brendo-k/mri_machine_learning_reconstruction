@@ -35,9 +35,7 @@ class pl_VarNet(plReconModel):
         self.save_hyperparameters()
 
         # reconstruction model
-        self.model = MultiContrastVarNet(
-            config
-        )
+        self.model = MultiContrastVarNet(config)
         
         # set learning rate
         self.lr = lr
@@ -69,6 +67,7 @@ class pl_VarNet(plReconModel):
         
         if self.k_loss_func:
             loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask']) * self.k_loss_scaling
+            loss = loss / batch['loss_mask'].sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
@@ -82,13 +81,14 @@ class pl_VarNet(plReconModel):
     def validation_step(self, batch, batch_idx):
         prediction = self.forward(batch)
 
-        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=1)
-        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=1)
+        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=2)
+        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
 
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
             loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
+            loss = loss / batch['loss_mask'].sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
@@ -166,9 +166,9 @@ class pl_VarNet(plReconModel):
         if k_loss_function == 'norml1l2':
             loss_func = L1L2Loss(norm_all_k)
         elif k_loss_function == 'l1':
-            loss_func = torch.nn.L1Loss()
+            loss_func = torch.nn.L1Loss(reduce='sum')
         elif k_loss_function == 'l2':
-            loss_func = torch.nn.MSELoss()
+            loss_func = torch.nn.MSELoss(reduce='sum')
         else:
             print('No k-space loss!!!')
             return None
