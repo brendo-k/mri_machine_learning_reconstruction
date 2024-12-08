@@ -1,7 +1,12 @@
 from argparse import ArgumentParser
 import torch
 
-from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
+from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
+    LearnedSSLLightning, 
+    VarnetConfig, 
+    LearnPartitionConfig, 
+    DualDomainConifg
+    )
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
@@ -61,28 +66,27 @@ def main(args):
 
     )
     
+    partitioning_config = LearnPartitionConfig(
+        image_size=(len(args.contrasts), args.ny, args.nx),
+        inital_R_value=2,
+        k_center_region = 10,
+        probability_sig_slope = 5.0,
+        sampling_sig_slope = 200,
+        is_learn_R = False,
+        is_warm_start = True
+    )
+
+    tripple_pathway_config = DualDomainConifg(
+        is_pass_inverse=args.pass_inverse_data,
+        is_pass_original=args.pass_all_data
+    )
 
     model = LearnedSSLLightning(
-            (len(args.contrasts), ny, nx), 
-            inital_R=args.R_hat, 
-            contrast_order=data_module.contrast_order,
-            lr = args.lr,
-            learn_R=args.learn_R,
-            warm_start=args.warm_start,
-            ssim_scaling_full=args.ssim_scaling_full,
-            sigmoid_slope2=args.sigmoid_slope2,
-            sigmoid_slope1=args.sigmoid_slope1,
-            ssim_scaling_set=args.ssim_scaling_set,
-            ssim_scaling_inverse=args.ssim_scaling_inverse,
-            lambda_scaling=args.lambda_scaling,
-            pass_all_data=args.pass_all_data,
-            pass_inverse_data=args.pass_inverse_data,
-            is_supervised_training=args.supervised,
-            is_learn_partitioning=args.learn_sampling,
-            image_loss_function=args.image_loss,
-            warmup_training=args.warmup_training,
-            k_space_loss_function=args.k_loss
-            )
+        varnet_config = varnet_config, 
+        learn_partitioning_config = partitioning_config, 
+        dual_domain_config = tripple_pathway_config,
+        lr = args.lr 
+        )
     torch.set_float32_matmul_precision('medium')
 
     if args.checkpoint: 
@@ -108,9 +112,9 @@ if __name__ == '__main__':
 
     # Training parameters
     training_group = parser.add_argument_group('Training Parameters')
-    training_group.add_argument('--num_workers', type=int, default=0)
+    training_group.add_argument('--num_workers', type=int, default=3)
     training_group.add_argument('--max_epochs', type=int, default=50)
-    training_group.add_argument('--batch_size', type=int, default=16)
+    training_group.add_argument('--batch_size', type=int, default=1)
     training_group.add_argument('--lr', type=float, default=1e-3)
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", type=str, help="Path to the YAML configuration file.")
@@ -118,8 +122,9 @@ if __name__ == '__main__':
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
     dataset_group.add_argument('--R', type=float, default=6.0)
-    dataset_group.add_argument('--dataset', type=str, default='brats')
-    dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
+    dataset_group.add_argument('--dataset', type=str, default='m4raw')
+    dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
+    dataset_group.add_argument('--data_dir', type=str, default="/Users/brend/Documents/Data")
     dataset_group.add_argument('--nx', type=int, default=128)
     dataset_group.add_argument('--ny', type=int, default=128)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
@@ -130,7 +135,6 @@ if __name__ == '__main__':
     model_group.add_argument('--R_hat', type=float, default=2.0)
     model_group.add_argument('--learn_R', action='store_true')
     model_group.add_argument('--warm_start', action='store_true')
-    model_group.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_random_phase/')
     model_group.add_argument('--chans', type=int, default=32)
     model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
@@ -146,6 +150,8 @@ if __name__ == '__main__':
     model_group.add_argument('--image_loss', type=str, default='ssim')
     model_group.add_argument('--k_loss', type=str, default='l1l2')
     model_group.add_argument('--warmup_training', action='store_true')
+    model_group.add_argument('--split_contrast_by_phase', action='store_true')
+    model_group.add_argument('--sense_method', type=str, default='first')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

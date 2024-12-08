@@ -12,7 +12,8 @@ from ml_recon.utils.undersample_tools import gen_pdf_bern
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluation_functions import nmse
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.models import LearnPartitioning, MultiContrastVarNet, TriplePathway
+from ml_recon.models.LearnPartitioning import LearnPartitioning, MultiContrastVarNet, VarnetConfig, LearnPartitionConfig
+from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 from ml_recon.utils.undersample_tools import ssdu_gaussian_selection, scale_pdf, apply_undersampling_from_dist
@@ -20,9 +21,9 @@ from ml_recon.utils.undersample_tools import ssdu_gaussian_selection, scale_pdf,
 class LearnedSSLLightning(plReconModel):
     def __init__(
             self, 
-            learn_partitioning_config: LearnPartitioning.LearnPartitionConfig,
-            varnet_config: MultiContrastVarNet.VarnetConfig,
-            dual_domain_config: TriplePathway.DualDomainConifg,
+            learn_partitioning_config: LearnPartitionConfig,
+            varnet_config: VarnetConfig,
+            dual_domain_config: DualDomainConifg,
             lr: float = 1e-3,
             ssim_scaling_set: float = 1e-4,
             ssim_scaling_full: float = 1e-4,
@@ -32,15 +33,15 @@ class LearnedSSLLightning(plReconModel):
             k_space_loss_function: str = 'l1l2',
             is_supervised_training: bool = False,
             is_learn_partitioning: bool = True,  
-            warmup_training: bool = False
+            warmup_training: bool = False,
             ):
         super().__init__(contrast_order=varnet_config.contrast_order)
         self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
 
-        if is_learn_partitioning == 'learn':
-            self.partition_model = LearnPartitioning.LearnPartitioning(learn_partitioning_config)
+        if is_learn_partitioning:
+            self.partition_model = LearnPartitioning(learn_partitioning_config)
 
-        self.recon_model = TriplePathway.TriplePathway(dual_domain_config, varnet_config)
+        self.recon_model = TriplePathway(dual_domain_config, varnet_config)
 
         self.lr = lr
         self.image_scaling_lam_inv = ssim_scaling_set
@@ -49,6 +50,7 @@ class LearnedSSLLightning(plReconModel):
         self.lambda_loss_scaling = lambda_scaling
         self.is_supervised_training = is_supervised_training
         self.is_training_warmup = warmup_training
+        self.is_learn_partitioning = is_learn_partitioning
 
         # loss function init
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
@@ -97,14 +99,7 @@ class LearnedSSLLightning(plReconModel):
         
         inverse_images = None 
         if inverse_k is not None:
-            lambda_k_wo_acs, inverse_k_wo_acs = TriplePathway.TriplePathway.create_inverted_masks(input_mask, loss_mask)
-            inverse_images = root_sum_of_squares(ifft_2d_img(inverse_k), coil_dim=2) 
-            inverse_images /= image_scaling_factor
-
-            k_loss_inverse = self.calculate_k_loss(inverse_k, zero_filled_k, lambda_k_wo_acs)
-            k_loss_inverse *= 1 - self.lambda_loss_scaling
-            image_loss_inverse_lambda = self.calculate_image_space_loss(lambda_images, inverse_images)
-            image_loss_inverse_lambda *= self.image_scaling_lam_inv
+            image_loss_inverse_lambda, k_loss_inverse, inverse_images = self.calculate_inverse_loss(input_mask, loss_mask, inverse_k, zero_filled_k, image_scaling_factor, lambda_images)
 
         if (inverse_images is not None) and (full_images is not None):
             image_loss_inverse_full = self.calculate_image_space_loss(full_images, inverse_images)
@@ -121,7 +116,6 @@ class LearnedSSLLightning(plReconModel):
         self.log("train/loss_lambda", k_loss_lambda, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/loss_inverse", k_loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
 
-        
         # R-value
         R_value = self.partition_model.get_R()
         for i, contrast in enumerate(self.contrast_order):
@@ -155,12 +149,23 @@ class LearnedSSLLightning(plReconModel):
                 wandb_logger.log_image('train/probability', probability)
 
         return loss
+
+    def calculate_inverse_loss(self, input_mask, loss_mask, inverse_k, zero_filled_k, image_scaling_factor, lambda_images):
+        lambda_k_wo_acs, inverse_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask)
+        inverse_images = root_sum_of_squares(ifft_2d_img(inverse_k), coil_dim=2) 
+        inverse_images /= image_scaling_factor
+
+        k_loss_inverse = self.calculate_k_loss(inverse_k, zero_filled_k, lambda_k_wo_acs)
+        k_loss_inverse *= 1 - self.lambda_loss_scaling
+        image_loss_inverse_lambda = self.calculate_image_space_loss(lambda_images, inverse_images)
+        image_loss_inverse_lambda *= self.image_scaling_lam_inv
+        return image_loss_inverse_lambda,k_loss_inverse,inverse_images
     
     def partition_k_space(self, batch):
         undersampled = batch['input']
         initial_mask = batch['mask'].to(torch.float32)
 
-        if self.is_learned_partitioning: 
+        if self.is_learn_partitioning: 
             input_mask, loss_mask = self.partition_model(undersampled, initial_mask)
         else: 
             input_mask, loss_mask = self.get_masks_from_dataset(batch)
@@ -178,25 +183,23 @@ class LearnedSSLLightning(plReconModel):
         initial_mask = batch['mask'].to(torch.float32)
 
         nbatch, contrast, coil, h, w = under.shape
+
+        lambda_set, loss_set = self.partition_k_space(batch)
+        estimates = self.recon_model.forward(under, fs_k_space, lambda_set, loss_set)
+
+        estimate_inverse = estimates['inverse_path']
+        estimate_lambda = estimates['lambda_path']
+        estimate_full = estimates['full_path']
+
+        mask_lambda_wo_acs, _ =TriplePathway.create_inverted_masks(lambda_set, loss_set)
         
-        mask_lambda, mask_inverse = self.split_into_lambda_loss_sets(initial_mask, nbatch)
-
-        mask_inverse_w_acs = mask_inverse.clone()
-        mask_lambda_wo_acs = mask_lambda.clone()
-        mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
-        mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
-
-        estimate_lambda = self.pass_through_model(under, mask_lambda, fs_k_space)
-        estimate_inverse = self.pass_through_model(under, mask_inverse_w_acs, fs_k_space)
-        estimate_full = self.pass_through_model(under, initial_mask, fs_k_space)
-
+        loss_lambda = self.k_space_loss(
+                torch.view_as_real(under * lambda_set),
+                torch.view_as_real(estimate_lambda * loss_set),
+                ) 
         loss_inverse = self.k_space_loss(
                 torch.view_as_real(under * mask_lambda_wo_acs),
                 torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), 
-                ) 
-        loss_lambda = self.k_space_loss(
-                torch.view_as_real(under * mask_inverse),
-                torch.view_as_real(estimate_lambda*mask_inverse),
                 ) 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)

@@ -15,7 +15,6 @@ class LearnPartitionConfig:
     image_size: Tuple[int, int, int]
     inital_R_value: float
     k_center_region: int = 10
-    is_line_constrained: bool = False
     probability_sig_slope: float = 5.0
     sampling_sig_slope: float = 200
     is_learn_R: bool = False
@@ -101,7 +100,7 @@ class LearnPartitioning(nn.Module):
 
         # testing function to ensure probabilities are close to the set R value
         for probs, R in zip(probability, cur_R):
-            assert torch.isclose(probs.mean(), 1/R, atol=0.01, rtol=0) 
+            assert probs.mean().item() - 1/R < 1e-3
              
         return probability
     
