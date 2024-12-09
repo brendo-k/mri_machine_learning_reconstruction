@@ -23,12 +23,10 @@ class UndersampledDataModule(pl.LightningDataModule):
             R_hat: float = 2.0,
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),
-            line_constrained: bool = False,
             num_workers: int = 0,
             norm_method: str = 'k',
-            supervised_dataset: bool = False,
-            pi_sampling: bool = True, 
             ssdu_partioning: bool = False,
+            sampling_method: str = '2d'
             ):
 
         super().__init__()
@@ -42,11 +40,9 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.resolution = resolution
-        self.line_constrained = line_constrained
         self.R = R
         self.R_hat = R_hat
-        self.supervised_dataset = supervised_dataset
-        self.pi_sampling = pi_sampling
+        self.sampling_method = sampling_method
         self.ssdu_partioning = ssdu_partioning
         
 
@@ -70,16 +66,15 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_keyword_args = {
             'nx': self.resolution[0], 
             'ny': self.resolution[1],
-            'contrasts': self.contrasts
+            'contrasts': self.contrasts, 
         }
 
         undersample_keywords = {
                 'R': self.R,
                 'R_hat': self.R_hat,
-                'line_constrained': self.line_constrained,
                 'transforms': self.transforms,
-                'is_variable_density': (not self.pi_sampling),
-                'acs_lines': 10
+                'acs_lines': 10,
+                'initial_sampling_method': self.sampling_method
         }
 
         self.train_dataset = self.dataset_class(
@@ -99,20 +94,17 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                self_supervised=(not self.supervised_dataset),
-                original_ssdu_partioning=self.ssdu_partioning,
+                is_ssdu_partitioning=self.ssdu_partioning,
                 **undersample_keywords
                 )
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
-                self_supervised=False,
                 **undersample_keywords
                 )
         
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
-                self_supervised=False,
                 **undersample_keywords
                 )
 
@@ -169,8 +161,6 @@ class normalize_image_max(object):
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        data['input'] /= scaling_factor
-        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -179,8 +169,6 @@ class normalize_k_max(object):
         fs_k_space = data['fs_k_space']
         scaling_factor = fs_k_space.abs().amax((1, 2, 3), keepdim=True)
         
-        data['input'] /= scaling_factor
-        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -190,8 +178,6 @@ class normalize_image_mean(object):
         fs_k_space = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = fs_k_space.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data['input'] /= scaling_factor
-        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -201,8 +187,6 @@ class normalize_image_mean2(object):
         image = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=1)
         scaling_factor = 2*image.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data['input'] /= scaling_factor
-        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 

@@ -60,11 +60,8 @@ def main(args):
                 norm_method=args.norm_method,
                 R=args.R,
                 R_hat=args.R_hat,
-                line_constrained=args.line_constrained,
-                supervised_dataset=args.supervised,
-                pi_sampling=args.pi_sampling, 
                 contrasts=args.contrasts, 
-                ssdu_partioning=args.ssdu_partioning, 
+                sampling_method=args.sampling_method
                 ) 
         # this needs to be done to load contrast ordering for model
         data_module.setup('train')
@@ -85,6 +82,7 @@ def main(args):
             image_loss_function=args.image_space_loss,
             image_loss_scaling=args.image_loss_scaling,
             k_loss_function=args.k_loss, 
+            is_supervised=args.supervised
             )
             
 
@@ -118,8 +116,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='/home/brenden/Documents/data/simulated_subset_random_phase')
     parser.add_argument('--dataset', type=str, default='brats')
     parser.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 't1ce', 'flair'])
-    parser.add_argument('--ssdu_partioning', action='store_true')
-    parser.add_argument('--line_constrained', action='store_true')
+    parser.add_argument('--sampling_method', type=str, default='2d')
+
 
     # model arguments
     parser.add_argument('--chans', type=int, default=32)

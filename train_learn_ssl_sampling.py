@@ -10,6 +10,8 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
+from pytorch_lightning.profilers import PyTorchProfiler
+from torch.profiler import ProfilerActivity, schedule
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -17,8 +19,8 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-        
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -28,12 +30,26 @@ def main(args):
     #    monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
     #    mode='min',  # Save the model with the minimum val_loss
     #)
+    prof_scheduler = schedule(
+        warmup=2,
+        active=5, 
+        skip_first=0,
+        wait=0,
+    )
+    pytorch_profiler = PyTorchProfiler(
+        activities=activities,
+        schedule=prof_scheduler,
+        export_to_chrome=True,
+        dirpath='.',
+        filename='prof'
+    )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
                          precision="bf16-mixed", 
+                         profiler = pytorch_profiler
                          )
 
 
@@ -48,9 +64,7 @@ def main(args):
             resolution=(ny, nx),
             num_workers=args.num_workers,
             contrasts=args.contrasts,
-            line_constrained=args.line_constrained,
-            pi_sampling=args.pi_sampling, 
-            supervised_dataset=True,
+            sampling_method=args.sampling_method,
             R=args.R
             ) 
 
@@ -85,7 +99,14 @@ def main(args):
         varnet_config = varnet_config, 
         learn_partitioning_config = partitioning_config, 
         dual_domain_config = tripple_pathway_config,
-        lr = args.lr 
+        lr = args.lr,
+        ssim_scaling_full=args.ssim_scaling_full,
+        ssim_scaling_set=args.ssim_scaling_set,
+        ssim_scaling_inverse=args.ssim_scaling_inverse,
+        lambda_scaling=args.lambda_scaling, 
+        image_loss_function=args.image_loss,
+        k_space_loss_function=args.k_loss,
+        is_supervised_training=args.supervised
         )
     torch.set_float32_matmul_precision('medium')
 
@@ -128,8 +149,8 @@ if __name__ == '__main__':
     dataset_group.add_argument('--nx', type=int, default=128)
     dataset_group.add_argument('--ny', type=int, default=128)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
-    dataset_group.add_argument('--line_constrained', action='store_true')
-    dataset_group.add_argument('--pi_sampling', action='store_true')
+    dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
+
 
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)

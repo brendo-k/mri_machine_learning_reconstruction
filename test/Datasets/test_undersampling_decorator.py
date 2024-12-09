@@ -63,7 +63,7 @@ def test_non_deterministic_between_lambda(get_data_dir):
 
 def test_pi_sampling(get_data_dir):
     dataset = BratsDataset(get_data_dir, nx=128, ny=128)
-    undersample_dataset = UndersampleDecorator(dataset, R=4, acs_lines=ACS_LINES, self_supervised=False, is_variable_density=False)
+    undersample_dataset = UndersampleDecorator(dataset, R=4, acs_lines=ACS_LINES, self_supervised=False, initial_sampling_method=False)
     
     data1 = undersample_dataset[0]
 

@@ -26,6 +26,7 @@ class pl_VarNet(plReconModel):
             k_loss_scaling: float = 1,
             norm_all_k: bool = False,
             lr: float = 1e-3,
+            is_supervised: bool = False
             ):
 
         self.config = config
@@ -39,6 +40,7 @@ class pl_VarNet(plReconModel):
         
         # set learning rate
         self.lr = lr
+        self.is_supervised = is_supervised
 
         # Set loss functions
         self.k_loss_func = self._set_k_loss_func(k_loss_function, norm_all_k)
@@ -57,10 +59,11 @@ class pl_VarNet(plReconModel):
         Returns:
             float: loss value
         """
+        undersampled_k, fully_sampled_k, input_mask, target_mask = self.build_masks(batch, self.is_supervised)
+        prediction = self.forward(undersampled_k, input_mask, fully_sampled_k)
+        target = fully_sampled_k * target_mask
 
-        prediction = self.forward(batch)
-
-        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=2)
+        target_img = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
         
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
@@ -77,22 +80,41 @@ class pl_VarNet(plReconModel):
 
         return loss
 
+    def build_masks(self, batch, is_supervised_masks):
+        k_space = batch['fs_k_space']
+        if is_supervised_masks:
+            input_mask = batch['inital_mask']
+            loss_mask = torch.ones_like(input_mask)
+        else:
+            input_mask = batch['inital_mask'] * batch['second_mask']
+            loss_mask = batch['inital_mask'] * (1 - batch['second_mask'])
+
+        under_k =  input_mask * k_space
+        return under_k, k_space, input_mask, loss_mask
+
 
     def validation_step(self, batch, batch_idx):
-        prediction = self.forward(batch)
+        initial_mask = batch['initial_mask']
+        k_space = batch['fs_k_space']
+        under_k = initial_mask * k_space
 
-        target_img = root_sum_of_squares(ifft_2d_img(batch['target']), coil_dim=2)
-        estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
+        prediction_full = self.forward(under_k, initial_mask, k_space)
+
+        doub_under, k_space, lambda_set, loss_set = self.build_masks(batch, True)
+        prediction_lambda = self.forward(lambda_set, lambda_set, loss_set)
+
+        target_img = root_sum_of_squares(ifft_2d_img(k_space * loss_set), coil_dim=2)
+        estimated_img = root_sum_of_squares(ifft_2d_img(prediction_lambda * loss_set), coil_dim=2)
 
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask'])
+            loss += self.k_loss_func(k_space*loss_set, prediction_lambda*loss_set)
             loss = loss / batch['loss_mask'].sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
-        ssim = self.calculate_ssim(batch['fs_k_space'], prediction)
+        ssim = self.calculate_ssim(batch['fs_k_space'], prediction_full)
 
         for contrast, ssim_contrast in zip(self.contrast_order, ssim):
             self.log(f'val/ssim_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
@@ -104,18 +126,23 @@ class pl_VarNet(plReconModel):
 
 
     def test_step(self, batch, batch_index):
-        estimated_target = self.forward(batch)
+        inital_mask = batch['inital_mask']
+        k_space = batch['fs_k_space']
+        under_k = inital_mask * k_space
+        estimated_target = self.forward(under_k, inital_mask, k_space)
         return super().test_step((estimated_target, batch['fs_k_space']), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
+        inital_mask = batch['inital_mask']
+        k_space = batch['fs_k_space']
+        under_k = inital_mask * k_space
 
-        estimate_k = self.forward(batch)
+        estimate_k = self.forward(under_k, inital_mask, k_space)
 
         return super().on_test_batch_end(outputs, (estimate_k, batch['fs_k_space']), batch_idx, dataloader_idx)
 
 
-    def forward(self, data): 
-        under_k, mask, fs_k_space = data['input'], data['mask'], data['fs_k_space']
+    def forward(self, under_k, mask, fs_k_space): 
         zero_fill_mask = fs_k_space != 0
         estimate_k = self.model(under_k, mask)
         estimate_k = estimate_k * ~mask + under_k
@@ -129,19 +156,20 @@ class pl_VarNet(plReconModel):
 
     def plot_example_images(self, batch, mode='train'):
         #pass
-        under_k = batch['input']
+        under_k = batch['fs_k_space'] * batch['initial_mask']
         with torch.no_grad():
-            estimate_k = self.forward(batch)
-            estimate_k = estimate_k * (batch['input'] == 0) + batch['input']
-            super().plot_images(under_k, estimate_k, batch['target'], batch['fs_k_space'], batch['mask'], mode) 
+            estimate_k = self.forward(under_k, batch['inital_mask'], batch['fs_k_space'])
+            estimate_k = estimate_k * (under_k == 0) + under_k
+            super().plot_images(estimate_k, batch['fs_k_space'], batch[''], mode) 
 
-            sense_maps = self.model.sens_model(under_k, batch['mask'])
+            sense_maps = self.model.sens_model(under_k, batch['initial_mask'])
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
-            masked_k = self.model.sens_model.mask_center(under_k, batch['mask'])
+            masked_k = self.model.sens_model.mask_center(under_k, batch['fs_k_space'])
             masked_k = masked_k[0, :, [0], :, :].abs()**0.2
 
-            input = batch['input'][0, :, [0], :, :].abs()**0.2
-            target = batch['target'][0, :, [0], :, :].abs()**0.2
+            under_k, k_space, input_set, loss_set = self.build_masks(batch)
+            input = under_k[0, :, [0], :, :].abs()**0.2
+            target = (under_k * loss_set)[0, :, [0], :, :].abs()**0.2
             if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger
                 wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
@@ -187,8 +215,8 @@ class pl_VarNet(plReconModel):
             torch.Tensor: float value of ssim averaged over batch and contrasts
         """
         ssim_func = structural_similarity_index_measure
-        est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=1)
-        targ_img = root_sum_of_squares(ifft_2d_img(fully_sampled_k, axes=[-1, -2]), coil_dim=1)
+        est_img = root_sum_of_squares(ifft_2d_img(estimate_target, axes=[-1, -2]), coil_dim=2)
+        targ_img = root_sum_of_squares(ifft_2d_img(fully_sampled_k, axes=[-1, -2]), coil_dim=2)
 
         ssim_values = []
         for contrast in range(est_img.shape[1]):

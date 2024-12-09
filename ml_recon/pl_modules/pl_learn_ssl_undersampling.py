@@ -59,47 +59,53 @@ class LearnedSSLLightning(plReconModel):
 
 
     def training_step(self, batch, batch_idx):
-        image_loss_full_lambda = torch.tensor([0]) 
-        image_loss_inverse_lambda = torch.tensor([0]) 
-        image_loss_inverse_full = torch.tensor([0]) 
-        k_loss_lambda = torch.tensor([0]) 
-        k_loss_inverse = torch.tensor([0])
+        image_loss_full_lambda = torch.tensor([0.0], device=self.device) 
+        image_loss_inverse_lambda = torch.tensor([0.0], device=self.device) 
+        image_loss_inverse_full = torch.tensor([0.0], device=self.device) 
+        k_loss_lambda = torch.tensor([0.0], device=self.device) 
+        k_loss_inverse = torch.tensor([0.0], device=self.device)
+        fully_sampled = batch['fs_k_space']
+        undersampled_k = fully_sampled * batch['initial_mask']
 
         input_mask, loss_mask = self.partition_k_space(batch)
-
-        if isinstance(self.logger, WandbLogger):
-            wandb_logger = self.logger
-        else:
-            wandb_logger = None
         
-        
-        estimates = self.recon_model.forward(batch['input'], batch['fs_k_space'], input_mask, loss_mask) 
+        estimates = self.recon_model.forward(
+            undersampled_k, 
+            fully_sampled, 
+            input_mask, 
+            loss_mask,
+        )
 
         lambda_k = estimates['lambda_path']
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
-        zero_filled_k = batch['input']
 
-        zero_filled_i = root_sum_of_squares(ifft_2d_img(zero_filled_k), coil_dim=2) 
+        zero_filled_i = self.k_to_img(undersampled_k)
         image_scaling_factor = zero_filled_i.amax((-1, -2), keepdim=True)
 
-        lambda_images = root_sum_of_squares(ifft_2d_img(lambda_k), coil_dim=2) 
-        lambda_images /= image_scaling_factor
+        lambda_images = self.k_to_img(lambda_k)/image_scaling_factor
 
-        k_loss_lambda = self.calculate_k_loss(lambda_k, zero_filled_k, loss_mask)
+        k_loss_lambda = self.calculate_k_loss(lambda_k, undersampled_k, loss_mask)
         k_loss_lambda *= self.lambda_loss_scaling
 
         full_images = None
         if full_k is not None:
-            full_images = root_sum_of_squares(ifft_2d_img(full_k), coil_dim=2) 
-            full_images /= image_scaling_factor
+            full_images = self.k_to_img(full_k) / image_scaling_factor
 
             image_loss_full_lambda = self.calculate_image_space_loss(full_images, lambda_images)
             image_loss_full_lambda *= self.image_scaling_lam_full
         
         inverse_images = None 
         if inverse_k is not None:
-            image_loss_inverse_lambda, k_loss_inverse, inverse_images = self.calculate_inverse_loss(input_mask, loss_mask, inverse_k, zero_filled_k, image_scaling_factor, lambda_images)
+            image_loss_inverse_lambda, k_loss_inverse, inverse_images = \
+                self.calculate_inverse_loss(
+                    input_mask, 
+                    loss_mask, 
+                    inverse_k, 
+                    undersampled_k, 
+                    image_scaling_factor, 
+                    lambda_images
+                    )
 
         if (inverse_images is not None) and (full_images is not None):
             image_loss_inverse_full = self.calculate_image_space_loss(full_images, inverse_images)
@@ -108,52 +114,70 @@ class LearnedSSLLightning(plReconModel):
 
         loss = k_loss_inverse + k_loss_lambda + image_loss_full_lambda + image_loss_inverse_full + image_loss_inverse_lambda
 
-        
-        
         self.log("train/image_loss_inverse_lambda", image_loss_inverse_lambda, on_epoch=True, on_step=False)
         self.log("train/image_loss_full_lambda", image_loss_full_lambda, on_step=True, on_epoch=True, prog_bar=True)
         self.log('train/image_loss_inverse_full', image_loss_inverse_full, on_step=False, on_epoch=True)
         self.log("train/loss_lambda", k_loss_lambda, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/loss_inverse", k_loss_inverse, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 
-        # R-value
-        R_value = self.partition_model.get_R()
-        for i, contrast in enumerate(self.contrast_order):
-            self.log(f'train/R_{contrast}', R_value[i])
+        self.log_R_value()
         
-        initial_mask = input_mask + loss_mask
-        # percentage of k-space points in lambda set vs inverse set
-        for i in range(len(self.learned_R_value)):
-            self.log(f'train/lambda-over-inverse_{self.contrast_order[i]}', 
-                     input_mask[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
-                     on_epoch=True, on_step=False)
-
-        if batch_idx == 0 and self.current_epoch % 10 == 0 and wandb_logger:
-            with torch.no_grad():
-                initial_mask = initial_mask[0, :, 0, :, :]
-                lambda_set_plot = input_mask[0, :, 0, : ,:]
-                loss_mask = loss_mask[0, :, 0, : ,:]
-                wandb_logger.log_image('train/omega_lambda', self.convert_image_to_plot(lambda_set_plot))
-                wandb_logger.log_image('train/omega_(1-lambda)', self.convert_image_to_plot(loss_mask))
-                wandb_logger.log_image('train/estimate_lambda', self.convert_image_to_plot(lambda_images[0]/lambda_images[0].max()))
-                wandb_logger.log_image('train/initial_mask', self.convert_image_to_plot(initial_mask))
-                if inverse_images is not None:
-                    wandb_logger.log_image('train/estimate_inverse', self.convert_image_to_plot(inverse_images[0]/inverse_images[0].max()))
-                if full_images is not None:
-                    wandb_logger.log_image('train/estimate_full', self.convert_image_to_plot(full_images[0]/full_images[0].max()))
-                    
-
-                probability = [torch.sigmoid(sampling_weights * self.sigmoid_slope_1) for sampling_weights in self.sampling_weights]
-                probability = self.norm_prob(probability, R_value, mask_center=True)
-
-                wandb_logger.log_image('train/probability', probability)
+        initial_mask = batch['initial_mask']
+        self.log_k_space_set_ratios(input_mask, initial_mask)
 
         return loss
+
+
+    @torch.no_grad() 
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        if not isinstance(self.logger, WandbLogger):
+            return
+
+        wandb_logger = self.logger
+        if batch_idx == 0 and self.current_epoch % 1 == 0 and wandb_logger:
+            input_mask, loss_mask = self.partition_k_space(batch)
+            fully_sampled = batch['fs_k_space']
+            initial_mask = batch['initial_mask']
+            undersampled_k = fully_sampled * initial_mask
+            estimates = self.recon_model.forward(
+                undersampled_k, 
+                fully_sampled, 
+                input_mask, 
+                loss_mask,
+                return_all=True
+            )
+            input_mask, loss_mask = self.partition_k_space(batch)
+            initial_mask = initial_mask[0, :, 0, :, :]
+            lambda_set_plot = input_mask[0, :, 0, : ,:]
+            loss_mask = loss_mask[0, :, 0, : ,:]
+            lambda_images = self.scale_image_to_0_1(self.k_to_img(estimates['lambda_path']))
+            inverse_images = self.scale_image_to_0_1(self.k_to_img(estimates['inverse_path']))
+            full_images = self.scale_image_to_0_1(self.k_to_img(estimates['full_path']))
+            wandb_logger.log_image('train/omega_lambda', self.split_along_contrasts(lambda_set_plot))
+            wandb_logger.log_image('train/omega_(1-lambda)', self.split_along_contrasts(loss_mask))
+            wandb_logger.log_image('train/estimate_lambda', self.split_along_contrasts(lambda_images[0]))
+            wandb_logger.log_image('train/initial_mask', self.split_along_contrasts(initial_mask))
+            wandb_logger.log_image('train/estimate_inverse', self.split_along_contrasts(inverse_images[0]))
+            wandb_logger.log_image('train/estimate_full', self.split_along_contrasts(full_images[0]))
+
+            probability = self.partition_model.get_probability(True)
+
+            wandb_logger.log_image('train/probability', self.split_along_contrasts(probability))
+
+
+    def k_to_img(self, k_space):
+        return root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
+
+
+    # all images are already above zero 
+    def scale_image_to_0_1(self, image):
+        return image/image.max()
 
     def calculate_inverse_loss(self, input_mask, loss_mask, inverse_k, zero_filled_k, image_scaling_factor, lambda_images):
         lambda_k_wo_acs, inverse_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask)
         inverse_images = root_sum_of_squares(ifft_2d_img(inverse_k), coil_dim=2) 
-        inverse_images /= image_scaling_factor
+        inverse_images = inverse_images / image_scaling_factor
 
         k_loss_inverse = self.calculate_k_loss(inverse_k, zero_filled_k, lambda_k_wo_acs)
         k_loss_inverse *= 1 - self.lambda_loss_scaling
@@ -162,8 +186,14 @@ class LearnedSSLLightning(plReconModel):
         return image_loss_inverse_lambda,k_loss_inverse,inverse_images
     
     def partition_k_space(self, batch):
-        undersampled = batch['input']
-        initial_mask = batch['mask'].to(torch.float32)
+        undersampled = batch['fs_k_space'] * batch['initial_mask']
+        initial_mask = batch['initial_mask'].to(torch.float32)
+
+        if self.is_supervised_training:
+            input_mask = batch['initial_mask']
+            loss_mask = torch.ones_like(input_mask)
+
+            return input_mask, loss_mask
 
         if self.is_learn_partitioning: 
             input_mask, loss_mask = self.partition_model(undersampled, initial_mask)
@@ -171,35 +201,41 @@ class LearnedSSLLightning(plReconModel):
             input_mask, loss_mask = self.get_masks_from_dataset(batch)
         return input_mask, loss_mask
 
-    def convert_image_to_plot(self, image):
+    def split_along_contrasts(self, image):
         return np.split(image.cpu().detach().numpy(), image.shape[0], 0)
 
 
 
     def validation_step(self, batch, batch_idx):
-        under = batch['input']
+        under = batch['fs_k_space'] * batch['initial_mask']
 
         fs_k_space = batch['fs_k_space']
-        initial_mask = batch['mask'].to(torch.float32)
+        initial_mask = batch['initial_mask'].to(torch.float32)
 
         nbatch, contrast, coil, h, w = under.shape
 
         lambda_set, loss_set = self.partition_k_space(batch)
-        estimates = self.recon_model.forward(under, fs_k_space, lambda_set, loss_set)
+        estimates = self.recon_model.forward(
+            under, 
+            fs_k_space, 
+            lambda_set, 
+            loss_set,
+            return_all=True 
+            )
 
         estimate_inverse = estimates['inverse_path']
         estimate_lambda = estimates['lambda_path']
         estimate_full = estimates['full_path']
 
-        mask_lambda_wo_acs, _ =TriplePathway.create_inverted_masks(lambda_set, loss_set)
+        lambda_set_wo_acs, _ =TriplePathway.create_inverted_masks(lambda_set, loss_set)
         
         loss_lambda = self.k_space_loss(
                 torch.view_as_real(under * lambda_set),
                 torch.view_as_real(estimate_lambda * loss_set),
                 ) 
         loss_inverse = self.k_space_loss(
-                torch.view_as_real(under * mask_lambda_wo_acs),
-                torch.view_as_real(estimate_inverse*mask_lambda_wo_acs), 
+                torch.view_as_real(under * lambda_set_wo_acs),
+                torch.view_as_real(estimate_inverse * lambda_set_wo_acs), 
                 ) 
         self.log("val/val_loss_inverse", loss_inverse, on_epoch=True, prog_bar=True)
         self.log("val/val_loss_lambda", loss_lambda, on_epoch=True, prog_bar=True)
@@ -234,8 +270,8 @@ class LearnedSSLLightning(plReconModel):
             est_lambda_plot = est_lambda_img[0].cpu().numpy()
             est_full_plot = est_full_img[0].cpu().numpy()
             fully_sampled_plot = fully_sampled_img[0].cpu().numpy()
-            mask_lambda = mask_lambda[0, :, 0].cpu().numpy()
-            mask_inverse = mask_inverse[0, :, 0].cpu().numpy()
+            lambda_set = lambda_set[0, :, 0].cpu().numpy()
+            loss_set = loss_set[0, :, 0].cpu().numpy()
             initial_mask = initial_mask[0, :, 0].cpu().numpy()
             est_lambda_plot /= np.max(est_lambda_plot, axis=(-1, -2), keepdims=True)
             est_full_plot /= np.max(est_full_plot, (-1, -2), keepdims=True)
@@ -296,20 +332,22 @@ class LearnedSSLLightning(plReconModel):
 
 
     def test_step(self, batch, batch_index):
-        undersampled = batch['input']
-        k_space = batch['fs_k_space']
-        mask = batch['mask'].to(torch.float32)
-        estimate_k = self.pass_through_model(undersampled, mask, k_space)
+        fully_sampled_k = batch['fs_k_space']
+        undersampled = fully_sampled_k * batch['initial_mask']
+        mask = batch['initial_mask'].to(torch.float32)
+        estimate_k = self.recon_model.forward(undersampled, fully_sampled_k, mask, target_set=torch.ones_like(fully_sampled_k))
+        estimate_k = estimate_k['lambda_path']
 
-        return super().test_step((estimate_k, k_space), batch_index)
+        return super().test_step((estimate_k, fully_sampled_k), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        undersampled = batch['input']
-        k_space = batch['fs_k_space']
+        fully_sampled_k = batch['fs_k_space']
+        undersampled = fully_sampled_k * batch['initial_mask']
         mask = batch['mask'].to(torch.float32)
-        estimate_k = self.pass_through_model(undersampled, mask, k_space)
+        estimate_k = self.recon_model.forward(undersampled, fully_sampled_k, mask, target_set=torch.ones_like(fully_sampled_k))
+        estimate_k = estimate_k['lambda_path']
 
-        return super().on_test_batch_end(outputs, (estimate_k, k_space), batch_idx, dataloader_idx)
+        return super().on_test_batch_end(outputs, (estimate_k, fully_sampled_k), batch_idx, dataloader_idx)
         
 
     def configure_optimizers(self):
@@ -317,17 +355,6 @@ class LearnedSSLLightning(plReconModel):
         #warmup_scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1) 
         #step_lr = StepLR(optimizer, step_size=50)
         return optimizer
-
-    def train_supervised_step(self, batch): 
-        undersampled = batch['input']
-        mask = batch['mask']
-        fully_sampled = batch['fs_k_space']
-
-        estimate = self.pass_through_model(undersampled, mask, fully_sampled)
-        loss = self.k_space_loss(torch.view_as_real(fully_sampled), torch.view_as_real(estimate)) 
-
-        self.log("train/train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        return loss
 
 
     def _setup_image_space_loss(self, image_loss_function):
@@ -389,4 +416,15 @@ class LearnedSSLLightning(plReconModel):
             raise ValueError('No k-space loss!')
 
     def get_masks_from_dataset(self, batch):
-        return batch['mask'], batch['loss_mask']
+        return batch['inital_mask'] * batch['second_mask'], batch['inital_mask'] * ~batch['second_mask']
+
+    def log_R_value(self):
+        R_value = self.partition_model.get_R()
+        for i, contrast in enumerate(self.contrast_order):
+            self.log(f'train/R_{contrast}', R_value[i])
+
+    def log_k_space_set_ratios(self, input_mask, initial_mask):
+        for i, contrast in enumerate(self.contrast_order):
+            self.log(f'train/lambda-over-inverse_{contrast}', 
+                     input_mask[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
+                     on_epoch=True, on_step=False)

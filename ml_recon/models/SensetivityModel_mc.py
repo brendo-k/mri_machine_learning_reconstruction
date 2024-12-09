@@ -48,7 +48,7 @@ class SensetivityModel_mc(nn.Module):
         if self.sensetivty_estimation == 'first': 
             images = images[:, [0], :, :, :]
 
-        images = ifft_2d_img(images, axes=[-1, -2])
+        images = ifft_2d_img(images, axes=[-1, -2]) # type: ignore
 
         number_of_coils = images.shape[2]
         num_contrasts = images.shape[1]
@@ -66,6 +66,7 @@ class SensetivityModel_mc(nn.Module):
         images, mean, std = self.norm(images)
         assert not torch.isnan(images).any()
         # pass through model
+
         images = self.model(images)
         assert not torch.isnan(images).any()
         # unnorm

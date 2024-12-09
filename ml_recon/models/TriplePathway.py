@@ -24,18 +24,18 @@ class TriplePathway(nn.Module):
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
-    def forward(self, undersampled_k, fully_sampled_k, input_set, target_set):
+    def forward(self, undersampled_k, fully_sampled_k, input_set, target_set, return_all=False):
         estimate_lambda = self.pass_through_lambda_path(undersampled_k, fully_sampled_k, input_set)
 
         # these pathways only make sense in the self-supervised case
         estimate_inverse = None
-        if self.config.is_pass_inverse:
+        if self.config.is_pass_inverse or return_all:
             # create new masks with inverted acs lines
             estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, undersampled_k, target_set)
 
         # these pathways only make sense in the self-supervised case, pass through original udnersampled data
         estimate_full = None
-        if self.config.is_pass_original:
+        if self.config.is_pass_original or return_all:
             estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
 
 
@@ -44,9 +44,7 @@ class TriplePathway(nn.Module):
             'inverse_path': estimate_inverse,
             'lambda_path': estimate_lambda,
         }
-
-
-
+    
     
     def pass_through_model(self, undersampled, mask, fully_sampled):
         zero_pad_mask = fully_sampled != 0
