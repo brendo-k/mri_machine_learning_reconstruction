@@ -1,5 +1,4 @@
 from .image_slices import image_slices
-from .fft_2d_img import fft_2d_img, ifft_2d_img
-from .root_sum_of_squares import root_sum_of_squares
+from .image_processing import fft_2d_img, ifft_2d_img, k_to_img, root_sum_of_squares
 from .complex_conversion import complex_to_real, real_to_complex
 from .read_config import replace_args_from_config

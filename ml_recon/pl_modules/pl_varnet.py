@@ -100,8 +100,8 @@ class pl_VarNet(plReconModel):
 
         prediction_full = self.forward(under_k, initial_mask, k_space)
 
-        doub_under, k_space, lambda_set, loss_set = self.build_masks(batch, True)
-        prediction_lambda = self.forward(lambda_set, lambda_set, loss_set)
+        doub_under, k_space, lambda_set, loss_set = self.build_masks(batch, self.is_supervised)
+        prediction_lambda = self.forward(doub_under, lambda_set, loss_set)
 
         target_img = root_sum_of_squares(ifft_2d_img(k_space * loss_set), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction_lambda * loss_set), coil_dim=2)
@@ -145,7 +145,7 @@ class pl_VarNet(plReconModel):
     def forward(self, under_k, mask, fs_k_space): 
         zero_fill_mask = fs_k_space != 0
         estimate_k = self.model(under_k, mask)
-        estimate_k = estimate_k * ~mask + under_k
+        estimate_k = estimate_k * (1 - mask) + under_k
         return estimate_k * zero_fill_mask
 
     # optimizer configureation -> using adam w/ lr of 1e-3
@@ -155,21 +155,24 @@ class pl_VarNet(plReconModel):
         return optimizer
 
     def plot_example_images(self, batch, mode='train'):
-        #pass
-        under_k = batch['fs_k_space'] * batch['initial_mask']
         with torch.no_grad():
-            estimate_k = self.forward(under_k, batch['inital_mask'], batch['fs_k_space'])
-            estimate_k = estimate_k * (under_k == 0) + under_k
-            super().plot_images(estimate_k, batch['fs_k_space'], batch[''], mode) 
+            fs_k_space = batch['fs_k_space']
+            undersampled_k = batch['undersampled']
+            initial_mask = batch['inital_mask']
+            
+            # pass original data through model
+            estimate_k = self.forward(undersampled_k, initial_mask, fs_k_space)
+            super().plot_images(estimate_k, fs_k_space, initial_mask, mode) 
 
-            sense_maps = self.model.sens_model(under_k, batch['initial_mask'])
+            sense_maps = self.model.sens_model(undersampled_k, initial_mask)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
-            masked_k = self.model.sens_model.mask_center(under_k, batch['fs_k_space'])
-            masked_k = masked_k[0, :, [0], :, :].abs()**0.2
 
-            under_k, k_space, input_set, loss_set = self.build_masks(batch)
-            input = under_k[0, :, [0], :, :].abs()**0.2
-            target = (under_k * loss_set)[0, :, [0], :, :].abs()**0.2
+            # pass lambda set through model (if self supervised)
+            input_k, _, lambda_set, loss_set = self.build_masks(batch, self.is_supervised)
+            input = input_k[0, :, [0], :, :].abs()**0.2
+            target = (input_k * loss_set)[0, :, [0], :, :].abs()**0.2
+            estimate_lambda_k = self.forward(input_k, lambda_set, fs_k_space)
+            
             if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger
                 wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))

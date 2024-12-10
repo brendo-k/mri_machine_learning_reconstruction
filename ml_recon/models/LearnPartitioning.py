@@ -15,8 +15,8 @@ class LearnPartitionConfig:
     image_size: Tuple[int, int, int]
     inital_R_value: float
     k_center_region: int = 10
-    probability_sig_slope: float = 5.0
-    sampling_sig_slope: float = 200
+    sigmoid_slope_probability: float = 5.0
+    sigmoid_slope_sampling: float = 200
     is_learn_R: bool = False
     is_warm_start: bool = True
 
@@ -60,7 +60,7 @@ class LearnPartitioning(nn.Module):
 
         activation = norm_probability - random_01_noise 
         # get sampling using softamx relaxation
-        sampling_mask = self.kMaxSampling(activation, self.config.sampling_sig_slope)
+        sampling_mask = self.kMaxSampling(activation, self.config.sigmoid_slope_sampling)
         
         #ensure sampling mask has no nans
         # Ensure sampling mask values are within [0, 1]
@@ -77,21 +77,20 @@ class LearnPartitioning(nn.Module):
         # get probability from sampling weights. Pass through sigmoid. 
         # NOTE this list is needed because of errors in autograd otherwise. It is due to 
         # multiplying each probability map per contrast by a different scalar.
-        probability = [torch.sigmoid(sampling_weight * self.config.probability_sig_slope) for sampling_weight in sampling_weights]
+        probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
 
-        # get an R value
-        R_value = self.get_R()
 
         # normalize the prob distribution to this R (this step is why we need the list of tensors for probability distribution)
-        norm_probability = self.norm_prob(probability, R_value, mask_center=mask_center)
+        norm_probability = self.norm_prob(probability, mask_center=mask_center)
 
         # we can now concat the list together now. We are safe
         norm_probability = torch.stack(norm_probability, dim=0)
         return norm_probability
     
     
-    def norm_prob(self, probability:List[torch.Tensor], cur_R:List[torch.Tensor], center_region=10, mask_center=False):
+    def norm_prob(self, probability:List[torch.Tensor], center_region=10, mask_center=False):
         image_shape = probability[0].shape
+        cur_R = self.get_R()
 
         probability = self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
 
@@ -158,23 +157,23 @@ class LearnPartitioning(nn.Module):
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
             init_prob = torch.zeros(config.image_size) + 0.5
-        self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.probability_sig_slope)
+        self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability)
 
     def _setup_R_values(self, config: LearnPartitionConfig):
         if config.is_learn_R: 
-            self.learned_R_value = torch.Tensor(torch.full((config.image_size[0],), float(config.inital_R_value - 1)))
+            self.learned_R_value = nn.Parameter(torch.full((config.image_size[0],), float(config.inital_R_value - 1)))
         else: 
             self.learned_R_value = torch.full((config.image_size[0],), float(config.inital_R_value))
             
-    def get_R(self) -> List[torch.Tensor]:
+    def get_R(self) -> torch.Tensor:
         if self.config.is_learn_R:
-            cur_R = []
-            for R_val in self.learned_R_value:
+            cur_R = torch.ones_like(self.learned_R_value)
+            for i ,R_val in enumerate(self.learned_R_value):
                 # no normalization of R, just ensure doesn't go less than 1
-                cur_R.append(1 + torch.nn.functional.softplus(R_val))
+                cur_R[i] = (1 + torch.nn.functional.softplus(R_val))
                 
         else: 
-            cur_R = self.learned_R_value.tolist()
+            cur_R = self.learned_R_value
                 
         return cur_R
 

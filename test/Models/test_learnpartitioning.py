@@ -12,8 +12,8 @@ def ssl_model():
         inital_R_value=2.0,
         k_center_region=ACS_LINES,
         is_line_constrained=False,
-        probability_sig_slope=5.0,
-        sampling_sig_slope=200,
+        sigmoid_slope_probability=5.0,
+        sigmoid_slope_sampling=200,
     )
 
     # Initialize SSLModel

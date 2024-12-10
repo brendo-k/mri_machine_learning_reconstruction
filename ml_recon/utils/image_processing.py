@@ -30,3 +30,25 @@ def fft_2d_img(data: Union[torch.Tensor, np.ndarray], axes=[-1, -2]):
         data = np.fft.fftshift(data, axes=axes)
         data = data.astype(np.complex64)
     return data
+
+def k_to_img(k_space, coil_dim=2):
+    return root_sum_of_squares(ifft_2d_img(k_space), coil_dim=coil_dim)
+
+def root_sum_of_squares(data: Union[torch.Tensor, npt.NDArray[np.float_]], coil_dim=0):
+    """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
+
+    Args:
+        data (torch.Tensor): Data needed to be coil combined
+        coil_dim (int, optional): dimension index. Defaults to 0.
+
+    Returns:
+        torch.Tensor: Coil combined data
+    """
+    assert data.ndim > coil_dim
+    if isinstance(data, np.ndarray):
+        return np.sqrt(np.sum(np.power(np.abs(data), 2), axis=coil_dim))
+    elif isinstance(data, torch.Tensor):
+        return torch.sqrt(data.abs().pow(2).sum(coil_dim) + 1e-20) # small value added to ensure sqrt is not zero
+    else:
+        raise ValueError(f'Data should be either a numpy array or pytorch Tensor')
+    

@@ -10,7 +10,7 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
-from pytorch_lightning.profilers import PyTorchProfiler
+from pytorch_lightning.profilers import PyTorchProfiler, AdvancedProfiler
 from torch.profiler import ProfilerActivity, schedule
 
 import pytorch_lightning as pl
@@ -33,7 +33,7 @@ def main(args):
     prof_scheduler = schedule(
         warmup=2,
         active=5, 
-        skip_first=0,
+        skip_first=5,
         wait=0,
     )
     pytorch_profiler = PyTorchProfiler(
@@ -43,13 +43,16 @@ def main(args):
         dirpath='.',
         filename='prof'
     )
+    advanced_prof = AdvancedProfiler(
+        dirpath='.', filename='prof'
+    )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         precision="bf16-mixed", 
-                         profiler = pytorch_profiler
+                         #precision="bf16-mixed", 
+                         #profiler=pytorch_profiler
                          )
 
 
@@ -82,12 +85,13 @@ def main(args):
     
     partitioning_config = LearnPartitionConfig(
         image_size=(len(args.contrasts), args.ny, args.nx),
-        inital_R_value=2,
+        inital_R_value=args.R_hat,
         k_center_region = 10,
-        probability_sig_slope = 5.0,
-        sampling_sig_slope = 200,
-        is_learn_R = False,
-        is_warm_start = True
+        sigmoid_slope_probability = args.sigmoid_slope1,
+        sigmoid_slope_sampling = args.sigmoid_slope2,
+        is_learn_R = args.learn_R,
+        is_warm_start = args.warm_start,
+        
     )
 
     tripple_pathway_config = DualDomainConifg(
@@ -106,7 +110,8 @@ def main(args):
         lambda_scaling=args.lambda_scaling, 
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
-        is_supervised_training=args.supervised
+        is_supervised_training=args.supervised,
+        is_learn_partitioning=args.learn_sampling
         )
     torch.set_float32_matmul_precision('medium')
 
