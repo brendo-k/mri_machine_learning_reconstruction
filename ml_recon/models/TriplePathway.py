@@ -72,8 +72,8 @@ class TriplePathway(nn.Module):
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
         return mask_inverse_w_acs,mask_lambda_wo_acs
 
-    def pass_through_lambda_path(self, undersampled, fs_k_space, lambda_set):
-        estimate_lambda = self.pass_through_model(undersampled * lambda_set, lambda_set, fs_k_space)
+    def pass_through_lambda_path(self, undersampled, fs_k_space, input_set):
+        estimate_lambda = self.pass_through_model(undersampled * input_set, input_set, fs_k_space)
 
         return estimate_lambda
     

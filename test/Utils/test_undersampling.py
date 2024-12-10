@@ -7,6 +7,7 @@ from ml_recon.utils.undersample_tools import (
     gen_pdf_bern, 
     get_mask_from_distribution, 
     get_mask_from_segregated_sampling, 
+    apply_undersampling_from_dist,
     scale_pdf,
     ssdu_gaussian_selection
     )
@@ -66,3 +67,23 @@ def test_ssdu_selection():
     input, loss = ssdu_gaussian_selection(mask)
 
     torch.testing.assert_close(input ^ loss, mask)
+
+
+def test_apply_undersampling_not_same():
+    rng = np.random.default_rng()
+    k_space = rng.random(size=(4, 6, 128, 128)) + 1j * rng.random(size=(4, 6, 128, 128))
+    pdf_R4 = gen_pdf_bern(128, 128, 1/4, 8, 10)
+    pdf_R4 = np.stack([pdf_R4 for _ in range(k_space.shape[0])])
+
+    undersampled_k, mask = apply_undersampling_from_dist(
+        0, 
+        pdf_R4,
+        k_space,
+        line_constrained=False, 
+        deterministic=False
+    )
+
+    k_mask = undersampled_k != 0 
+    np.testing.assert_allclose(k_mask[:, [0], ...], mask)
+    assert not np.all(undersampled_k == k_space)
+    

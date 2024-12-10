@@ -87,10 +87,10 @@ class Unet(nn.Module):
 
 
 class Unet_down(nn.Module):
-    def __init__(self, in_channel, out_channel, drop_prob):
+    def __init__(self, in_channel, out_channel, drop_prob, groups=1):
         super().__init__()
         self.down = down()
-        self.conv = double_conv(in_channel, out_channel, drop_prob)
+        self.conv = double_conv(in_channel, out_channel, drop_prob, groups=groups)
 
     def forward(self, x):
         x = self.down(x)
@@ -112,16 +112,16 @@ class Unet_up(nn.Module):
 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chans, out_chans, drop_prob):
+    def __init__(self, in_chans, out_chans, drop_prob, groups=1):
         
         super().__init__()
 
         self.layers = nn.Sequential(
-            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
             nn.InstanceNorm2d(out_chans, affine=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),
-            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
             nn.InstanceNorm2d(out_chans, affine=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),

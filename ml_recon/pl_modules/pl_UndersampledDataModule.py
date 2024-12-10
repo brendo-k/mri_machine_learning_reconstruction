@@ -157,10 +157,11 @@ class UndersampledDataModule(pl.LightningDataModule):
 # normalization transforms
 class normalize_image_max(object):
     def __call__(self, data: dict):
-        input = data['input']
+        input = data['fs_k_space']
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
+        data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -169,6 +170,7 @@ class normalize_k_max(object):
         fs_k_space = data['fs_k_space']
         scaling_factor = fs_k_space.abs().amax((1, 2, 3), keepdim=True)
         
+        data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -178,6 +180,7 @@ class normalize_image_mean(object):
         fs_k_space = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = fs_k_space.mean((1, 2), keepdim=True).unsqueeze(1)
         
+        data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
@@ -187,6 +190,7 @@ class normalize_image_mean2(object):
         image = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=1)
         scaling_factor = 2*image.mean((1, 2), keepdim=True).unsqueeze(1)
         
+        data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 

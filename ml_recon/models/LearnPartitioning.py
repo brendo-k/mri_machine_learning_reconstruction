@@ -37,11 +37,8 @@ class LearnPartitioning(nn.Module):
         self._setup_sampling_weights(learn_part_config)
 
 
-    def forward(self, 
-                undersampled_k: torch.Tensor, 
-                initial_mask: torch.Tensor
-                ) -> Tuple[torch.Tensor, torch.Tensor]:
-        nbatch, contrast, coil, h, w = undersampled_k.shape
+    def forward(self, initial_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        nbatch = initial_mask.shape[0]
 
         lambda_set, inverse_set = self.split_into_lambda_loss_sets(initial_mask, nbatch)
 
