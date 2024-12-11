@@ -303,19 +303,19 @@ class LearnedSSLLightning(plReconModel):
 
     def test_step(self, batch, batch_index):
         fully_sampled_k = batch['fs_k_space']
-        undersampled = fully_sampled_k * batch['initial_mask']
-        mask = batch['initial_mask'].to(torch.float32)
-        estimate_k = self.recon_model.forward(undersampled, fully_sampled_k, mask, target_set=torch.ones_like(fully_sampled_k))
-        estimate_k = estimate_k['lambda_path']
+        undersampled = batch['undersampled']
+        mask = batch['initial_mask']
+        # pass inital data through model
+        estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
         return super().test_step((estimate_k, fully_sampled_k), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         fully_sampled_k = batch['fs_k_space']
-        undersampled = fully_sampled_k * batch['initial_mask']
-        mask = batch['initial_mask'].to(torch.float32)
-        estimate_k = self.recon_model.forward(undersampled, fully_sampled_k, mask, target_set=torch.ones_like(fully_sampled_k))
-        estimate_k = estimate_k['lambda_path']
+        undersampled = batch['undersampled']
+        mask = batch['initial_mask']
+        # pass inital data through the model
+        estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
         return super().on_test_batch_end(outputs, (estimate_k, fully_sampled_k), batch_idx, dataloader_idx)
         
