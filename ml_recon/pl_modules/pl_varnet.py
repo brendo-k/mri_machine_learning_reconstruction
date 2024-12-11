@@ -83,11 +83,11 @@ class pl_VarNet(plReconModel):
     def build_masks(self, batch, is_supervised_masks):
         k_space = batch['fs_k_space']
         if is_supervised_masks:
-            input_mask = batch['inital_mask']
+            input_mask = batch['initial_mask']
             loss_mask = torch.ones_like(input_mask)
         else:
-            input_mask = batch['inital_mask'] * batch['second_mask']
-            loss_mask = batch['inital_mask'] * (1 - batch['second_mask'])
+            input_mask = batch['initial_mask'] * batch['second_mask']
+            loss_mask = batch['initial_mask'] * (1 - batch['second_mask'])
 
         under_k =  input_mask * k_space
         return under_k, k_space, input_mask, loss_mask
@@ -96,7 +96,7 @@ class pl_VarNet(plReconModel):
     def validation_step(self, batch, batch_idx):
         initial_mask = batch['initial_mask']
         k_space = batch['fs_k_space']
-        under_k = initial_mask * k_space
+        under_k = batch['undersampled']
 
         prediction_full = self.forward(under_k, initial_mask, k_space)
 
@@ -117,7 +117,7 @@ class pl_VarNet(plReconModel):
         ssim = self.calculate_ssim(batch['fs_k_space'], prediction_full)
 
         for contrast, ssim_contrast in zip(self.contrast_order, ssim):
-            self.log(f'val/ssim_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
+            self.log(f'val/ssim_full_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
         if self.current_epoch % 10 == 0 and batch_idx == 0: 
@@ -126,18 +126,18 @@ class pl_VarNet(plReconModel):
 
 
     def test_step(self, batch, batch_index):
-        inital_mask = batch['inital_mask']
+        initial_mask = batch['initial_mask']
         k_space = batch['fs_k_space']
-        under_k = inital_mask * k_space
-        estimated_target = self.forward(under_k, inital_mask, k_space)
+        under_k = batch['undersampled']
+        estimated_target = self.forward(under_k, initial_mask, k_space)
         return super().test_step((estimated_target, batch['fs_k_space']), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        inital_mask = batch['inital_mask']
+        initial_mask = batch['initial_mask']
         k_space = batch['fs_k_space']
-        under_k = inital_mask * k_space
+        under_k = initial_mask * k_space
 
-        estimate_k = self.forward(under_k, inital_mask, k_space)
+        estimate_k = self.forward(under_k, initial_mask, k_space)
 
         return super().on_test_batch_end(outputs, (estimate_k, batch['fs_k_space']), batch_idx, dataloader_idx)
 
@@ -158,7 +158,7 @@ class pl_VarNet(plReconModel):
         with torch.no_grad():
             fs_k_space = batch['fs_k_space']
             undersampled_k = batch['undersampled']
-            initial_mask = batch['inital_mask']
+            initial_mask = batch['initial_mask']
             
             # pass original data through model
             estimate_k = self.forward(undersampled_k, initial_mask, fs_k_space)

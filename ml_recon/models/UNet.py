@@ -119,11 +119,11 @@ class double_conv(nn.Module):
         self.layers = nn.Sequential(
             nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
             nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.LeakyReLU(negative_slope=0.0, inplace=True),
             nn.Dropout2d(drop_prob),
             nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
             nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.LeakyReLU(negative_slope=0.0, inplace=True),
             nn.Dropout2d(drop_prob),
         )
       
@@ -133,10 +133,10 @@ class double_conv(nn.Module):
 class down(nn.Module):
     def __init__(self):
         super().__init__()
-        self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
+        self.avg_pool = nn.AvgPool2d(2, stride=(2, 2))
 
     def forward(self, x):
-        x = self.max_pool(x)
+        x = self.avg_pool(x)
         return x
 
 

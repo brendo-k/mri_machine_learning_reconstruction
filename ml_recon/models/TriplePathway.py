@@ -47,7 +47,10 @@ class TriplePathway(nn.Module):
     
     
     def pass_through_model(self, undersampled, mask, fully_sampled):
-        zero_pad_mask = fully_sampled != 0
+        # save some memory by not saving full image
+        zero_pad_mask = fully_sampled[:, :, 0, :, :] != 0
+        zero_pad_mask = zero_pad_mask.unsqueeze(2)
+
         estimate = self.recon_model(undersampled*mask, mask)
         estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate * zero_pad_mask
