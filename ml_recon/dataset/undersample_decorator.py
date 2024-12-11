@@ -90,6 +90,8 @@ class UndersampleDecorator(Dataset):
 
     def gen_pi_mak(self, k_space):
         mask_omega = np.zeros_like(k_space, dtype=bool)
+        # don't need coil dimension
+        mask_omega = mask_omega[:, [0], :, :]
         mask_omega[..., ::int(self.R)] = 1
         w = mask_omega.shape[-1]
         mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1

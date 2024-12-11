@@ -59,9 +59,9 @@ class pl_VarNet(plReconModel):
         Returns:
             float: loss value
         """
-        undersampled_k, fully_sampled_k, input_mask, target_mask = self.build_masks(batch, self.is_supervised)
+        undersampled_k, fully_sampled_k, input_mask, loss_mask = self.build_masks(batch, self.is_supervised)
         prediction = self.forward(undersampled_k, input_mask, fully_sampled_k)
-        target = fully_sampled_k * target_mask
+        target = fully_sampled_k * loss_mask
 
         target_img = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
@@ -69,8 +69,8 @@ class pl_VarNet(plReconModel):
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(batch['target'], prediction*batch['loss_mask']) * self.k_loss_scaling
-            loss = loss / batch['loss_mask'].sum()
+            loss += self.k_loss_func(undersampled_k*loss_mask, prediction*loss_mask) * self.k_loss_scaling
+            loss = loss / loss_mask.sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
@@ -110,7 +110,7 @@ class pl_VarNet(plReconModel):
         
         if self.k_loss_func:
             loss += self.k_loss_func(k_space*loss_set, prediction_lambda*loss_set)
-            loss = loss / batch['loss_mask'].sum()
+            loss = loss / loss_set.sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
 
