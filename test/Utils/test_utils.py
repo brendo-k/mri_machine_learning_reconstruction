@@ -1,4 +1,4 @@
-from ml_recon.utils.root_sum_of_squares import root_sum_of_squares
+from ml_recon.utils import root_sum_of_squares
 import torch
 import math
 

@@ -7,11 +7,8 @@
     "DEBUG": true
   },
 
-  "venv": "ENV",
-  "venvPath": "/home/kadotab/",
-
   "reportMissingImports": true,
 
-  "pythonVersion": "3.9",
+  "pythonVersion": "3.11",
   "pythonPlatform": "Linux",
 }

@@ -1,5 +1,5 @@
 import einops
-from numpy import who
+import numpy as np
 import torch
 import math
 

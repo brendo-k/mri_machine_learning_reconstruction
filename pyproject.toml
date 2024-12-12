@@ -1,0 +1,16 @@
+[project]
+name = "ml_recon"
+version = "0.0.1"
+authors = [
+  { name="Brenden Kadota", email="brenden.kadota@gmail.com" },
+]
+description = "MRI tools for visualization"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+[tool.setuptools.packages.find]
+include = ["ml_recon"]

@@ -2,9 +2,9 @@ import numpy as np
 import torch
 from typing import Union
 
-import numpy.typing as npt
+from numpy.typing import NDArray
 
-def ifft_2d_img(data: Union[torch.Tensor, npt.NDArray[np.complex_]], axes=[-1, -2]) -> Union[torch.Tensor, np.ndarray]:
+def ifft_2d_img(data: torch.Tensor | NDArray, axes=[-1, -2]) -> Union[torch.Tensor, np.ndarray]:
     assert isinstance(data, torch.Tensor) or isinstance(data, np.ndarray), 'data should be a numpy array or pytorch tensor'
 
     if isinstance(data, torch.Tensor):
@@ -19,7 +19,7 @@ def ifft_2d_img(data: Union[torch.Tensor, npt.NDArray[np.complex_]], axes=[-1, -
         
     return data
 
-def fft_2d_img(data: Union[torch.Tensor, np.ndarray], axes=[-1, -2]):
+def fft_2d_img(data: Union[torch.Tensor, NDArray], axes=[-1, -2]):
     if isinstance(data, torch.Tensor):
         data = torch.fft.ifftshift(data, dim=axes)
         data = torch.fft.fft2(data, dim=axes, norm='ortho')
@@ -34,7 +34,7 @@ def fft_2d_img(data: Union[torch.Tensor, np.ndarray], axes=[-1, -2]):
 def k_to_img(k_space, coil_dim=2):
     return root_sum_of_squares(ifft_2d_img(k_space), coil_dim=coil_dim)
 
-def root_sum_of_squares(data: Union[torch.Tensor, npt.NDArray[np.float_]], coil_dim=0):
+def root_sum_of_squares(data: Union[torch.Tensor, NDArray[np.complex64]], coil_dim=0):  # type: ignore
     """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
 
     Args:

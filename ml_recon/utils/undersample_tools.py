@@ -22,7 +22,7 @@ def apply_undersampling_from_dist(
         k_space, 
         line_constrained: bool, 
         deterministic: bool
-) -> Tuple[NDArray[np.complex_], NDArray[np.bool_]]:
+) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:
 
     rng = get_random_generator(index, deterministic)
     mask = get_mask_from_distribution(prob_map, rng, line_constrained)
@@ -102,7 +102,7 @@ def gen_pdf_bern(nx, ny, delta, p, c_sq):
     return prob_map
 
 
-def get_mask_from_distribution(prob_map: NDArray[np.float_], rng, line_constrained) -> NDArray[np.bool_]:
+def get_mask_from_distribution(prob_map: NDArray[np.float32], rng, line_constrained) -> NDArray[np.bool_]:
     prob_map[prob_map > 0.999] = 1
     if line_constrained:
         (_, ny, _) = np.shape(prob_map)

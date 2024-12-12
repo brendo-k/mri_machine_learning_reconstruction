@@ -56,7 +56,7 @@ class UndersampleDecorator(Dataset):
 
 
     def __getitem__(self, index):
-        k_space:NDArray[np.complex_] = self.dataset[index] #[con, chan, h, w] 
+        k_space:NDArray[np.complex64] = self.dataset[index] #[con, chan, h, w] 
         if self.initial_sampling_method == '1d' or self.initial_sampling_method == '2d': 
             under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
                                         self.omega_prob, 
