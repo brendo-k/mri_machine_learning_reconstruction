@@ -2,9 +2,11 @@ from argparse import ArgumentParser
 from datetime import datetime
 
 import torch
+from torch.profiler import ProfilerActivity, schedule
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.profilers import PyTorchProfiler
 
 from ml_recon.pl_modules.pl_varnet import pl_VarNet, VarnetConfig
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
@@ -25,7 +27,7 @@ def main(args):
     pl.seed_everything(8)
     torch.set_float32_matmul_precision('medium')
 
-    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True)
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch')
     #unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     #file_name = 'pl_varnet-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -35,13 +37,27 @@ def main(args):
     #    mode="min", 
     #    save_last=True, 
     #    )
-
+    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
+    prof_scheduler = schedule(
+        warmup=2,
+        active=5, 
+        skip_first=5,
+        wait=0,
+    )
+    pytorch_profiler = PyTorchProfiler(
+        activities=activities,
+        schedule=prof_scheduler,
+        export_to_chrome=True,
+        dirpath='.',
+        filename='prof'
+    )
 
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[],
+                         precision='bf16-mixed'
                          )
 
     if args.checkpoint: 

@@ -11,6 +11,7 @@ from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
 from pytorch_lightning.profilers import PyTorchProfiler, AdvancedProfiler
+from pytorch_lightning.tuner.tuning import Tuner
 from torch.profiler import ProfilerActivity, schedule
 
 import pytorch_lightning as pl
@@ -19,8 +20,7 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -30,6 +30,7 @@ def main(args):
     #    monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
     #    mode='min',  # Save the model with the minimum val_loss
     #)
+    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
     prof_scheduler = schedule(
         warmup=2,
         active=5, 
@@ -51,7 +52,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         #precision="bf16-mixed", 
+                         precision="bf16-mixed", 
                          #profiler=pytorch_profiler
                          )
 
@@ -122,9 +123,9 @@ def main(args):
         data_module.setup('train')
 
     ## AUTOMATIC HYPERPARAMETER TUNING
-    #tuner = Tuner(trainer)
+    tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
-    #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
+    tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
     #wandb_logger.experiment.config.update(model.hparams)
 
