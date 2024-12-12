@@ -58,8 +58,8 @@ class Unet(nn.Module):
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, Tuple[List[int], List[int], int, int]]:
         _, _, h, w = x.shape
-        w_mult = w - (16 - w % 16) # move to next multiple of 16
-        h_mult = h - (16 - h % 16) # h that is the next multiple of 16
+        w_mult = w + (16 - w % 16) # move to next multiple of 16
+        h_mult = h + (16 - h % 16) # h that is the next multiple of 16
         w_pad = [math.floor((w_mult - w) / 2), math.ceil((w_mult - w) / 2)]
         h_pad = [math.floor((h_mult - h) / 2), math.ceil((h_mult - h) / 2)]
         x = F.pad(x, w_pad + h_pad)

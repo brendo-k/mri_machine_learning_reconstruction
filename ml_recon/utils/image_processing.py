@@ -31,8 +31,8 @@ def fft_2d_img(data: Union[torch.Tensor, NDArray], axes=[-1, -2]):
         data = data.astype(np.complex64)
     return data
 
-def k_to_img(k_space, coil_dim=2):
-    return root_sum_of_squares(ifft_2d_img(k_space), coil_dim=coil_dim)
+def k_to_img(k_space, coil_dim=2, ft_dim=[-1, -2]):
+    return root_sum_of_squares(ifft_2d_img(k_space, axes=ft_dim), coil_dim=coil_dim)
 
 def root_sum_of_squares(data: Union[torch.Tensor, NDArray[np.complex64]], coil_dim=0):  # type: ignore
     """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
