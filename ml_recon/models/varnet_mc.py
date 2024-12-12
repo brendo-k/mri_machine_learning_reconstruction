@@ -31,7 +31,7 @@ class VarNet_mc(nn.Module):
         )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel_mc(2, 2, chans=sens_chans, mask_center=True)
+        self.sens_model = SensetivityModel_mc(2, 2, contrasts=contrasts, chans=sens_chans)
         # regularizer weight
 
         self.lambda_reg = nn.Parameter(torch.ones(num_cascades, 1))

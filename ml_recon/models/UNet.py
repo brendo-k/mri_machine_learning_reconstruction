@@ -9,11 +9,6 @@ from argparse import ArgumentParser
 class Unet(nn.Module):
     """
     PyTorch implementation of a U-Net model.
-
-    O. Ronneberger, P. Fischer, and Thomas Brox. U-net: Convolutional networks
-    for biomedical image segmentation. In International Conference on Medical
-    image computing and computer-assisted intervention, pages 234–241.
-    Springer, 2015.
     """
 
     def __init__(
@@ -22,21 +17,26 @@ class Unet(nn.Module):
             out_chan: int , 
             depth: int = 4,
             chans: int = 18, 
+            relu_slope: float = 0.0,
             drop_prob: float = 0.0
             ):
 
         super().__init__()
         self.down_sample_layers = nn.ModuleList([double_conv(in_chan, chans, drop_prob)])
         cur_chan = chans
+        self.relu_slope = relu_slope
+
         for _ in range(depth):
-            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob))
+            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob, relu_slope=relu_slope))
             cur_chan *= 2
 
         self.up_sample_layers = nn.ModuleList()
         for _ in range(depth):
-            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob))
+            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope=relu_slope))
             cur_chan //= 2
         self.conv1d = nn.Conv2d(chans, out_chan, 1, bias=False)
+
+
 
     def forward(self, x):
         x, pad_sizes = self.pad(x)
@@ -51,24 +51,17 @@ class Unet(nn.Module):
         x = self.unpad(x, *pad_sizes)
         return x
 
-    @staticmethod
-    def add_model_specific_args(parser: ArgumentParser):
-        parser.add_argument('--depth', type=int, default=4)
-        return parser
+
 
     # pad input image to be divisible by 16 for unet downsampling
     def pad(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, Tuple[List[int], List[int], int, int]]:
         _, _, h, w = x.shape
-        w_mult = ((w - 1) | 15) + 1
-        h_mult = ((h - 1) | 15) + 1
+        w_mult = w - (16 - w % 16) # move to next multiple of 16
+        h_mult = h - (16 - h % 16) # h that is the next multiple of 16
         w_pad = [math.floor((w_mult - w) / 2), math.ceil((w_mult - w) / 2)]
         h_pad = [math.floor((h_mult - h) / 2), math.ceil((h_mult - h) / 2)]
-        # TODO: fix this type when PyTorch fixes theirs
-        # the documentation lies - this actually takes a list
-        # https://github.com/pytorch/pytorch/blob/master/torch/nn/functional.py#L3457
-        # https://github.com/pytorch/pytorch/pull/16949
         x = F.pad(x, w_pad + h_pad)
 
         return x, (h_pad, w_pad, h_mult, w_mult)
@@ -87,10 +80,10 @@ class Unet(nn.Module):
 
 
 class Unet_down(nn.Module):
-    def __init__(self, in_channel, out_channel, drop_prob, groups=1):
+    def __init__(self, in_channel, out_channel, drop_prob, groups=1, relu_slope=0.0):
         super().__init__()
         self.down = down()
-        self.conv = double_conv(in_channel, out_channel, drop_prob, groups=groups)
+        self.conv = double_conv(in_channel, out_channel, drop_prob, groups=groups, relu_slope=relu_slope)
 
     def forward(self, x):
         x = self.down(x)
@@ -98,11 +91,11 @@ class Unet_down(nn.Module):
         return x
 
 class Unet_up(nn.Module):
-    def __init__(self, in_chan, out_chan, drop_prob):
+    def __init__(self, in_chan, out_chan, drop_prob, relu_slope=0.0):
         super().__init__()
         self.up = up(in_chan, out_chan)
         self.concat = concat()
-        self.conv = double_conv(in_chan, out_chan, drop_prob)
+        self.conv = double_conv(in_chan, out_chan, drop_prob, relu_slope=relu_slope)
 
     def forward(self, x, x_concat):
         x = self.up(x)
@@ -112,18 +105,18 @@ class Unet_up(nn.Module):
 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chans, out_chans, drop_prob, groups=1):
+    def __init__(self, in_chans, out_chans, drop_prob, groups=1, relu_slope=0.0):
         
         super().__init__()
 
         self.layers = nn.Sequential(
             nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
-            nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.0, inplace=True),
+            nn.InstanceNorm2d(out_chans, affine=False),
+            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
             nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
-            nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.0, inplace=True),
+            nn.InstanceNorm2d(out_chans, affine=False),
+            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
         )
       
