@@ -241,13 +241,13 @@ class LearnedSSLLightning(plReconModel):
 
 
         wandb_logger = self.logger
-        wandb_logger.log_image('val/estimate_lambda', self.split_along_contrasts(lambda_path_img))
-        wandb_logger.log_image('val/estimate_inverse', self.split_along_contrasts(inverse_path_img))
-        wandb_logger.log_image('val/estimate_full', self.split_along_contrasts(full_path_img))
-        wandb_logger.log_image('val/ground_truth', self.split_along_contrasts(fully_sampling_img))
+        wandb_logger.log_image('val/estimate_lambda', self.split_along_contrasts(lambda_path_img[0]))
+        wandb_logger.log_image('val/estimate_inverse', self.split_along_contrasts(inverse_path_img[0]))
+        wandb_logger.log_image('val/estimate_full', self.split_along_contrasts(full_path_img[0]))
+        wandb_logger.log_image('val/ground_truth', self.split_along_contrasts(fully_sampling_img[0]))
 
-        wandb_logger.log_image('val/estimate_lambda_diff', self.split_along_contrasts(diff_lambda_fs.clip(0, 1)))
-        wandb_logger.log_image('val/estimate_full_diff', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)))
+        wandb_logger.log_image('val/estimate_lambda_diff', self.split_along_contrasts(diff_lambda_fs.clip(0, 1)[0]))
+        wandb_logger.log_image('val/estimate_full_diff', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
     
     
     def log_image_metrics(self, fs_k_space, estimate_lambda, estimate_inverse=None, estimate_full=None):

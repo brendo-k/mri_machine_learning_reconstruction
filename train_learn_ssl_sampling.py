@@ -123,9 +123,9 @@ def main(args):
         data_module.setup('train')
 
     ## AUTOMATIC HYPERPARAMETER TUNING
-    tuner = Tuner(trainer)
+    #tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
-    tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
+    #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
     #wandb_logger.experiment.config.update(model.hparams)
 

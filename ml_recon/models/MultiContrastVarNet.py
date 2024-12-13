@@ -20,29 +20,23 @@ class VarnetConfig:
 
 
 class MultiContrastVarNet(nn.Module):
-    def __init__(self, config: VarnetConfig):
-        super().__init__()
-        self.config = config
+    def __init__(self, 
+                config: VarnetConfig
 
-        contrasts = len(self.config.contrast_order)
-        model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=self.config.channels)
+                 ):
+        super().__init__()
+        contrasts = len(config.contrast_order)
+        model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=config.channels)
 
         # module cascades
         self.cascades = nn.ModuleList(
-            [VarnetBlock(model_backbone(), self.config.split_contrast_by_phase) for _ in range(self.config.cascades)]
+            [VarnetBlock(model_backbone()) for _ in range(config.cascades)]
         )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel_mc(
-            in_chans=2, 
-            out_chans=2, 
-            chans=self.config.sense_chans, 
-            sensetivity_estimation=self.config.sensetivity_estimation,
-            contrasts=contrasts
-            )
-
+        self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones(self.config.cascades, 1))
+        self.lambda_reg = nn.Parameter(torch.ones(config.cascades, 1))
 
     # k-space sent in [B, C, H, W]
     def forward(self, undersampled_k, mask):
@@ -70,28 +64,24 @@ class MultiContrastVarNet(nn.Module):
 
 
 class VarnetBlock(nn.Module):
-    def __init__(self, model: nn.Module, split_complex_by_phase: bool = False) -> None:
+    def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self.model = model
-        if split_complex_by_phase:
-            self.complex_forward = complex_conversion.complex_to_polar
-            self.complex_backwards = complex_conversion.polar_to_complex
-        else:
-            self.complex_forward = complex_conversion.complex_to_real
-            self.complex_backwards = complex_conversion.real_to_complex
 
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, k_space, sensetivities):
-        # Reduce (coil combine estimate to images)
+        # Reduce
         images = ifft_2d_img(k_space, axes=[-1, -2])
+
+        # Images now [B, contrast, h, w] (complex)
         images = torch.sum(images * sensetivities.conj(), dim=2)
 
-        # Images after complex_forward [B, contrast * 2, h, w] (real)
-        images = self.complex_forward(images)
+        # Images now [B, contrast * 2, h, w] (real)
+        images = complex_conversion.complex_to_real(images)
         images, mean, std = self.norm(images)
         images = self.model(images)
         images = self.unnorm(images, mean, std)
-        images = self.complex_backwards(images)
+        images = complex_conversion.real_to_complex(images)
 
         # Expand
         images = sensetivities * images.unsqueeze(2)
@@ -114,4 +104,3 @@ class VarnetBlock(nn.Module):
     ) -> torch.Tensor:
         x = x * std + mean
         return x
-

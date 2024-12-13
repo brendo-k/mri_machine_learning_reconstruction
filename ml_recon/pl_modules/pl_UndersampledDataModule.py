@@ -25,15 +25,21 @@ class UndersampledDataModule(pl.LightningDataModule):
             resolution: tuple[int, int] = (128, 128),
             num_workers: int = 0,
             norm_method: str = 'k',
+            self_supervsied: bool = False,
+            sampling_method: str = '2d',
             ssdu_partioning: bool = False,
-            sampling_method: str = '2d'
             ):
 
         super().__init__()
         self.save_hyperparameters()
         
-        self._setup_dataset_class(dataset_name.lower())
-        self._setup_norm_method(norm_method)
+        dataset_name = str.lower(dataset_name)
+        if dataset_name == 'brats': 
+            self.dataset_class = BratsDataset
+        elif dataset_name == 'fastmri':
+            self.dataset_class = FastMRIDataset
+        elif dataset_name == 'm4raw':
+            self.dataset_class = M4Raw
 
         self.data_dir = data_dir
         self.contrasts = contrasts
@@ -42,16 +48,20 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.resolution = resolution
         self.R = R
         self.R_hat = R_hat
-        self.sampling_method = sampling_method
+        self.self_supervised = self_supervsied
         self.ssdu_partioning = ssdu_partioning
+        self.sampling_method = sampling_method
         
+        if norm_method == 'img':
+            self.transforms = normalize_image_max()
+        elif norm_method == 'k': 
+            self.transforms = normalize_k_max() 
+        elif norm_method == 'image_mean':
+            self.transforms = normalize_image_mean() 
+        elif norm_method == 'image_mean2':
+            self.transforms = normalize_image_mean2() 
 
     def setup(self, stage):
-        """Setup function that is run before training and testing
-
-        Args:
-            stage (str): name of the stage ie. train, test, val
-        """
         super().setup(stage)
         data_dir = os.listdir(self.data_dir)
 
@@ -66,15 +76,14 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_keyword_args = {
             'nx': self.resolution[0], 
             'ny': self.resolution[1],
-            'contrasts': self.contrasts, 
+            'contrasts': self.contrasts
         }
 
         undersample_keywords = {
                 'R': self.R,
                 'R_hat': self.R_hat,
+                'sampling_method': self.sampling_method,
                 'transforms': self.transforms,
-                'acs_lines': 10,
-                'initial_sampling_method': self.sampling_method
         }
 
         self.train_dataset = self.dataset_class(
@@ -94,23 +103,25 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                is_ssdu_partitioning=self.ssdu_partioning,
+                self_supervised=self.self_supervised,
+                original_ssdu_partioning=self.ssdu_partioning,
                 **undersample_keywords
                 )
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
+                self_supervised=False,
                 **undersample_keywords
                 )
         
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
+                self_supervised=False,
                 **undersample_keywords
                 )
 
         self.contrast_order = self.train_dataset.contrast_order
     
-    # dataloaders
     def train_dataloader(self):
         return DataLoader(
                 self.train_dataset, 
@@ -123,7 +134,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
                 self.val_dataset, 
-                batch_size=self.batch_size*7, 
+                batch_size=self.batch_size, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
@@ -131,66 +142,51 @@ class UndersampledDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
                 self.test_dataset, 
-                batch_size=self.batch_size*7, 
+                batch_size=self.batch_size, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
-    def _setup_norm_method(self, norm_method):
-        if norm_method == 'img':
-            self.transforms = normalize_image_max()
-        elif norm_method == 'k': 
-            self.transforms = normalize_k_max()
-        elif norm_method == 'image_mean':
-            self.transforms = normalize_image_mean()
-        elif norm_method == 'image_mean2':
-            self.transforms = normalize_image_mean2()
-
-    def _setup_dataset_class(self, dataset_name):
-        if dataset_name == 'brats': 
-            self.dataset_class = BratsDataset
-        elif dataset_name == 'fastmri':
-            self.dataset_class = FastMRIDataset
-        elif dataset_name == 'm4raw':
-            self.dataset_class = M4Raw
 
 
-# normalization transforms
 class normalize_image_max(object):
     def __call__(self, data: dict):
-        input = data['fs_k_space']
+        input = data['input']
         img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
-        data['undersampled'] /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
 class normalize_k_max(object):
     def __call__(self, data):
-        fs_k_space = data['fs_k_space']
-        scaling_factor = fs_k_space.abs().amax((1, 2, 3), keepdim=True)
+        input = data['input']
+        undersample_max = input.abs().amax((1, 2, 3), keepdim=True)
         
-        data['undersampled'] /= scaling_factor
-        data['fs_k_space'] /= scaling_factor
+        data['input'] /= undersample_max
+        data['target'] /= undersample_max
+        data['fs_k_space'] /= undersample_max
         return data
 
 class normalize_image_mean(object):
     def __call__(self, data):
-        input = data['fs_k_space']
-        fs_k_space = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
-        scaling_factor = fs_k_space.mean((1, 2), keepdim=True).unsqueeze(1)
+        input = data['input']
+        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data['undersampled'] /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
 class normalize_image_mean2(object):
     def __call__(self, data):
-        fs_k_space = data['fs_k_space']
-        image = root_sum_of_squares(ifft_2d_img(fs_k_space), coil_dim=1)
-        scaling_factor = 2*image.mean((1, 2), keepdim=True).unsqueeze(1)
+        input = data['input']
+        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
         
-        data['undersampled'] /= scaling_factor
+        data['input'] /= scaling_factor
+        data['target'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
-

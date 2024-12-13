@@ -23,7 +23,7 @@ class pl_VarNet(plReconModel):
             image_loss_function: Optional[str] = '',
             image_loss_scaling: float = 1,
             k_loss_function: Optional[str] = 'norml1l2',
-            k_loss_scaling: float = 1,
+            k_loss_scaling: float = 1.0,
             norm_all_k: bool = False,
             lr: float = 1e-3,
             is_supervised: bool = False
@@ -59,9 +59,8 @@ class pl_VarNet(plReconModel):
         Returns:
             float: loss value
         """
-        undersampled_k, fully_sampled_k, input_mask, loss_mask = self.build_masks(batch, self.is_supervised)
-        prediction = self.forward(undersampled_k, input_mask, fully_sampled_k)
-        target = fully_sampled_k * loss_mask
+        prediction = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
+        target = batch['target']
 
         target_img = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
@@ -69,75 +68,44 @@ class pl_VarNet(plReconModel):
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(undersampled_k*loss_mask, prediction*loss_mask) * self.k_loss_scaling
-            loss = loss / loss_mask.sum()
+            loss += self.k_loss_func(target, prediction*batch['loss_mask']) * self.k_loss_scaling
+            #loss = loss / loss_mask.sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
-        if self.current_epoch % 10 == 0 and batch_idx == 0: 
+        if self.current_epoch % 1 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'train')
 
         return loss
 
-    def build_masks(self, batch, is_supervised_masks):
-        k_space = batch['fs_k_space']
-        if is_supervised_masks:
-            input_mask = batch['initial_mask']
-            loss_mask = torch.ones_like(input_mask)
-        else:
-            input_mask = batch['initial_mask'] * batch['second_mask']
-            loss_mask = batch['initial_mask'] * (1 - batch['second_mask'])
-
-        under_k =  input_mask * k_space
-        return under_k, k_space, input_mask, loss_mask
-
+  
 
     def validation_step(self, batch, batch_idx):
-        initial_mask = batch['initial_mask']
-        k_space = batch['fs_k_space']
-        under_k = batch['undersampled']
-
-        prediction_full = self.forward(under_k, initial_mask, k_space)
-
-        doub_under, k_space, lambda_set, loss_set = self.build_masks(batch, self.is_supervised)
-        prediction_lambda = self.forward(doub_under, lambda_set, loss_set)
-
-        target_img = root_sum_of_squares(ifft_2d_img(k_space * loss_set), coil_dim=2)
-        estimated_img = root_sum_of_squares(ifft_2d_img(prediction_lambda * loss_set), coil_dim=2)
+        prediction_lambda = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
 
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(k_space*loss_set, prediction_lambda*loss_set)
-            loss = loss / loss_set.sum()
-        if self.image_loss_func: 
-            loss += self.image_loss_func(target_img, estimated_img) * self.image_space_scaling
+            loss += self.k_loss_func(batch['target'], prediction_lambda*batch['loss_mask'])
 
-        ssim = self.calculate_ssim(batch['fs_k_space'], prediction_full)
+        ssim = self.calculate_ssim(batch['fs_k_space'], prediction_lambda)
 
         for contrast, ssim_contrast in zip(self.contrast_order, ssim):
             self.log(f'val/ssim_full_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
-        if self.current_epoch % 10 == 0 and batch_idx == 0: 
+        if self.current_epoch % 1 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'val')
         return loss
 
 
     def test_step(self, batch, batch_index):
-        initial_mask = batch['initial_mask']
-        k_space = batch['fs_k_space']
-        under_k = batch['undersampled']
-        estimated_target = self.forward(under_k, initial_mask, k_space)
-        return super().test_step((estimated_target, batch['fs_k_space']), batch_index)
+        estimate_k = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
+        return super().test_step((estimate_k, batch['fs_k_space']), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        initial_mask = batch['initial_mask']
-        k_space = batch['fs_k_space']
-        under_k = initial_mask * k_space
-
-        estimate_k = self.forward(under_k, initial_mask, k_space)
+        estimate_k = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
 
         return super().on_test_batch_end(outputs, (estimate_k, batch['fs_k_space']), batch_idx, dataloader_idx)
 
@@ -156,22 +124,18 @@ class pl_VarNet(plReconModel):
 
     def plot_example_images(self, batch, mode='train'):
         with torch.no_grad():
-            fs_k_space = batch['fs_k_space']
-            undersampled_k = batch['undersampled']
-            initial_mask = batch['initial_mask']
+            input, mask, fs_k_space = batch['input'], batch['mask'], batch['fs_k_space']
             
             # pass original data through model
-            estimate_k = self.forward(undersampled_k, initial_mask, fs_k_space)
-            super().plot_images(estimate_k, fs_k_space, initial_mask, mode) 
+            estimate_k = self.forward(input, mask, fs_k_space)
+            super().plot_images(estimate_k, fs_k_space, mask, mode) 
 
-            sense_maps = self.model.sens_model(undersampled_k, initial_mask)
+            sense_maps = self.model.sens_model(input, mask)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
 
             # pass lambda set through model (if self supervised)
-            input_k, _, lambda_set, loss_set = self.build_masks(batch, self.is_supervised)
-            input = input_k[0, :, [0], :, :].abs()**0.2
-            target = (input_k * loss_set)[0, :, [0], :, :].abs()**0.2
-            estimate_lambda_k = self.forward(input_k, lambda_set, fs_k_space)
+            input = input[0, :, [0], :, :].abs()**0.2
+            target = (batch['target'])[0, :, [0], :, :].abs()**0.2
             
             if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger

@@ -77,7 +77,6 @@ def main(args):
                 R=args.R,
                 R_hat=args.R_hat,
                 contrasts=args.contrasts, 
-                sampling_method=args.sampling_method
                 ) 
         # this needs to be done to load contrast ordering for model
         data_module.setup('train')
@@ -125,8 +124,8 @@ if __name__ == '__main__':
     parser.add_argument('--limit_batches', type=float, default=1.0)
     parser.add_argument('--R', type=float, default=4.0)
     parser.add_argument('--R_hat', type=float, default=2.0)
-    parser.add_argument('--nx', type=int, default=128)
-    parser.add_argument('--ny', type=int, default=128)
+    parser.add_argument('--nx', type=int, default=256)
+    parser.add_argument('--ny', type=int, default=256)
     parser.add_argument('--norm_method', type=str, default='k')
     parser.add_argument('--supervised', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/home/brenden/Documents/data/simulated_subset_random_phase')

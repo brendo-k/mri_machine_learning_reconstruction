@@ -9,34 +9,34 @@ from argparse import ArgumentParser
 class Unet(nn.Module):
     """
     PyTorch implementation of a U-Net model.
+
+    O. Ronneberger, P. Fischer, and Thomas Brox. U-net: Convolutional networks
+    for biomedical image segmentation. In International Conference on Medical
+    image computing and computer-assisted intervention, pages 234–241.
+    Springer, 2015.
     """
 
     def __init__(
             self, 
-            in_chan: int, 
-            out_chan: int , 
-            depth: int = 4,
-            chans: int = 18, 
-            relu_slope: float = 0.0,
-            drop_prob: float = 0.0
+            in_chan, 
+            out_chan, 
+            depth=4,
+            chans=18, 
+            drop_prob=0
             ):
 
         super().__init__()
         self.down_sample_layers = nn.ModuleList([double_conv(in_chan, chans, drop_prob)])
         cur_chan = chans
-        self.relu_slope = relu_slope
-
         for _ in range(depth):
-            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob, relu_slope=relu_slope))
+            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob))
             cur_chan *= 2
 
         self.up_sample_layers = nn.ModuleList()
         for _ in range(depth):
-            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope=relu_slope))
+            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob))
             cur_chan //= 2
         self.conv1d = nn.Conv2d(chans, out_chan, 1, bias=False)
-
-
 
     def forward(self, x):
         x, pad_sizes = self.pad(x)
@@ -50,7 +50,6 @@ class Unet(nn.Module):
         x = self.conv1d(x)
         x = self.unpad(x, *pad_sizes)
         return x
-
 
 
     # pad input image to be divisible by 16 for unet downsampling
@@ -80,10 +79,10 @@ class Unet(nn.Module):
 
 
 class Unet_down(nn.Module):
-    def __init__(self, in_channel, out_channel, drop_prob, groups=1, relu_slope=0.0):
+    def __init__(self, in_channel, out_channel, drop_prob):
         super().__init__()
         self.down = down()
-        self.conv = double_conv(in_channel, out_channel, drop_prob, groups=groups, relu_slope=relu_slope)
+        self.conv = double_conv(in_channel, out_channel, drop_prob)
 
     def forward(self, x):
         x = self.down(x)
@@ -91,11 +90,11 @@ class Unet_down(nn.Module):
         return x
 
 class Unet_up(nn.Module):
-    def __init__(self, in_chan, out_chan, drop_prob, relu_slope=0.0):
+    def __init__(self, in_chan, out_chan, drop_prob):
         super().__init__()
         self.up = up(in_chan, out_chan)
         self.concat = concat()
-        self.conv = double_conv(in_chan, out_chan, drop_prob, relu_slope=relu_slope)
+        self.conv = double_conv(in_chan, out_chan, drop_prob)
 
     def forward(self, x, x_concat):
         x = self.up(x)
@@ -105,18 +104,18 @@ class Unet_up(nn.Module):
 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chans, out_chans, drop_prob, groups=1, relu_slope=0.0):
+    def __init__(self, in_chans, out_chans, drop_prob):
         
         super().__init__()
 
         self.layers = nn.Sequential(
-            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
-            nn.InstanceNorm2d(out_chans, affine=False),
-            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
+            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans, affine=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),
-            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False, groups=groups),
-            nn.InstanceNorm2d(out_chans, affine=False),
-            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
+            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_chans, affine=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(drop_prob),
         )
       
@@ -126,10 +125,10 @@ class double_conv(nn.Module):
 class down(nn.Module):
     def __init__(self):
         super().__init__()
-        self.avg_pool = nn.AvgPool2d(2, stride=(2, 2))
+        self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
 
     def forward(self, x):
-        x = self.avg_pool(x)
+        x = self.max_pool(x)
         return x
 
 

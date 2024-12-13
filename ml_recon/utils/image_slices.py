@@ -38,6 +38,7 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
                                 left=False,
                                 labelleft=False,
                                 labelbottom=False) 
+    plt.tight_layout()
 
     return fig, axes
 

@@ -19,66 +19,73 @@ class UndersampleDecorator(Dataset):
         self, 
         dataset: Dataset, 
         R: float = 4, 
-        R_hat: float = 2,
-        polynomial_order: int = 8, # only used for variable density
+        poly_order: int = 8,
         acs_lines: int = 10,
-        initial_sampling_method: str = '2d', # can be 2d, 1d, pi
-        is_ssdu_partitioning: bool = False, # if second mask is ssdu else use charlies method (same dist)
         transforms: Union[Callable, None] = None, 
+        self_supervised: bool = False, 
+        R_hat: float = math.nan,
+        original_ssdu_partioning: bool = False,
+        sampling_method: str = '2d'
     ):
         super().__init__()
 
         self.dataset = dataset
         self.contrasts = dataset[0].shape[0]
         self.contrast_order = dataset.contrast_order # type: ignore
-        self.initial_sampling_method = initial_sampling_method
+        self.sampling_type = sampling_method
         self.R = R
+        self.R_hat = R_hat
         self.acs_lines = acs_lines
-        self.is_ssdu_partitioning = is_ssdu_partitioning
+        self.original_ssdu_partioning = original_ssdu_partioning
+        
+        assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
-        self.line_constrained = True if is_ssdu_partitioning == '1d' else False       
-
-        if initial_sampling_method == '2d' or initial_sampling_method == '1d':
-            self.omega_prob = gen_pdf(self.line_constrained, dataset.nx, dataset.ny, 1/R, polynomial_order, acs_lines) # type: ignore
-            # create omega probability the same size as number of contrasts
+        if self.sampling_type == '2d':
+            line_constrained = False
+            self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
+            self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+        elif self.sampling_type == '1D':
+            line_constrained = True
+            self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
-        # create a random index for the determenistic seed
+        self.transforms = transforms
         self.random_index = random.randint(0, 1_000_000_000)
         self.acs_lines = acs_lines
 
-        self.transforms = transforms
+        #self supervised
+        self.self_supervised = self_supervised
 
-        self.R_hat = R_hat
-        
+
+
     def __len__(self):
         return self.dataset.__len__() # type: ignore
 
 
     def __getitem__(self, index):
-        k_space:NDArray[np.complex64] = self.dataset[index] #[con, chan, h, w] 
-        if self.initial_sampling_method == '1d' or self.initial_sampling_method == '2d': 
-            under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
-                                        self.omega_prob, 
-                                        k_space, 
-                                        deterministic=True, 
-                                        line_constrained=self.line_constrained, 
-                                        )
-        elif self.initial_sampling_method == 'pi':
-            mask_omega = self.gen_pi_mak(k_space)
-            under = k_space * mask_omega
-        else:
-            raise ValueError('Could not find an inital sampling method')
-
-
-        second_mask = self.gen_heuristic_ssl_masks(index, under, mask_omega)
+        k_space:NDArray[np.complex_] = self.dataset[index] #[con, chan, h, w] 
+        fully_sampled_k_space = k_space.copy()
+        first_undersampled, omega_mask = self.generate_inital_mask(index, k_space)
+        omega_mask = omega_mask.astype(np.float32)
 
         output = {
-            'fs_k_space': k_space, 
-            'undersampled': k_space * mask_omega,
-            'initial_mask': mask_omega.astype(np.float32),
-            'second_mask': second_mask.astype(np.float32)
-        }
+                'input': first_undersampled, 
+                'target': k_space, 
+                'fs_k_space': fully_sampled_k_space,
+                'mask': omega_mask,
+                'loss_mask': np.ones_like(omega_mask)
+                }
+
+        if self.self_supervised:
+            input_mask, loss_mask = self.generate_ssl_masks(index, first_undersampled, omega_mask, output)
+            output.update(
+                {
+                    'input': output['input'] * input_mask,
+                    'target': output['target'] * loss_mask,
+                    'mask': input_mask.astype(np.float32),
+                    'loss_mask': loss_mask.astype(np.float32),
+                }
+            )
         
         for keys in output:
             output[keys] = torch.from_numpy(output[keys])
@@ -88,36 +95,52 @@ class UndersampleDecorator(Dataset):
 
         return output
 
-    def gen_pi_mak(self, k_space):
-        mask_omega = np.zeros_like(k_space, dtype=bool)
-        # don't need coil dimension
-        mask_omega = mask_omega[:, [0], :, :]
-        mask_omega[..., ::int(self.R)] = 1
-        w = mask_omega.shape[-1]
-        mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1
-        return mask_omega
-
-    def gen_heuristic_ssl_masks(self, index, under, mask_omega):
-        if self.is_ssdu_partitioning:
-            second_undersampling_mask = []
+    def generate_ssl_masks(self, index, under, mask_omega, output):
+        if self.original_ssdu_partioning:
+            input_mask = []
             loss_mask = []
             for i in range(mask_omega.shape[0]):
                 input, loss = ssdu_gaussian_selection(mask_omega[i, 0])
-                second_undersampling_mask.append(np.expand_dims(input, 0))
+                input_mask.append(np.expand_dims(input, 0))
                 loss_mask.append(np.expand_dims(loss, 0))
 
-            second_undersampling_mask = np.stack(second_undersampling_mask, axis=0)
+            input_mask = np.stack(input_mask, axis=0)
             loss_mask = np.stack(loss_mask, axis=0)
+
         else:
+                # scale pdf
             scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
-            doub_under, second_undersampling_mask = apply_undersampling_from_dist(
+            line_constrained = self.sampling_type == '1d'
+            doub_under, mask_lambda = apply_undersampling_from_dist(
                         index,
                         scaled_new_prob,
                         under,
                         deterministic=False,
-                        line_constrained=self.line_constrained,
+                        line_constrained=line_constrained,
                         )
                 
-        
-        return second_undersampling_mask 
+                # loss mask is what is not in double undersampled
+            input_mask = mask_omega * mask_lambda
+            loss_mask = mask_omega * (1 - mask_lambda)
 
+        return input_mask, loss_mask
+
+    def generate_inital_mask(self, index, k_space):
+        if self.sampling_type == '2d' or self.sampling_type == '1d': 
+            line_constrained = self.sampling_type == '1d'
+            under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
+                                        self.omega_prob,
+                                        k_space, 
+                                        deterministic=True, 
+                                        line_constrained=line_constrained, 
+                                        )
+        elif self.sampling_type == 'pi':
+            mask_omega = np.zeros_like(k_space, dtype=bool)
+            mask_omega[..., ::int(self.R)] = 1
+            w = mask_omega.shape[-1]
+            mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1
+            under = k_space * mask_omega
+        else:
+            raise ValueError(f'Could not load {self.sampling_type}')
+        
+        return under, mask_omega
