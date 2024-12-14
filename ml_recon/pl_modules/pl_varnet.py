@@ -59,8 +59,11 @@ class pl_VarNet(plReconModel):
         Returns:
             float: loss value
         """
-        prediction = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
-        target = batch['target']
+        undersampled = batch['undersampled']
+        fully_sampled = batch['fs_k_space']
+        mask = batch['mask']
+        prediction = self.forward(undersampled, mask, fully_sampled) #fully sampled here used for zero filling mask
+        target = fully_sampled * batch['loss_mask'] # loss mask is all ones in fully supervised case
 
         target_img = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
@@ -82,14 +85,23 @@ class pl_VarNet(plReconModel):
   
 
     def validation_step(self, batch, batch_idx):
-        prediction_lambda = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
+        undersampled = batch['undersampled']
+        fully_sampled = batch['fs_k_space']
+        mask = batch['mask']
+        prediction_lambda = self.forward(undersampled * mask, mask, fully_sampled) #fully sampled here used for zero filling mask
+        target = fully_sampled * batch['loss_mask'] # loss mask is all ones in fully supervised case
 
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(batch['target'], prediction_lambda*batch['loss_mask'])
+            loss += self.k_loss_func(target, prediction_lambda*batch['loss_mask'])
 
-        ssim = self.calculate_ssim(batch['fs_k_space'], prediction_lambda)
+
+        inital_mask = batch['mask'] 
+        if (batch['loss_mask'] == 0).any():
+            inital_mask = inital_mask + batch['loss_mask']
+        prediction_full = self.forward(undersampled, inital_mask, fully_sampled)
+        ssim = self.calculate_ssim(batch['fs_k_space'], prediction_full)
 
         for contrast, ssim_contrast in zip(self.contrast_order, ssim):
             self.log(f'val/ssim_full_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
@@ -101,11 +113,19 @@ class pl_VarNet(plReconModel):
 
 
     def test_step(self, batch, batch_index):
-        estimate_k = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
+        mask = batch['mask']
+        if (batch['loss_mask'] == 0).any(): # if loss mask has zeros (must be ssl loss mask)
+            mask += batch['loss_mask'] # combine to get original sampliing mask
+
+        estimate_k = self.forward(batch['undersampled'], mask, batch['fs_k_space'])
         return super().test_step((estimate_k, batch['fs_k_space']), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        estimate_k = self.forward(batch['input'], batch['mask'], batch['fs_k_space'])
+        mask = batch['mask']
+        if (batch['loss_mask'] == 0).any(): # if loss mask has zeros (must be ssl loss mask)
+            mask += batch['loss_mask'] # combine to get original sampliing mask
+
+        estimate_k = self.forward(batch['undersampled'], mask, batch['fs_k_space'])
 
         return super().on_test_batch_end(outputs, (estimate_k, batch['fs_k_space']), batch_idx, dataloader_idx)
 
@@ -124,24 +144,25 @@ class pl_VarNet(plReconModel):
 
     def plot_example_images(self, batch, mode='train'):
         with torch.no_grad():
-            input, mask, fs_k_space = batch['input'], batch['mask'], batch['fs_k_space']
+            undersampled, mask, fs_k_space = batch['undersampled'], batch['mask'], batch['fs_k_space']
             
             # pass original data through model
-            estimate_k = self.forward(input, mask, fs_k_space)
+            estimate_k = self.forward(undersampled, mask, fs_k_space)
             super().plot_images(estimate_k, fs_k_space, mask, mode) 
 
-            sense_maps = self.model.sens_model(input, mask)
+            sense_maps = self.model.sens_model(undersampled, mask)
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
 
             # pass lambda set through model (if self supervised)
-            input = input[0, :, [0], :, :].abs()**0.2
-            target = (batch['target'])[0, :, [0], :, :].abs()**0.2
+            target = undersampled * batch['loss_mask']
+            undersampled = undersampled[0, :, [0], :, :].abs()**0.2
+            target = target[0, :, [0], :, :].abs()**0.2
             
             if isinstance(self.logger, WandbLogger):
                 wandb_logger = self.logger
                 wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
                 wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))
-                wandb_logger.log_image(mode + '/input', np.split(input.clamp(0, 1).cpu().numpy(), input.shape[0], 0))
+                wandb_logger.log_image(mode + '/input', np.split(undersampled.clamp(0, 1).cpu().numpy(), undersampled.shape[0], 0))
 
     def _set_image_loss_func(self, image_loss_function):
         if image_loss_function == 'ssim':

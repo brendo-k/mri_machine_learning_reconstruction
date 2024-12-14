@@ -69,8 +69,7 @@ class UndersampleDecorator(Dataset):
         omega_mask = omega_mask.astype(np.float32)
 
         output = {
-                'input': first_undersampled, 
-                'target': k_space, 
+                'undersampled': first_undersampled, 
                 'fs_k_space': fully_sampled_k_space,
                 'mask': omega_mask,
                 'loss_mask': np.ones_like(omega_mask)
@@ -80,8 +79,6 @@ class UndersampleDecorator(Dataset):
             input_mask, loss_mask = self.generate_ssl_masks(index, first_undersampled, omega_mask, output)
             output.update(
                 {
-                    'input': output['input'] * input_mask,
-                    'target': output['target'] * loss_mask,
                     'mask': input_mask.astype(np.float32),
                     'loss_mask': loss_mask.astype(np.float32),
                 }

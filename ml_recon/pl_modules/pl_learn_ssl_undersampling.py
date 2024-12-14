@@ -67,12 +67,10 @@ class LearnedSSLLightning(plReconModel):
         k_loss_inverse = torch.tensor([0.0], device=self.device)
 
         fully_sampled = batch['fs_k_space']
-        undersampled_k = fully_sampled * batch['initial_mask']
-
         input_mask, loss_mask = self.partition_k_space(batch)
-        
+        undersampled_k = batch['undersampled']
         estimates = self.recon_model.forward(
-            undersampled_k, 
+            undersampled_k,
             fully_sampled, 
             input_mask, 
             loss_mask,
@@ -133,7 +131,7 @@ class LearnedSSLLightning(plReconModel):
         if self.is_learn_partitioning:
             self.log_R_value()
         
-        initial_mask = batch['initial_mask']
+        initial_mask = undersampled_k != 0
         self.log_k_space_set_ratios(input_mask, initial_mask)
 
         return loss
@@ -150,7 +148,6 @@ class LearnedSSLLightning(plReconModel):
 
         wandb_logger = self.logger
         fs_k_space = batch['fs_k_space']
-        initial_mask = batch['initial_mask']
         undersampled_k = batch['undersampled']
 
         input_mask, loss_mask = self.partition_k_space(batch)
@@ -177,7 +174,7 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('train/estimate_full', self.split_along_contrasts(full_images[0]))
 
         # plot masks (first of the batch)
-        initial_mask = initial_mask[0, :, 0, :, :]
+        initial_mask = (undersampled_k != 0)[0, :, 0, :, :]
         lambda_set_plot = input_mask[0, :, 0, : ,:]
         loss_mask = loss_mask[0, :, 0, : ,:]
         wandb_logger.log_image('train/lambda_set', self.split_along_contrasts(lambda_set_plot))
@@ -191,7 +188,7 @@ class LearnedSSLLightning(plReconModel):
 
 
     def validation_step(self, batch, batch_idx):
-        under = batch['fs_k_space'] * batch['initial_mask']
+        under = batch['undersampled']
         fs_k_space = batch['fs_k_space']
 
         lambda_set, loss_set = self.partition_k_space(batch)
@@ -221,7 +218,6 @@ class LearnedSSLLightning(plReconModel):
 
         under = batch['undersampled']
         fs_k_space = batch['fs_k_space']
-        initial_mask = batch['initial_mask']
 
         lambda_set, loss_set = self.partition_k_space(batch)
         estimates = self.recon_model(under, fs_k_space, lambda_set, loss_set, return_all=True)
@@ -260,19 +256,14 @@ class LearnedSSLLightning(plReconModel):
             estimate_inverse (torch.Tensor, optional): Inverse estimated k-space data. Defaults to None.
             estimate_full (torch.Tensor, optional): Fully estimated k-space data. Defaults to None.
         """
-        # Convert k-space to image space and scale
+        # Get scaling factor
         image_scaling = k_to_img(fs_k_space).amax(dim=(-1, -2), keepdim=True)
-        fully_sampled_img = self.k_to_img_scaled(fs_k_space, image_scaling)
-    
-        est_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
-        est_lambda_img = torch.clip(est_lambda_img, 0, 1)
 
-        # Process optional estimates
-        est_inverse_img, est_full_img = None, None
-        if estimate_inverse is not None:
-            est_inverse_img = self.k_to_img_scaled(estimate_inverse, image_scaling)
-        if estimate_full is not None:
-            est_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
+        # convert to images and clip 0, 1
+        fully_sampled_img = self.k_to_img_scaled(fs_k_space, image_scaling)
+        est_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
+        est_inverse_img = self.k_to_img_scaled(estimate_inverse, image_scaling)
+        est_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
 
         # Helper function to log SSIM metrics
         def log_ssim(label, img1, img2):
@@ -296,6 +287,7 @@ class LearnedSSLLightning(plReconModel):
         log_nmse("gt_inverse", fs_k_space, estimate_inverse)
         log_nmse("gt_lambda", fs_k_space, estimate_lambda)
 
+
     def k_to_img_scaled(self, estimate_lambda, image_scaling):
         est_lambda_img = torch.clip(k_to_img(estimate_lambda) / image_scaling, 0, 1)
         return est_lambda_img
@@ -304,7 +296,9 @@ class LearnedSSLLightning(plReconModel):
     def test_step(self, batch, batch_index):
         fully_sampled_k = batch['fs_k_space']
         undersampled = batch['undersampled']
-        mask = batch['initial_mask']
+        mask = batch['mask']
+        if (batch['loss_mask'] == 0).any(): # if loss mask has zeros (must be ssl loss mask)
+            mask += batch['loss_mask'] # combine to get original sampliing mask
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
@@ -313,7 +307,9 @@ class LearnedSSLLightning(plReconModel):
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         fully_sampled_k = batch['fs_k_space']
         undersampled = batch['undersampled']
-        mask = batch['initial_mask']
+        mask = batch['mask']
+        if (batch['loss_mask'] == 0).any(): # if loss mask has zeros (must be ssl loss mask)
+            mask += batch['loss_mask'] # combine to get original sampliing mask
         # pass inital data through the model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
@@ -378,9 +374,6 @@ class LearnedSSLLightning(plReconModel):
         else:
             raise ValueError('No k-space loss!')
 
-    def get_masks_from_dataset(self, batch):
-        return batch['initial_mask'] * batch['second_mask'], batch['initial_mask'] * (1 - batch['second_mask'])
-
     def log_R_value(self):
         R_value = self.partition_model.get_R()
         for i, contrast in enumerate(self.contrast_order):
@@ -403,20 +396,19 @@ class LearnedSSLLightning(plReconModel):
         return k_loss_inverse
     
     def partition_k_space(self, batch):
-        initial_mask = batch['initial_mask'].to(torch.float32)
-
         # if supervised, just return the inital mask and loss mask of all ones 
         if self.is_supervised_training:
-            input_mask = initial_mask
+            input_mask = batch['mask']
             loss_mask = torch.ones_like(input_mask)
 
             return input_mask, loss_mask
 
         # compute either learned or heuristic partioning masks
         if self.is_learn_partitioning: 
+            initial_mask = batch['mask'] + batch['loss_mask']
             input_mask, loss_mask = self.partition_model(initial_mask)
         else: 
-            input_mask, loss_mask = self.get_masks_from_dataset(batch)
+            input_mask, loss_mask = batch['mask'] + batch['loss_mask']
         return input_mask, loss_mask
 
     def split_along_contrasts(self, image):
