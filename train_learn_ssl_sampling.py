@@ -153,8 +153,8 @@ if __name__ == '__main__':
     dataset_group.add_argument('--dataset', type=str, default='m4raw')
     dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
     dataset_group.add_argument('--data_dir', type=str, default="/Users/brend/Documents/Data")
-    dataset_group.add_argument('--nx', type=int, default=128)
-    dataset_group.add_argument('--ny', type=int, default=128)
+    dataset_group.add_argument('--nx', type=int, default=256)
+    dataset_group.add_argument('--ny', type=int, default=256)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
 
