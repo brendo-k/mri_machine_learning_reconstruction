@@ -15,3 +15,5 @@ artifacts
 MRI\ Reconstruction
 SSL\ Characterization
 checkpoints
+ml_recon.egg-info
+build/** 

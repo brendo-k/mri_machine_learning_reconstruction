@@ -84,6 +84,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'sampling_method': self.sampling_method,
                 'transforms': self.transforms,
+                'self_supervised': self.self_supervised,
         }
 
         self.train_dataset = self.dataset_class(
@@ -103,20 +104,17 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
-                self_supervised=self.self_supervised,
                 original_ssdu_partioning=self.ssdu_partioning,
                 **undersample_keywords
                 )
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
-                self_supervised=False,
                 **undersample_keywords
                 )
         
         self.test_dataset = UndersampleDecorator(
                 self.test_dataset,
-                self_supervised=False,
                 **undersample_keywords
                 )
 
