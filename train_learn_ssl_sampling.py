@@ -69,7 +69,8 @@ def main(args):
             num_workers=args.num_workers,
             contrasts=args.contrasts,
             sampling_method=args.sampling_method,
-            R=args.R
+            R=args.R,
+            self_supervsied=(not args.supervised)
             ) 
 
     data_module.setup('train')
