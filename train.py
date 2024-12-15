@@ -86,7 +86,8 @@ def main(args):
             cascades=args.cascades, 
             channels=args.chans,
             split_contrast_by_phase=args.split_contrast_by_phase,
-            sensetivity_estimation=args.sense_method
+            sensetivity_estimation=args.sense_method,
+            model=args.model
 
         )
 

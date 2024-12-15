@@ -1,6 +1,6 @@
 import pytest
 import torch
-from ml_recon.models.XNet import XNet
+from ml_recon.models import XNet
 
 @pytest.fixture
 def model(device):
@@ -8,7 +8,7 @@ def model(device):
     model.to(device)
     return model
 
-def test_forward(model, image_input_3_contrast, device):
+def test_forward_shape(model, image_input_3_contrast, device):
     image_input_3_contrast = image_input_3_contrast.to(device)
     output = model(image_input_3_contrast)
 

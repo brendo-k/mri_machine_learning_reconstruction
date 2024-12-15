@@ -103,6 +103,8 @@ class SensetivityModel_mc(nn.Module):
         # force symmetric left and right acs boundries
         low_freq_x = torch.min(left, right)
         low_freq_y = torch.min(top, bottom)
+        low_freq_x[low_freq_x < 5] = 5
+        low_freq_y[low_freq_y < 5] = 5
         center_mask = torch.zeros_like(coil_k_spaces[:, :, 0, :, :], dtype=torch.bool)
         # loop through num_low freq tensor and set acs lines to true
         for i in range(low_freq_x.shape[0]):

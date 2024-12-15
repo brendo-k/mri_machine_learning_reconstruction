@@ -22,19 +22,20 @@ class Unet(nn.Module):
             out_chan, 
             depth=4,
             chans=18, 
-            drop_prob=0
+            drop_prob=0, 
+            relu_slope=0.2
             ):
 
         super().__init__()
-        self.down_sample_layers = nn.ModuleList([double_conv(in_chan, chans, drop_prob)])
+        self.down_sample_layers = nn.ModuleList([double_conv(in_chan, chans, drop_prob, relu_slope)])
         cur_chan = chans
         for _ in range(depth):
-            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob))
+            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob, relu_slope))
             cur_chan *= 2
 
         self.up_sample_layers = nn.ModuleList()
         for _ in range(depth):
-            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob))
+            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope))
             cur_chan //= 2
         self.conv1d = nn.Conv2d(chans, out_chan, 1, bias=False)
 
@@ -79,10 +80,10 @@ class Unet(nn.Module):
 
 
 class Unet_down(nn.Module):
-    def __init__(self, in_channel, out_channel, drop_prob):
+    def __init__(self, in_channel, out_channel, drop_prob, relu_slope):
         super().__init__()
         self.down = down()
-        self.conv = double_conv(in_channel, out_channel, drop_prob)
+        self.conv = double_conv(in_channel, out_channel, drop_prob, relu_slope)
 
     def forward(self, x):
         x = self.down(x)
@@ -90,11 +91,11 @@ class Unet_down(nn.Module):
         return x
 
 class Unet_up(nn.Module):
-    def __init__(self, in_chan, out_chan, drop_prob):
+    def __init__(self, in_chan, out_chan, drop_prob, relu_slope):
         super().__init__()
         self.up = up(in_chan, out_chan)
         self.concat = concat()
-        self.conv = double_conv(in_chan, out_chan, drop_prob)
+        self.conv = double_conv(in_chan, out_chan, drop_prob, relu_slope)
 
     def forward(self, x, x_concat):
         x = self.up(x)
@@ -104,18 +105,18 @@ class Unet_up(nn.Module):
 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chans, out_chans, drop_prob):
+    def __init__(self, in_chans, out_chans, drop_prob, relu_slope):
         
         super().__init__()
 
         self.layers = nn.Sequential(
             nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
             nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
             nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
             nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
         )
       

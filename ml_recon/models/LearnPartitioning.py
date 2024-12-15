@@ -45,12 +45,12 @@ class LearnPartitioning(nn.Module):
         return lambda_set, inverse_set
     
     def split_into_lambda_loss_sets(self, omega_mask, batch_size): 
-        lambda_mask = self.get_mask(batch_size, mask_center=True)
+        lambda_mask = self.get_mask(batch_size)
         return omega_mask * lambda_mask, omega_mask * (1 - lambda_mask)
 
-    def get_mask(self, batch_size, mask_center=False):
+    def get_mask(self, batch_size):
         # Calculate probability and normalize
-        norm_probability = self.get_probability(mask_center)
+        norm_probability = self.get_probability()
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
@@ -71,7 +71,7 @@ class LearnPartitioning(nn.Module):
         return sampling_mask.unsqueeze(2)
     
     
-    def get_probability(self, mask_center):
+    def get_probability(self):
         sampling_weights = self.sampling_weights
 
         # get probability from sampling weights. Pass through sigmoid. 
@@ -81,18 +81,18 @@ class LearnPartitioning(nn.Module):
 
 
         # normalize the prob distribution to this R (this step is why we need the list of tensors for probability distribution)
-        norm_probability = self.norm_prob(probability, mask_center=mask_center)
+        norm_probability = self.norm_prob(probability)
 
         # we can now concat the list together now. We are safe
         norm_probability = torch.stack(norm_probability, dim=0)
         return norm_probability
     
     
-    def norm_prob(self, probability:List[torch.Tensor], center_region=10, mask_center=False):
+    def norm_prob(self, probability:List[torch.Tensor], center_region=10,):
         image_shape = probability[0].shape
         cur_R = self.get_R()
 
-        probability = self.norm_2d_probability(probability, cur_R, center_region, mask_center, image_shape)
+        probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
         # testing function to ensure probabilities are close to the set R value
         for probs, R in zip(probability, cur_R):
@@ -101,7 +101,7 @@ class LearnPartitioning(nn.Module):
         return probability
     
     
-    def norm_2d_probability(self, probability, cur_R, center_region, mask_center, image_shape):
+    def norm_2d_probability(self, probability, cur_R, center_region, image_shape):
         center = [image_shape[0]//2, image_shape[1]//2]
 
         center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
@@ -111,8 +111,7 @@ class LearnPartitioning(nn.Module):
 
         # create acs mask of zeros for acs box and zeros elsewhere
         center_mask = torch.ones(image_shape, device=probability[0].device)
-        if mask_center:
-            center_mask[center_bb_y, center_bb_x] = 0
+        center_mask[center_bb_y, center_bb_x] = 0
 
         for i in range(len(probability)):
             probability[i] = probability[i] * center_mask
@@ -120,8 +119,7 @@ class LearnPartitioning(nn.Module):
             
         for i in range(len(probability)):
             probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
-            if mask_center:
-                probability_total -= center_region ** 2
+            probability_total -= center_region ** 2
 
             # we need to find cur_R * scaling_factor = R
             # scaling down the values of 1
@@ -135,8 +133,7 @@ class LearnPartitioning(nn.Module):
             else:
                 inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
                 inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
-                if mask_center:
-                    inverse_sum -= center_region**2
+                inverse_sum -= center_region**2
                 inverse_total = torch.maximum(inverse_total, torch.zeros_like(inverse_sum))
                 scaling_factor = inverse_total / inverse_sum
                 assert scaling_factor <= 1 and scaling_factor >= 0
@@ -145,9 +142,8 @@ class LearnPartitioning(nn.Module):
                 probability[i] = 1 - inv_prob
            
             # acs box is now ones and everything else is zeros
-        if mask_center:
-            for i in range(len(probability)):
-                probability[i][center_bb_y, center_bb_x] = 1
+        for i in range(len(probability)):
+            probability[i][center_bb_y, center_bb_x] = 1
         return probability
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):

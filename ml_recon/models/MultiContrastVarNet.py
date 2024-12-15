@@ -4,6 +4,7 @@ from typing import Tuple, Union
 from functools import partial
 
 from ml_recon.models import Unet
+from ml_recon.models.XNet import XNet
 from functools import partial
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
@@ -12,6 +13,7 @@ from dataclasses import dataclass
 @dataclass
 class VarnetConfig:
     contrast_order: list
+    model: str = 'unet'
     cascades: int = 5
     sense_chans: int = 8
     channels: int = 18
@@ -22,11 +24,13 @@ class VarnetConfig:
 class MultiContrastVarNet(nn.Module):
     def __init__(self, 
                 config: VarnetConfig
-
                  ):
         super().__init__()
         contrasts = len(config.contrast_order)
-        model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=config.channels)
+        if config.model == 'unet':
+            model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=config.channels)
+        else:
+            model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
 
         # module cascades
         self.cascades = nn.ModuleList(

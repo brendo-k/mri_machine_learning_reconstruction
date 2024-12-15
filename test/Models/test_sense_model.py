@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture
 def sensitivity_model():
     """Fixture to create a SensetivityModel_mc instance for testing."""
-    return SensetivityModel_mc(in_chans=2, out_chans=2, chans=18, contrasts=1)
+    return SensetivityModel_mc(in_chans=2, out_chans=2, chans=18)
 
 @torch.no_grad()
 def test_passthrough(sensitivity_model):
@@ -51,7 +51,7 @@ def test_scaling():
     mask[..., 150:170] = 1
     mask = mask.to(torch.bool)
 
-    sense_model = SensetivityModel_mc(2, 2, 4, contrasts=1)
+    sense_model = SensetivityModel_mc(2, 2, 4)
     x_masked = sense_model(x, mask)
 
     x_summed = (x_masked * x_masked.conj()).sum(2)

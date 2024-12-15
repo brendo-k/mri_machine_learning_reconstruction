@@ -67,8 +67,9 @@ class LearnedSSLLightning(plReconModel):
         k_loss_inverse = torch.tensor([0.0], device=self.device)
 
         fully_sampled = batch['fs_k_space']
-        input_mask, loss_mask = self.partition_k_space(batch)
         undersampled_k = batch['undersampled']
+
+        input_mask, loss_mask = self.partition_k_space(batch)
         estimates = self.recon_model.forward(
             undersampled_k,
             fully_sampled, 
@@ -77,6 +78,7 @@ class LearnedSSLLightning(plReconModel):
             return_all=True
         )
 
+        # estimated k-space from different paths
         lambda_k = estimates['lambda_path']
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
@@ -408,7 +410,7 @@ class LearnedSSLLightning(plReconModel):
             initial_mask = batch['mask'] + batch['loss_mask']
             input_mask, loss_mask = self.partition_model(initial_mask)
         else: 
-            input_mask, loss_mask = batch['mask'] + batch['loss_mask']
+            input_mask, loss_mask = batch['mask'], batch['loss_mask']
         return input_mask, loss_mask
 
     def split_along_contrasts(self, image):

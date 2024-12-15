@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from ml_recon.models.UNet import concat, double_conv, Unet_down, Unet_up, down
+from ml_recon.models.UNet import double_conv, Unet_down, Unet_up, down
 
 class XNet(nn.Module):
     def __init__(self, contrast_order: list, channels: int, depth: int = 4, drop_prob: float = 0.0):
