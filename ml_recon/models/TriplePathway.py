@@ -55,6 +55,7 @@ class TriplePathway(nn.Module):
         estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate * zero_pad_mask
 
+    # replace estimated points with aquired points
     def final_dc_step(self, undersampled, estimated, mask):
         return estimated * (1 - mask) + undersampled * mask
 
@@ -66,6 +67,11 @@ class TriplePathway(nn.Module):
             
         return estimate_inverse
 
+    def pass_through_lambda_path(self, undersampled, fs_k_space, input_set):
+        estimate_lambda = self.pass_through_model(undersampled * input_set, input_set, fs_k_space)
+
+        return estimate_lambda
+
     @staticmethod
     def create_inverted_masks(lambda_set, inverse_set):
         _, _, _, h, w = lambda_set.shape
@@ -74,9 +80,3 @@ class TriplePathway(nn.Module):
         mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
         return mask_inverse_w_acs,mask_lambda_wo_acs
-
-    def pass_through_lambda_path(self, undersampled, fs_k_space, input_set):
-        estimate_lambda = self.pass_through_model(undersampled * input_set, input_set, fs_k_space)
-
-        return estimate_lambda
-    

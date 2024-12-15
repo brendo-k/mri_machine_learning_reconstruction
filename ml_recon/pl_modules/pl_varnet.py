@@ -78,7 +78,7 @@ class pl_VarNet(plReconModel):
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
         self.log('train/train_loss', loss, on_epoch=True, on_step=True, logger=True, sync_dist=True)
-        if self.current_epoch % 1 == 0 and batch_idx == 0: 
+        if self.current_epoch % 10 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'train')
 
         return loss
@@ -109,7 +109,7 @@ class pl_VarNet(plReconModel):
             self.log(f'val/ssim_full_{contrast}', ssim_contrast, on_epoch=True, logger=True, sync_dist=True)
         self.log('val/val_loss', loss, on_epoch=True, logger=True, sync_dist=True)
 
-        if self.current_epoch % 1 == 0 and batch_idx == 0: 
+        if self.current_epoch % 10 == 0 and batch_idx == 0: 
             self.plot_example_images(batch, 'val')
         return loss
 

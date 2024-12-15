@@ -33,6 +33,7 @@ class M4Raw(Dataset):
         slices = []
         contrast_order = []
 
+        files.sort()
         for file in files:
             file_path = os.path.join(data_dir, file)
             self.file_names.append(file_path)
