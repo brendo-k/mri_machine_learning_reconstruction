@@ -185,7 +185,7 @@ class LearnedSSLLightning(plReconModel):
 
         # plot probability if learn partitioning
         if self.is_learn_partitioning:
-            probability = self.partition_model.get_probability(True)
+            probability = self.partition_model.get_probability()
             wandb_logger.log_image('train/probability', self.split_along_contrasts(probability))
 
 

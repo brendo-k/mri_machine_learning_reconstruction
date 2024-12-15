@@ -11,7 +11,7 @@ def test_double_conv():
     x = torch.randn(input_shape)
 
     # Create an instance of the double_conv module
-    double_conv_module = double_conv(in_chans, out_chans, drop_prob)
+    double_conv_module = double_conv(in_chans, out_chans, drop_prob, relu_slope=0.2)
 
     # Ensure the output shape matches the expected shape
     output = double_conv_module(x)
@@ -69,7 +69,7 @@ def test_unet_forward():
     height, width = 128, 128
 
     # Create an instance of the Unet model
-    model = Unet(in_channels, out_channels, depth, chans, drop_prob)
+    model = Unet(in_channels, out_channels, depth, chans, drop_prob, relu_slope=0.2)
 
     # Generate random input data
     input_data = torch.rand(batch_size, in_channels, height, width)
@@ -92,7 +92,7 @@ def test_unet_down_forward():
     height, width = 64, 64
 
     # Create an instance of the Unet_down module
-    down_module = Unet_down(in_channels, out_channels, drop_prob)
+    down_module = Unet_down(in_channels, out_channels, drop_prob, relu_slope=0.2)
 
     # Generate random input data
     input_data = torch.rand(batch_size, in_channels, height, width)
@@ -115,7 +115,7 @@ def test_unet_up_forward():
     height, width = 64, 64
 
     # Create an instance of the Unet_down module
-    up_module = Unet_up(in_channels, out_channels, drop_prob)
+    up_module = Unet_up(in_channels, out_channels, drop_prob, relu_slope=0.2)
 
     # Generate random input data
     input_data = torch.rand(batch_size, in_channels, height, width)

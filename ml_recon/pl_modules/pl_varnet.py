@@ -62,8 +62,9 @@ class pl_VarNet(plReconModel):
         undersampled = batch['undersampled']
         fully_sampled = batch['fs_k_space']
         mask = batch['mask']
+        loss_mask = batch['loss_mask']
         prediction = self.forward(undersampled, mask, fully_sampled) #fully sampled here used for zero filling mask
-        target = fully_sampled * batch['loss_mask'] # loss mask is all ones in fully supervised case
+        target = fully_sampled * loss_mask # loss mask is all ones in fully supervised case
 
         target_img = root_sum_of_squares(ifft_2d_img(target), coil_dim=2)
         estimated_img = root_sum_of_squares(ifft_2d_img(prediction), coil_dim=2)
@@ -71,8 +72,8 @@ class pl_VarNet(plReconModel):
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(target, prediction*batch['loss_mask']) * self.k_loss_scaling
-            #loss = loss / loss_mask.sum()
+            loss += self.k_loss_func(target, prediction*loss_mask) * self.k_loss_scaling
+            loss = loss / loss_mask.sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
@@ -88,18 +89,19 @@ class pl_VarNet(plReconModel):
         undersampled = batch['undersampled']
         fully_sampled = batch['fs_k_space']
         mask = batch['mask']
+        loss_mask = batch['loss_mask']
         prediction_lambda = self.forward(undersampled * mask, mask, fully_sampled) #fully sampled here used for zero filling mask
-        target = fully_sampled * batch['loss_mask'] # loss mask is all ones in fully supervised case
+        target = fully_sampled * loss_mask # loss mask is all ones in fully supervised case
 
         loss = torch.tensor([0], dtype=torch.float32, device=self.device)
         
         if self.k_loss_func:
-            loss += self.k_loss_func(target, prediction_lambda*batch['loss_mask'])
+            loss += self.k_loss_func(target, prediction_lambda*loss_mask)
 
 
         inital_mask = batch['mask'] 
-        if (batch['loss_mask'] == 0).any():
-            inital_mask = inital_mask + batch['loss_mask']
+        if (loss_mask == 0).any():
+            inital_mask = inital_mask + loss_mask
         prediction_full = self.forward(undersampled, inital_mask, fully_sampled)
         ssim = self.calculate_ssim(batch['fs_k_space'], prediction_full)
 

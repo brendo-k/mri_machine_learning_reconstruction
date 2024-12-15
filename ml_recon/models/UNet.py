@@ -18,12 +18,12 @@ class Unet(nn.Module):
 
     def __init__(
             self, 
-            in_chan, 
-            out_chan, 
-            depth=4,
-            chans=18, 
-            drop_prob=0, 
-            relu_slope=0.2
+            in_chan:int, 
+            out_chan:int, 
+            depth:int=4,
+            chans:int=18, 
+            drop_prob:float=0.0, 
+            relu_slope:float=0.2
             ):
 
         super().__init__()
