@@ -366,7 +366,7 @@ class LearnedSSLLightning(plReconModel):
                     torch.view_as_real(undersampled * loss_mask),
                     torch.view_as_real(estimate * loss_mask), 
                     )
-        k_loss /= loss_mask.sum() # normalize based on loss mask
+        #k_loss /= loss_mask.sum() # normalize based on loss mask
                     
         return k_loss * loss_scaling
 
@@ -375,9 +375,9 @@ class LearnedSSLLightning(plReconModel):
         if k_space_loss_function == 'l1l2':
             self.k_space_loss = L1L2Loss(norm_all_k=False)
         elif k_space_loss_function == 'l1':
-            self.k_space_loss = torch.nn.L1Loss(reduction='sum')
+            self.k_space_loss = torch.nn.L1Loss()
         elif k_space_loss_function == 'l2': 
-            self.k_space_loss = torch.nn.MSELoss(reduction='sum')
+            self.k_space_loss = torch.nn.MSELoss()
         else:
             raise ValueError('No k-space loss!')
 
