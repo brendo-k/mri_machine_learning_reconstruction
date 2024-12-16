@@ -375,9 +375,9 @@ class LearnedSSLLightning(plReconModel):
         if k_space_loss_function == 'l1l2':
             self.k_space_loss = L1L2Loss(norm_all_k=False)
         elif k_space_loss_function == 'l1':
-            self.k_space_loss = torch.nn.L1Loss()
+            self.k_space_loss = torch.nn.L1Loss(reduction='sum')
         elif k_space_loss_function == 'l2': 
-            self.k_space_loss = torch.nn.MSELoss()
+            self.k_space_loss = torch.nn.MSELoss(reduction='sum')
         else:
             raise ValueError('No k-space loss!')
 
