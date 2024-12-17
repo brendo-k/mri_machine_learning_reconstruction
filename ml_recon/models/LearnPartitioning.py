@@ -93,7 +93,7 @@ class LearnPartitioning(nn.Module):
         cur_R = self.get_R()
 
         # if not learn probability, no need to norm
-        if not self.learned_R_value:
+        if not self.config.is_learn_R:
             probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
 
