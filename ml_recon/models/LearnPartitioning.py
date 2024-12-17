@@ -50,7 +50,7 @@ class LearnPartitioning(nn.Module):
 
     def get_mask(self, batch_size):
         # Calculate probability and normalize
-        norm_probability = self.get_probability()
+        norm_probability = self.get_norm_probability()
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
@@ -71,7 +71,7 @@ class LearnPartitioning(nn.Module):
         return sampling_mask.unsqueeze(2)
     
     
-    def get_probability(self):
+    def get_norm_probability(self):
         sampling_weights = self.sampling_weights
 
         # get probability from sampling weights. Pass through sigmoid. 
@@ -92,7 +92,10 @@ class LearnPartitioning(nn.Module):
         image_shape = probability[0].shape
         cur_R = self.get_R()
 
-        probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
+        # if not learn probability, no need to norm
+        if not self.learned_R_value:
+            probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
+
 
         # testing function to ensure probabilities are close to the set R value
         for probs, R in zip(probability, cur_R):
@@ -140,10 +143,11 @@ class LearnPartitioning(nn.Module):
 
                 inv_prob = (1 - probability[i])*scaling_factor
                 probability[i] = 1 - inv_prob
-           
-            # acs box is now ones and everything else is zeros
+                    
+        # acs box is now ones and everything else is zeros
         for i in range(len(probability)):
             probability[i][center_bb_y, center_bb_x] = 1
+           
         return probability
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
@@ -153,6 +157,8 @@ class LearnPartitioning(nn.Module):
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
             init_prob = torch.zeros(config.image_size) + 0.5
+            h, w = init_prob.shape[1], init_prob.shape[2]
+            init_prob[:, h//2 - config.k_center_region//2:h//2 + config.k_center_region//2, w//2 - config.k_center_region//2:w//2 + config.k_center_region//2] = 0.99
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability)
 
     def _setup_R_values(self, config: LearnPartitionConfig):
@@ -163,10 +169,11 @@ class LearnPartitioning(nn.Module):
             
     def get_R(self) -> torch.Tensor:
         if self.config.is_learn_R:
+            sampling_weights = self.sampling_weights
+            probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
             cur_R = torch.ones_like(self.learned_R_value)
-            for i ,R_val in enumerate(self.learned_R_value):
-                # no normalization of R, just ensure doesn't go less than 1
-                cur_R[i] = (1 + torch.nn.functional.softplus(R_val))
+            for i in range(len(self.learned_R_value)):
+                cur_R[i] = 1/probability[i].mean()
                 
         else: 
             cur_R = self.learned_R_value

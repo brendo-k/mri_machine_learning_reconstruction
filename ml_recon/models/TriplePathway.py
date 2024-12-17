@@ -79,4 +79,4 @@ class TriplePathway(nn.Module):
         mask_lambda_wo_acs = lambda_set.clone()
         mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
         mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
-        return mask_inverse_w_acs,mask_lambda_wo_acs
+        return mask_inverse_w_acs, mask_lambda_wo_acs

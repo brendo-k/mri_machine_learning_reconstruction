@@ -57,7 +57,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[],
-                         precision='bf16-mixed'
+                         #precision='bf16-mixed'
                          )
 
     if args.checkpoint: 
@@ -104,6 +104,7 @@ def main(args):
 
     print(data_module.hparams)
     print(model.hparams)
+    #model = torch.compile(model)
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
     

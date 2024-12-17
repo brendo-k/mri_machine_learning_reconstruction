@@ -29,6 +29,7 @@ class LearnedSSLLightning(plReconModel):
             is_supervised_training: bool = False,
             is_learn_partitioning: bool = True,  
             warmup_training: bool = False,
+            is_norm_loss: bool = False,
             ):
         super().__init__(contrast_order=varnet_config.contrast_order)
         self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
@@ -46,6 +47,7 @@ class LearnedSSLLightning(plReconModel):
         self.is_supervised_training = is_supervised_training
         self.is_training_warmup = warmup_training
         self.is_learn_partitioning = is_learn_partitioning
+        self.is_norm_loss = is_norm_loss
 
         # loss function init
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
@@ -95,7 +97,7 @@ class LearnedSSLLightning(plReconModel):
             # k space loss
             k_loss_inverse = self.calculate_inverse_k_loss(input_mask, loss_mask, inverse_k, undersampled_k)
             # image space loss
-            image_loss_inverse_full = self.compute_image_loss(
+            image_loss_inverse_lambda = self.compute_image_loss(
                 lambda_k, 
                 inverse_k,
                 undersampled_k,
@@ -184,7 +186,7 @@ class LearnedSSLLightning(plReconModel):
 
         # plot probability if learn partitioning
         if self.is_learn_partitioning:
-            probability = self.partition_model.get_probability()
+            probability = self.partition_model.get_norm_probability()
             wandb_logger.log_image('train/probability', self.split_along_contrasts(probability))
 
 
@@ -366,18 +368,24 @@ class LearnedSSLLightning(plReconModel):
                     torch.view_as_real(undersampled * loss_mask),
                     torch.view_as_real(estimate * loss_mask), 
                     )
-        #k_loss /= loss_mask.sum() # normalize based on loss mask
+        if self.is_norm_loss:
+            k_loss /= loss_mask.sum() # normalize based on loss mask
                     
         return k_loss * loss_scaling
 
 
     def _setup_k_space_loss(self, k_space_loss_function):
+        if self.is_norm_loss:
+            reduce = 'sum'
+        else:
+            reduce = 'mean'
+
         if k_space_loss_function == 'l1l2':
-            self.k_space_loss = L1L2Loss(norm_all_k=False)
+            self.k_space_loss = L1L2Loss(norm_all_k=False, reduce=reduce)
         elif k_space_loss_function == 'l1':
-            self.k_space_loss = torch.nn.L1Loss()
+            self.k_space_loss = torch.nn.L1Loss(reduction=reduce)
         elif k_space_loss_function == 'l2': 
-            self.k_space_loss = torch.nn.MSELoss()
+            self.k_space_loss = torch.nn.MSELoss(reduction=reduce)
         else:
             raise ValueError('No k-space loss!')
 
@@ -398,7 +406,7 @@ class LearnedSSLLightning(plReconModel):
 
 
     def calculate_inverse_k_loss(self, input_mask, loss_mask, inverse_k, undersampled_k):
-        lambda_k_wo_acs, inverse_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask)
+        _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask)
         k_loss_inverse = self.calculate_k_loss(inverse_k, undersampled_k, lambda_k_wo_acs, (1 - self.lambda_loss_scaling))
         return k_loss_inverse
     

@@ -52,7 +52,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         precision="bf16-mixed", 
+                         #precision="bf16-mixed", 
                          #profiler=pytorch_profiler
                          )
 
@@ -113,9 +113,10 @@ def main(args):
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
         is_supervised_training=args.supervised,
-        is_learn_partitioning=args.learn_sampling
+        is_learn_partitioning=args.learn_sampling, 
+        is_norm_loss = args.norm_loss_by_masks,
         )
-    torch.set_float32_matmul_precision('medium')
+    #torch.set_float32_matmul_precision('medium')
 
     if args.checkpoint: 
         print("Loading Checkpoint!")
@@ -180,6 +181,7 @@ if __name__ == '__main__':
     model_group.add_argument('--warmup_training', action='store_true')
     model_group.add_argument('--split_contrast_by_phase', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
+    model_group.add_argument('--norm_loss_by_masks', action='store_true')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

@@ -61,8 +61,9 @@ class SSIMLoss(nn.Module):
             return 1 - S
 
 class L1L2Loss():
-    def __init__(self, norm_all_k):
+    def __init__(self, norm_all_k, reduce='mean'):
         self.norm_all_k = norm_all_k
+        self.reduce = reduce
         
     def __call__(self, target: torch.Tensor, predicted: torch.Tensor):
         assert not torch.isnan(target).any()
@@ -81,6 +82,9 @@ class L1L2Loss():
             print(target)
         
         loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)
+        if self.reduce == 'mean':
+            loss /= predicted.numel()
+        
         return loss
 
 class L1ImageGradLoss():
