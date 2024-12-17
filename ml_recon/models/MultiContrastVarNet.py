@@ -5,6 +5,7 @@ from functools import partial
 
 from ml_recon.models import Unet
 from ml_recon.models.XNet import XNet
+from ml_recon.models.PhaseAbsNetwork import PhaseMagnitudeNetwork
 from functools import partial
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
@@ -31,10 +32,13 @@ class MultiContrastVarNet(nn.Module):
             model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=config.channels)
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
+        
+        if config.split_contrast_by_phase:
+            model_backbone = partial(PhaseMagnitudeNetwork, in_chan=contrasts, out_chan=contrasts, chans=config.channels)
 
         # module cascades
         self.cascades = nn.ModuleList(
-            [VarnetBlock(model_backbone()) for _ in range(config.cascades)]
+            [VarnetBlock(model_backbone(), config.split_contrast_by_phase) for _ in range(config.cascades)]
         )
 
         # model to estimate sensetivities
@@ -68,9 +72,17 @@ class MultiContrastVarNet(nn.Module):
 
 
 class VarnetBlock(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, model: nn.Module, is_split_phase=False) -> None:
         super().__init__()
         self.model = model
+
+        if is_split_phase:
+            self.complex_forward = complex_conversion.complex_to_polar
+            self.complex_backward = complex_conversion.polar_to_complex
+        else:
+            self.complex_forward = complex_conversion.complex_to_real
+            self.complex_backward = complex_conversion.real_to_complex
+
 
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, k_space, sensetivities):
@@ -81,11 +93,11 @@ class VarnetBlock(nn.Module):
         images = torch.sum(images * sensetivities.conj(), dim=2)
 
         # Images now [B, contrast * 2, h, w] (real)
-        images = complex_conversion.complex_to_real(images)
+        images = self.complex_forward(images)
         images, mean, std = self.norm(images)
         images = self.model(images)
         images = self.unnorm(images, mean, std)
-        images = complex_conversion.real_to_complex(images)
+        images = self.complex_backward(images)
 
         # Expand
         images = sensetivities * images.unsqueeze(2)
@@ -93,7 +105,6 @@ class VarnetBlock(nn.Module):
 
         return images
     
-    # is this not just instance norm?
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
         mean = x.mean(dim=(2, 3), keepdim=True)

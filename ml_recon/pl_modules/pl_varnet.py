@@ -156,7 +156,7 @@ class pl_VarNet(plReconModel):
             sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
 
             # pass lambda set through model (if self supervised)
-            target = undersampled * batch['loss_mask']
+            target = fs_k_space * batch['loss_mask']
             undersampled = undersampled[0, :, [0], :, :].abs()**0.2
             target = target[0, :, [0], :, :].abs()**0.2
             

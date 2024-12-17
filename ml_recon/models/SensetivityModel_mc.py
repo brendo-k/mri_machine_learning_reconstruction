@@ -48,7 +48,7 @@ class SensetivityModel_mc(nn.Module):
         num_contrasts = images.shape[1]
 
         if self.sensetivity_estimation == 'joint':
-            images = images.permute(0, 2, 1, 3, 4)
+            images = images.swapdims(1, 2) # b contrast, chan, h, w -> b chan con h w
             images = einops.rearrange(images, 'b c contrast h w -> (b c) contrast h w')
         elif self.sensetivity_estimation == 'first' or self.sensetivity_estimation == 'independent':
             images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
@@ -69,7 +69,7 @@ class SensetivityModel_mc(nn.Module):
         # rearange back to original format
         if self.sensetivity_estimation == 'joint':
             images = einops.rearrange(images, '(b c) contrast h w -> b c contrast h w', c=number_of_coils, contrast=num_contrasts)
-            images = images.permute(0, 2, 1, 3, 4)
+            images = images.swapdims(1, 2) # swap back
         elif self.sensetivity_estimation == 'first' or self.sensetivity_estimation == 'independent':
             images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps

@@ -11,25 +11,25 @@ class XNet(nn.Module):
 
         n_contrasts = len(self.contrast_order)
         self.down_sample_layers = nn.ModuleList([nn.ModuleList([
-            double_conv(2, channels, drop_prob=0)
+            double_conv(2, channels, drop_prob=0, relu_slope=0.2)
             ]) for _ in range(n_contrasts)])
         cur_chan = channels
         for _ in range(depth - 1):
             for c in range(n_contrasts):
                 self.down_sample_layers[c].append(
-                    Unet_down(cur_chan, cur_chan*2, drop_prob=drop_prob)
+                    Unet_down(cur_chan, cur_chan*2, drop_prob=drop_prob, relu_slope=0.2)
                     )
             cur_chan *= 2
 
         self.final_downsampling = down() 
-        self.mixing_layer = double_conv(cur_chan*n_contrasts, cur_chan * 2, drop_prob=0)
+        self.mixing_layer = double_conv(cur_chan*n_contrasts, cur_chan * 2, drop_prob=0, relu_slope=0.2)
 
         self.upsampling_layer = nn.ModuleList([nn.ModuleList([]) for _ in range(n_contrasts)])
 
         cur_chan = cur_chan * 2
         for _ in range(depth):
             for c in range(n_contrasts):
-                self.upsampling_layer[c].append(Unet_up(cur_chan, cur_chan//2, drop_prob))
+                self.upsampling_layer[c].append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope=0.2))
             cur_chan //= 2
 
         self.final_conv = nn.ModuleList(
@@ -57,7 +57,7 @@ class XNet(nn.Module):
         for contrast_index in range(len(self.contrast_order)):
             x = latent_space
             sub_network = self.upsampling_layer[contrast_index]
-            for i, layer in enumerate(sub_network):
+            for i, layer in enumerate(sub_network): # type: ignore
                 x = layer(x, stack[contrast_index][-i - 1])
             decoder_outputs.append(x)
 

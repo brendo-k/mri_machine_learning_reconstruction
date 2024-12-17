@@ -5,9 +5,8 @@ import torch.nn as nn
 import torch
 from ml_recon.models import Unet
 import torch.nn.functional as F
-from argparse import ArgumentParser
 
-class PhaseAbsNetwork(nn.Module):
+class PhaseMagnitudeNetwork(nn.Module):
     """
     PyTorch implementation of a U-Net model.
 
@@ -28,7 +27,20 @@ class PhaseAbsNetwork(nn.Module):
 
         super().__init__()
         self.phase_network = Unet(in_chan, out_chan, depth, chans, drop_prob)
-        self.abs_network = Unet(in_chan, out_chan, depth, chans, drop_prob)
+        self.magnitude_network = Unet(in_chan, out_chan, depth, chans, drop_prob)
 
     def forward(self, x):
+        b, c, h, w = x.shape
+        magnitude_images = x[:, :c//2, ...]
+        phase_images = x[:, c//2:, ...]
+        output = torch.zeros_like(x)
+
+        magnitude_output = self.magnitude_network(magnitude_images)
+        phase_output = self.phase_network(phase_images)
+
+        output[:, :c//2, :, :] = magnitude_output
+        output[:, c//2:, :, :] = phase_output
+        return output
+
+
         
