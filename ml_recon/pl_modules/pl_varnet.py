@@ -7,9 +7,11 @@ from torchmetrics.functional.image import structural_similarity_index_measure
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from pytorch_lightning.loggers import WandbLogger
 
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares, k_to_img, fft_2d_img
+from ml_recon.utils.complex_conversion import real_to_complex, complex_to_real
 from ml_recon.losses import L1L2Loss, L1ImageGradLoss
-from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
+from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig, SensetivityModel_mc
+from ml_recon.models.UNet import Unet
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 
 from typing import Literal, Optional
@@ -26,7 +28,6 @@ class pl_VarNet(plReconModel):
             k_loss_scaling: float = 1.0,
             norm_all_k: bool = False,
             lr: float = 1e-3,
-            is_supervised: bool = False
             ):
 
         self.config = config
@@ -37,10 +38,11 @@ class pl_VarNet(plReconModel):
 
         # reconstruction model
         self.model = MultiContrastVarNet(config)
+        #self.model = Unet(2, 2, 4, 64, 0, 0.0)
+        #self.sense_model = SensetivityModel_mc(2, 2, 8)
         
         # set learning rate
         self.lr = lr
-        self.is_supervised = is_supervised
 
         # Set loss functions
         self.k_loss_func = self._set_k_loss_func(k_loss_function, norm_all_k)
@@ -73,7 +75,7 @@ class pl_VarNet(plReconModel):
         
         if self.k_loss_func:
             loss += self.k_loss_func(target, prediction*loss_mask) * self.k_loss_scaling
-            loss = loss / loss_mask.sum()
+            #loss = loss / loss_mask.sum()
         if self.image_loss_func: 
             loss += self.image_loss_func(target_img, estimated_img) * self.image_loss_scaling
 
@@ -135,36 +137,44 @@ class pl_VarNet(plReconModel):
     def forward(self, under_k, mask, fs_k_space): 
         zero_fill_mask = fs_k_space != 0
         estimate_k = self.model(under_k, mask)
-        estimate_k = estimate_k * (1 - mask) + under_k
-        return estimate_k * zero_fill_mask
+        estimate_k = estimate_k * (1 - mask) + under_k * mask
+        return estimate_k 
 
     # optimizer configureation -> using adam w/ lr of 1e-3
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 6000, eta_min=1e-3) 
         return optimizer
-
+    @torch.no_grad()
     def plot_example_images(self, batch, mode='train'):
-        with torch.no_grad():
-            undersampled, mask, fs_k_space = batch['undersampled'], batch['mask'], batch['fs_k_space']
-            
-            # pass original data through model
-            estimate_k = self.forward(undersampled, mask, fs_k_space)
-            super().plot_images(estimate_k, fs_k_space, mask, mode) 
+        undersampled, mask, fs_k_space = batch['undersampled'], batch['mask'], batch['fs_k_space']
+        mask = batch['mask']
+        if (batch['loss_mask'] == 0).any(): # if loss mask has zeros (must be ssl loss mask)
+            mask = mask + batch['loss_mask'] # combine to get original sampliing mask
+        
+        # pass original data through model
+        estimate_k = self.forward(undersampled, mask, fs_k_space)
+        super().plot_images(estimate_k, fs_k_space, mask, mode) 
 
-            sense_maps = self.model.sens_model(undersampled, mask)
-            sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
+        sense_maps = self.model.sens_model(undersampled, mask)
+        sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()
+    
+        zf_img = k_to_img(undersampled) 
+        zf_img /= zf_img.amax((-1, -2), keepdim=True)
+        zf_img = zf_img[0]
 
-            # pass lambda set through model (if self supervised)
-            target = fs_k_space * batch['loss_mask']
-            undersampled = undersampled[0, :, [0], :, :].abs()**0.2
-            target = target[0, :, [0], :, :].abs()**0.2
-            
-            if isinstance(self.logger, WandbLogger):
-                wandb_logger = self.logger
-                wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
-                wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))
-                wandb_logger.log_image(mode + '/input', np.split(undersampled.clamp(0, 1).cpu().numpy(), undersampled.shape[0], 0))
+        # pass lambda set through model (if self supervised)
+        target = fs_k_space * batch['loss_mask']
+        undersampled = undersampled[0, :, [0], :, :].abs()**0.2
+        target = target[0, :, [0], :, :].abs()**0.2
+        
+        if isinstance(self.logger, WandbLogger):
+            wandb_logger = self.logger
+            wandb_logger.log_image(mode + '/sense_maps', np.split(sense_maps.cpu().numpy()/sense_maps.max().item(), sense_maps.shape[0], 0))
+            wandb_logger.log_image(mode + '/target', np.split(target.clamp(0, 1).cpu().numpy(),target.shape[0], 0))
+            wandb_logger.log_image(mode + '/input', np.split(undersampled.clamp(0, 1).cpu().numpy(), undersampled.shape[0], 0))
+            wandb_logger.log_image(mode + '/zf', np.split(zf_img.clamp(0, 1).cpu().numpy(), undersampled.shape[0], 0))
+
 
     def _set_image_loss_func(self, image_loss_function):
         if image_loss_function == 'ssim':
@@ -182,7 +192,7 @@ class pl_VarNet(plReconModel):
     
     def _set_k_loss_func(self, k_loss_function, norm_all_k):
         if k_loss_function == 'norml1l2':
-            loss_func = L1L2Loss(norm_all_k)
+            loss_func = L1L2Loss(norm_all_k, reduce='mean')
         elif k_loss_function == 'l1':
             loss_func = torch.nn.L1Loss(reduction='sum')
         elif k_loss_function == 'l2':

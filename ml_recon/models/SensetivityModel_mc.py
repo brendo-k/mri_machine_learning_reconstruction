@@ -1,5 +1,4 @@
 import einops
-from numpy import who
 import torch
 import math
 
@@ -73,20 +72,21 @@ class SensetivityModel_mc(nn.Module):
         elif self.sensetivity_estimation == 'first' or self.sensetivity_estimation == 'independent':
             images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
         # rss to normalize sense maps
-        rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2) + 1e-9
+        rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2) 
         #assert not (rss_norm == 0).any()
         images = images / rss_norm
         return images
 
-    def mask_center(self, coil_k_spaces, center_mask):
+    def mask_center(self, coil_k_spaces, mask):
         # coil_k: [b cont chan height width]
+        masked_k_space = coil_k_spaces.clone()
 
-        center_x = center_mask.shape[-1] // 2
-        center_y = center_mask.shape[-2] // 2
+        center_x = mask.shape[-1] // 2
+        center_y = mask.shape[-2] // 2
         
         # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
-        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :]).to(torch.int8)
-        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x]).to(torch.int8)
+        squeezed_mask_hor = (mask[:, :, 0, center_y, :]).to(torch.int8)
+        squeezed_mask_vert = (mask[:, :, 0, :, center_x]).to(torch.int8)
 
         # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
         left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
@@ -105,7 +105,7 @@ class SensetivityModel_mc(nn.Module):
         low_freq_y = torch.min(top, bottom)
         low_freq_x[low_freq_x < 5] = 5
         low_freq_y[low_freq_y < 5] = 5
-        center_mask = torch.zeros_like(coil_k_spaces[:, :, 0, :, :], dtype=torch.bool)
+        center_mask = torch.zeros_like(masked_k_space[:, :, 0, :, :], dtype=torch.bool)
         # loop through num_low freq tensor and set acs lines to true
         for i in range(low_freq_x.shape[0]):
             for j in range(low_freq_y.shape[1]):
@@ -114,7 +114,7 @@ class SensetivityModel_mc(nn.Module):
                             center_x - low_freq_x[i, j]:center_x + low_freq_x[i, j]
                             ] = True
 
-        return coil_k_spaces * center_mask.unsqueeze(2)
+        return masked_k_space * center_mask.unsqueeze(2)
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
@@ -122,7 +122,7 @@ class SensetivityModel_mc(nn.Module):
         x = x.view(b, 2, c // 2 * h * w)
 
         mean = x.mean(dim=2).view(b, 2, 1, 1)
-        std = x.std(dim=2).view(b, 2, 1, 1) + 1e-20
+        std = x.std(dim=2).view(b, 2, 1, 1)
 
         x = x.view(b, c, h, w)
 

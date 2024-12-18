@@ -27,7 +27,7 @@ def main(args):
     pl.seed_everything(8)
     torch.set_float32_matmul_precision('medium')
 
-    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True, save_dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(project=args.project, name=args.run_name, log_model=True)
     #unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     #file_name = 'pl_varnet-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -57,7 +57,6 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[],
-                         #precision='bf16-mixed'
                          )
 
     if args.checkpoint: 
@@ -77,6 +76,7 @@ def main(args):
                 R=args.R,
                 R_hat=args.R_hat,
                 contrasts=args.contrasts, 
+                self_supervsied=(not args.supervised)
                 ) 
         # this needs to be done to load contrast ordering for model
         data_module.setup('train')
@@ -98,7 +98,6 @@ def main(args):
             image_loss_function=args.image_space_loss,
             image_loss_scaling=args.image_loss_scaling,
             k_loss_function=args.k_loss, 
-            is_supervised=args.supervised
             )
             
 
