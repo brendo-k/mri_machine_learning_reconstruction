@@ -52,7 +52,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         #precision="bf16-mixed", 
+                         precision="bf16-mixed", 
                          #profiler=pytorch_profiler
                          )
 
@@ -116,7 +116,7 @@ def main(args):
         is_learn_partitioning=args.learn_sampling, 
         is_norm_loss = args.norm_loss_by_masks,
         )
-    #torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision('medium')
 
     if args.checkpoint: 
         print("Loading Checkpoint!")

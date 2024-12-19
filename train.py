@@ -57,6 +57,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          callbacks=[],
+                         precision='bf16-mixed'
                          )
 
     if args.checkpoint: 

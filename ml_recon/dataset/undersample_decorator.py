@@ -40,11 +40,11 @@ class UndersampleDecorator(Dataset):
         
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
-        if self.sampling_type == '2d':
+        if self.sampling_type == '2d' or self.sampling_type == 'pi':
             line_constrained = False
             self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
-        elif self.sampling_type == '1D':
+        elif self.sampling_type == '1d':
             line_constrained = True
             self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
