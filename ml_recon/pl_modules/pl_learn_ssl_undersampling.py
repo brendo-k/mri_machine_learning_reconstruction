@@ -26,7 +26,6 @@ class LearnedSSLLightning(plReconModel):
             lambda_scaling: float = 1, 
             image_loss_function: str = 'ssim',
             k_space_loss_function: str = 'l1l2',
-            is_supervised_training: bool = False,
             is_learn_partitioning: bool = True,  
             warmup_training: bool = False,
             is_norm_loss: bool = False,
@@ -44,7 +43,6 @@ class LearnedSSLLightning(plReconModel):
         self.image_scaling_lam_full = ssim_scaling_full
         self.image_scaling_full_inv = ssim_scaling_inverse
         self.lambda_loss_scaling = lambda_scaling
-        self.is_supervised_training = is_supervised_training
         self.is_training_warmup = warmup_training
         self.is_learn_partitioning = is_learn_partitioning
         self.is_norm_loss = is_norm_loss
@@ -79,7 +77,6 @@ class LearnedSSLLightning(plReconModel):
         lambda_k = estimates['lambda_path']
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
-
 
         k_loss_lambda = self.calculate_k_loss(lambda_k, undersampled_k, loss_mask, self.lambda_loss_scaling)
 
@@ -151,18 +148,36 @@ class LearnedSSLLightning(plReconModel):
         # log first batch of every 10th epoch
         if batch_idx != 0 or self.current_epoch % 10 != 0:
             return 
-
-        wandb_logger = self.logger
-        fs_k_space = batch['fs_k_space']
+        fully_sampled = batch['fs_k_space']
         undersampled_k = batch['undersampled']
 
         input_mask, loss_mask = self.partition_k_space(batch)
-        estimates = self.recon_model(undersampled_k, fs_k_space, input_mask, loss_mask)
-        
+        estimates = self.recon_model.forward(
+            undersampled_k,
+            fully_sampled, 
+            input_mask, 
+            loss_mask,
+            return_all=False
+        )
+
+
+        wandb_logger = self.logger
+        fully_sampled = batch['fs_k_space']
+        undersampled_k = batch['undersampled']
+
+        input_mask, loss_mask = self.partition_k_space(batch)
+        estimates = self.recon_model.forward(
+            undersampled_k,
+            fully_sampled, 
+            input_mask, 
+            loss_mask,
+            return_all=False
+        )
+
         # plot images (first of the batch)
-        image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
+        image_scaling = k_to_img(fully_sampled).amax((-1, -2), keepdim=True)
         
-        fully_sampled_images = self.k_to_img_scaled(fs_k_space, image_scaling)
+        fully_sampled_images = self.k_to_img_scaled(fully_sampled, image_scaling)
         lambda_images = self.k_to_img_scaled(estimates['lambda_path'], image_scaling)
 
         wandb_logger.log_image('train/estimate_lambda', self.split_along_contrasts(lambda_images[0]))
@@ -285,15 +300,15 @@ class LearnedSSLLightning(plReconModel):
         log_ssim("gt_lambda", fully_sampled_img, est_lambda_img)
 
         # Helper function to log NMSE metrics
-        def log_nmse(label, k_space1, k_space2):
-            if k_space1 is not None and k_space2 is not None:
-                nmse_val = evaluate_over_contrasts(nmse, k_space1, k_space2)
+        def log_nmse(label, img1, img2):
+            if img1 is not None and img2 is not None:
+                nmse_val = evaluate_over_contrasts(nmse, img1, img2)
                 self.log(f"val/nmse_{label}", nmse_val, on_epoch=True)
 
         # Log NMSE metrics
-        log_nmse("gt_full", fs_k_space, estimate_full)
-        log_nmse("gt_inverse", fs_k_space, estimate_inverse)
-        log_nmse("gt_lambda", fs_k_space, estimate_lambda)
+        log_nmse("gt_full", fully_sampled_img, est_full_img)
+        log_nmse("gt_inverse", fully_sampled_img, est_inverse_img)
+        log_nmse("gt_lambda", fully_sampled_img, est_lambda_img)
 
 
     def k_to_img_scaled(self, estimate_lambda, image_scaling):
@@ -411,12 +426,6 @@ class LearnedSSLLightning(plReconModel):
         return k_loss_inverse
     
     def partition_k_space(self, batch):
-        assert not self.is_supervised_training & self.is_learn_partitioning, "can't be supervised and learned self-suprvised partitioning"
-        # if supervised, just return the inital mask and loss mask of all ones 
-        if self.is_supervised_training:
-            input_mask = batch['mask']
-            loss_mask = torch.ones_like(input_mask)
-
         # compute either learned or heuristic partioning masks
         if self.is_learn_partitioning: 
             assert (batch['mask'] * batch['loss_mask'] == 0).all()

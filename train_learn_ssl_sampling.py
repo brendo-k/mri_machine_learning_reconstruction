@@ -52,7 +52,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         precision="bf16-mixed", 
+                         #precision="bf16-mixed", 
                          #profiler=pytorch_profiler
                          )
 
@@ -112,7 +112,6 @@ def main(args):
         lambda_scaling=args.lambda_scaling, 
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
-        is_supervised_training=args.supervised,
         is_learn_partitioning=args.learn_sampling, 
         is_norm_loss = args.norm_loss_by_masks,
         )
