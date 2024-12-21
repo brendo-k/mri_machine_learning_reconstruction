@@ -78,7 +78,7 @@ class LearnedSSLLightning(plReconModel):
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
 
-        k_loss_lambda = self.calculate_k_loss(lambda_k, undersampled_k, loss_mask, self.lambda_loss_scaling)
+        k_loss_lambda = self.calculate_k_loss(lambda_k, fully_sampled, loss_mask, self.lambda_loss_scaling)
 
         # calculate full lambda image loss pathway
         if full_k is not None:
@@ -222,7 +222,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_full = estimates['full_path']
         estimate_inverse = estimates['inverse_path']
 
-        loss_lambda = self.calculate_k_loss(estimate_lambda, under, loss_set, self.lambda_loss_scaling)
+        loss_lambda = self.calculate_k_loss(estimate_lambda, fully_sampled, loss_set, self.lambda_loss_scaling)
         loss_inverse = self.calculate_inverse_k_loss(lambda_set, loss_set, estimate_inverse, under)
 
         self.log_scalar("val/val_loss_inverse", loss_inverse, prog_bar=True)

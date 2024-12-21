@@ -226,10 +226,11 @@
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
                 "args": [
-                    "--nx", "240", 
-                    "--ny", "240", 
+                    "--nx", "256", 
+                    "--ny", "256", 
                     "--max_epochs", "1",
-                    "--data_dir", "/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_averaged/",
+                    "--num_workers", "2",
+                    "--data_dir", "/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_chunked/",
                     "--dataset", "m4raw",
                     "--contrasts", "t1", "t2", "flair"
 
