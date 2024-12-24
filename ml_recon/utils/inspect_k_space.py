@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from ml_recon.utils import image_slices, root_sum_of_squares, ifft_2d_img
+import torch
 import argparse
 
 
@@ -26,7 +27,7 @@ def main():
 
     print(kspace.shape)
     if args.images: 
-        plotting_aray = root_sum_of_squares(ifft_2d_img(kspace).astype(np.complex64), coil_dim=2)[:, args.contrast_index]
+        plotting_aray = root_sum_of_squares(ifft_2d_img(torch.from_numpy(kspace)).numpy().astype(np.complex64), coil_dim=2)[:, args.contrast_index]
     else: 
         plotting_aray = np.abs(kspace[:, args.contrast_index, 0, :, :])**0.02
 

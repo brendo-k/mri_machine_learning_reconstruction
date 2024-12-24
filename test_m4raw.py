@@ -9,12 +9,11 @@ from ml_recon.pl_modules.pl_varnet import pl_VarNet
 
 
 def main():
-    data_dir = '/home/brenden/Documents/data/m4raw'
-    logger = WandbLogger(project='M4Raw', name='Un-Masked M4Raw ssl: t1')
-    artifact = logger.use_artifact('chiew-lab/SSL Characterization/model-eiebw7zd:v0')
-    artifact_dir = artifact.download()
-    model = pl_VarNet.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'))
-    datamodule = UndersampledDataModule.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'), data_dir=data_dir)
+    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_chunked/'
+    logger = WandbLogger(project='M4Raw', name='More-Masked M4Raw ssl: t1')
+    checkpoint = '/home/kadotab/python/ml/m4raw/o3q61m67/checkpoints/epoch=49-step=19200.ckpt'
+    model = pl_VarNet.load_from_checkpoint(checkpoint)
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint, data_dir=data_dir)
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
     trainer.test(model, datamodule=datamodule)

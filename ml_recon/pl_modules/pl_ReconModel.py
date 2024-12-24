@@ -28,7 +28,7 @@ class plReconModel(pl.LightningModule):
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0
+        image_background_mask = ground_truth_image > scaling_factor * 0.12
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
@@ -90,7 +90,7 @@ class plReconModel(pl.LightningModule):
         ground_truth_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2) 
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0
+        image_background_mask = ground_truth_image > scaling_factor * 0.1
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
@@ -102,7 +102,7 @@ class plReconModel(pl.LightningModule):
         
         estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]
-        difference_image = (difference_image*4).clamp(0, 1)
+        difference_image = (difference_image*10).clamp(0, 1)
         difference_image = difference_image[0]
         image_background_mask = image_background_mask[0]
         wandb_logger = self.logger

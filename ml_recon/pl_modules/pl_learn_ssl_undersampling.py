@@ -222,7 +222,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_full = estimates['full_path']
         estimate_inverse = estimates['inverse_path']
 
-        loss_lambda = self.calculate_k_loss(estimate_lambda, fully_sampled, loss_set, self.lambda_loss_scaling)
+        loss_lambda = self.calculate_k_loss(estimate_lambda, fs_k_space, loss_set, self.lambda_loss_scaling)
         loss_inverse = self.calculate_inverse_k_loss(lambda_set, loss_set, estimate_inverse, under)
 
         self.log_scalar("val/val_loss_inverse", loss_inverse, prog_bar=True)
@@ -267,6 +267,11 @@ class LearnedSSLLightning(plReconModel):
 
         wandb_logger.log_image('val/estimate_lambda_diff', self.split_along_contrasts(diff_lambda_fs.clip(0, 1)[0]))
         wandb_logger.log_image('val/estimate_full_diff', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
+
+        lambda_set_plot = lambda_set[0, :, 0, : ,:]
+        loss_mask = loss_set[0, :, 0, : ,:]
+        wandb_logger.log_image('val/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
+        wandb_logger.log_image('val/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
     
     
     def log_image_metrics(self, fs_k_space, estimate_lambda, estimate_inverse=None, estimate_full=None):
