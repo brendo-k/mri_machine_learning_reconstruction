@@ -138,7 +138,7 @@ class pl_VarNet(plReconModel):
         zero_fill_mask = fs_k_space != 0
         estimate_k = self.model(under_k, mask)
         estimate_k = estimate_k * (1 - mask) + under_k * mask
-        return estimate_k 
+        return estimate_k * zero_fill_mask
 
     # optimizer configureation -> using adam w/ lr of 1e-3
     def configure_optimizers(self):

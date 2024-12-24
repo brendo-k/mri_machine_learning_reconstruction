@@ -24,42 +24,27 @@ def batch() -> dict:
     return {
         'fs_k_space': k_space, 
         'undersampled': undersampled,
-        'initial_mask': initial_mask.to(torch.float32),
-        'second_mask': second_mask.to(torch.float32)
+        'mask': initial_mask.to(torch.float32),
+        'loss_mask': second_mask.to(torch.float32)
     }
 
-    
+def test_partitioning_ssl_learned(build_model: LearnedSSLLightning, batch): 
+    build_model.is_learn_partitioning = True
 
-def test_partitioning_superivsed(build_model: LearnedSSLLightning, batch): 
-    build_model.is_supervised_training = True
 
     input_mask, loss_mask = build_model.partition_k_space(batch)
+    initial_mask = batch['undersampled'] != 0
 
-    torch.testing.assert_close(input_mask, batch['initial_mask'])
-    torch.testing.assert_close(loss_mask, torch.ones_like(batch['initial_mask']))
-
+    torch.testing.assert_close(input_mask + loss_mask, initial_mask)
     assert input_mask.dtype == torch.float32
     assert loss_mask.dtype == torch.float32
 
-def test_partitioning_ssl_heruistic(build_model: LearnedSSLLightning, batch): 
-    build_model.is_supervised_training = False
+def test_partitioning_unlearned(build_model: LearnedSSLLightning, batch): 
     build_model.is_learn_partitioning = False
 
     input_mask, loss_mask = build_model.partition_k_space(batch)
+    initial_mask = batch['undersampled'] != 0
 
-    torch.testing.assert_close(input_mask, batch['initial_mask']*batch['second_mask'])
-    torch.testing.assert_close(loss_mask, batch['initial_mask'] * (1 - batch['second_mask']))
-    torch.testing.assert_close(input_mask + loss_mask, batch['initial_mask'])
-
-    assert input_mask.dtype == torch.float32
-    assert loss_mask.dtype == torch.float32
-
-def test_partitioning_ssl_learned(build_model: LearnedSSLLightning, batch): 
-    build_model.is_supervised_training = False 
-    build_model.is_learn_partitioning = True
-
-    input_mask, loss_mask = build_model.partition_k_space(batch)
-
-    torch.testing.assert_close(input_mask + loss_mask, batch['initial_mask'])
+    torch.testing.assert_close(input_mask + loss_mask, initial_mask)
     assert input_mask.dtype == torch.float32
     assert loss_mask.dtype == torch.float32

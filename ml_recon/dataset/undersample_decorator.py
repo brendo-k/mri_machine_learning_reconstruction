@@ -63,7 +63,7 @@ class UndersampleDecorator(Dataset):
 
 
     def __getitem__(self, index):
-        k_space:NDArray[np.complex_] = self.dataset[index] #[con, chan, h, w] 
+        k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
         fully_sampled_k_space = k_space.copy()
         first_undersampled, omega_mask = self.generate_inital_mask(index, k_space)
         omega_mask = omega_mask.astype(np.float32)
