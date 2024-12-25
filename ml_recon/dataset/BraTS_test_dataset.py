@@ -11,7 +11,7 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
-class BratsDataset(Dataset):
+class BratsDatasetTest(Dataset):
     """
     Takes data directory and creates a dataset for BraTS dataset. Need to simulate first 
     using ml_recon/utils/simulate_brats
@@ -19,7 +19,7 @@ class BratsDataset(Dataset):
 
     def __init__(
             self,
-            data_dir: Union[str, os.PathLike], 
+            data_dir: str, 
             ground_truth_dir: Union[str, os.PathLike], 
             nx:int = 256,
             ny:int = 256,
@@ -30,6 +30,7 @@ class BratsDataset(Dataset):
         assert contrasts, 'Contrast list should not be empty!'
 
         super().__init__()
+        
         self.nx = nx
         self.ny = ny
         self.transforms = transforms

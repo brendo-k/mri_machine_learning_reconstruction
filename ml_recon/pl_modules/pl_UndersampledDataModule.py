@@ -1,7 +1,9 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.dataset.BraTS_dataset import BratsDataset
+from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
 from ml_recon.dataset.m4raw_dataset import M4Raw
+from ml_recon.dataset.m4raw_test_dataset import M4RawTest
 from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
 
 from torch.utils.data import DataLoader
@@ -18,6 +20,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self, 
             dataset_name: str,
             data_dir: str, 
+            test_dir: str,
             batch_size: int, 
             R: float = 6,
             R_hat: float = 2.0,
@@ -36,12 +39,15 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
             self.dataset_class = BratsDataset
+            self.test_dataset_class = BratsDatasetTest
         elif dataset_name == 'fastmri':
             self.dataset_class = FastMRIDataset
         elif dataset_name == 'm4raw':
             self.dataset_class = M4Raw
+            self.test_dataset_class = M4RawTest
 
         self.data_dir = data_dir
+        self.test_dir = test_dir
         self.contrasts = contrasts
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -72,6 +78,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         train_dir = os.path.join(self.data_dir, train_file)
         val_dir = os.path.join(self.data_dir, val_file)
         test_dir = os.path.join(self.data_dir, test_file)
+        test_img_dir = os.path.join(self.test_dir, test_file)
 
         dataset_keyword_args = {
             'nx': self.resolution[0], 
@@ -79,7 +86,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             'contrasts': self.contrasts
         }
 
-        undersample_keywords = {
+        undersample_keyword_args = {
                 'R': self.R,
                 'R_hat': self.R_hat,
                 'sampling_method': self.sampling_method,
@@ -97,26 +104,24 @@ class UndersampledDataModule(pl.LightningDataModule):
                 **dataset_keyword_args
                 )
 
-        self.test_dataset = self.dataset_class(
-                test_dir, 
-                **dataset_keyword_args
-                )
-
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
                 original_ssdu_partioning=self.ssdu_partioning,
-                **undersample_keywords
+                **undersample_keyword_args
                 )
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
-                **undersample_keywords
+                **undersample_keyword_args
+                )
+
+        self.test_dataset = self.test_dataset_class(
+                test_dir,
+                test_img_dir,
+                **dataset_keyword_args,
+                **undersample_keyword_args
                 )
         
-        self.test_dataset = UndersampleDecorator(
-                self.test_dataset,
-                **undersample_keywords
-                )
 
         self.contrast_order = self.train_dataset.contrast_order
     
