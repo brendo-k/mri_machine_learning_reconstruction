@@ -24,6 +24,8 @@ class M4RawTest(Dataset):
             contrasts: List[str] = ['t1', 't2', 'flair'],
             R: int = 4, 
             R_hat: int = 2,
+            self_supervised: bool = True, 
+            sampling_method: str = '2d'
             ):
 
         # call super constructor
@@ -32,19 +34,24 @@ class M4RawTest(Dataset):
         self.ny = ny
         self.data_dir = data_dir
         self.test_dir = test_dir
+        self.transforms = transforms
 
         self.k_space_dataset = UndersampleDecorator(
-                dataset=M4Raw(data_dir, nx, ny, transforms, contrasts),
+                dataset=M4Raw(data_dir, nx, ny, contrasts=contrasts),
                 R=R, 
-                R_hat=R_hat
+                R_hat=R_hat, 
+                sampling_method = sampling_method,
+                self_supervised = self_supervised
                 )
-        self.average_dataset = M4Raw(test_dir, nx, ny, transforms, contrasts)
+        self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='rss_images')
 
     def __len__(self):
-        return len(self.k_space_datset)
+        return len(self.k_space_dataset)
 
     def __getitem__(self, index):
         k_space = self.k_space_dataset[index]
-        image = self.average_dataset[index]
-
+        image = torch.from_numpy(self.average_dataset[index])
+        if self.transforms: 
+            k_space, image = self.transforms((k_space, image))
         return k_space, image
+

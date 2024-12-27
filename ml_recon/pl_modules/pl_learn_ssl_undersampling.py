@@ -324,26 +324,28 @@ class LearnedSSLLightning(plReconModel):
     def test_step(self, batch, batch_index):
         k_space = batch[0]
         ground_truth_image = batch[1]
-        fully_sampled_k = batch['fs_k_space']
-        undersampled = batch['undersampled']
-        mask = batch['mask']
-        if (batch['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
-            mask += batch['loss_mask'] # combine to get original sampliing mask
+        fully_sampled_k = k_space['fs_k_space']
+        undersampled = k_space['undersampled']
+        mask = k_space['mask']
+        if (k_space['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
+            mask += k_space['loss_mask'] # combine to get original sampliing mask
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
         return super().test_step((estimate_k, ground_truth_image), batch_index)
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        fully_sampled_k = batch['fs_k_space']
-        undersampled = batch['undersampled']
-        mask = batch['mask']
-        if (batch['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
-            mask += batch['loss_mask'] # combine to get original sampliing mask
+        k_space = batch[0]
+        ground_truth_image = batch[1]
+        fully_sampled_k = k_space['fs_k_space']
+        undersampled = k_space['undersampled']
+        mask = k_space['mask']
+        if (k_space['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
+            mask += k_space['loss_mask'] # combine to get original sampliing mask
         # pass inital data through the model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
 
-        return super().on_test_batch_end(outputs, (estimate_k, fully_sampled_k), batch_idx, dataloader_idx)
+        return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
         
 
     def configure_optimizers(self):

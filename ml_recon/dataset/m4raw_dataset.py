@@ -18,6 +18,7 @@ class M4Raw(Dataset):
             nx:int = 256,
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
+            key:str = 'kspace',
             contrasts: List[str] = ['t1', 't2', 'flair']
             ):
 
@@ -25,6 +26,7 @@ class M4Raw(Dataset):
         super().__init__()
         self.nx = nx
         self.ny = ny
+        self.key = key
 
         self.transforms = transforms
 
@@ -39,7 +41,7 @@ class M4Raw(Dataset):
             self.file_names.append(file_path)
 
             with h5py.File(file_path, 'r') as fr:
-                dataset = fr['kspace']
+                dataset = fr[self.key]
                 assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[1])
                 contrast_dataset = fr['contrasts']
@@ -76,11 +78,11 @@ class M4Raw(Dataset):
         
         
         with h5py.File(cur_file, 'r') as fr:
-            dataset = fr['kspace']
+            dataset = fr[self.key]
             assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
                 
-        k_space = np.stack([self.center_k_space(contrast) for contrast in k_space], axis=0)
+        k_space = np.stack([(contrast) for contrast in k_space], axis=0)
         return k_space 
 
     def center_k_space(self, contrast_k):
