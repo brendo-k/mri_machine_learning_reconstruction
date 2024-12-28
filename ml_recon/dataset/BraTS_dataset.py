@@ -24,7 +24,7 @@ class BratsDataset(Dataset):
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
-            extension: str = "npy"
+            data_key: str = "k_space"
             ):
         assert contrasts, 'Contrast list should not be empty!'
 
@@ -33,7 +33,7 @@ class BratsDataset(Dataset):
         self.ny = ny
         self.transforms = transforms
         self.contrasts = np.array([contrast.lower() for contrast in contrasts])
-        self.extension = extension
+        self.data_key = data_key
 
         sample_dir = os.listdir(data_dir)
         sample_dir.sort()
@@ -106,7 +106,7 @@ class BratsDataset(Dataset):
     def get_data_from_indecies(self, volume_index, slice_index):
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
-            dataset = fr['k_space']
+            dataset = fr[self.data_key]
             assert isinstance(dataset, h5py.Dataset)
             data = torch.as_tensor(dataset[slice_index, self.contrast_order_indexes])
             data = F.center_crop(data, [self.ny, self.nx]).numpy()

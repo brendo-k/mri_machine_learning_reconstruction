@@ -1,6 +1,7 @@
 from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space
 import numpy as np
 import nibabel as nib
+import torch
 import h5py
 import os
 import multiprocessing
@@ -36,12 +37,12 @@ def process_file(file, out_path, seed, noise, center_size):
         if i % 3 == 0:
             #cur_images = SimulatedBrats.resample(images[..., i], IMAGE_SIZE[0], IMAGE_SIZE[1])
             cur_images = images[..., i]
-            cur_images = fft_2d_img(cur_images)
+            cur_images = fft_2d_img(torch.from_numpy(cur_images))
             _, y, x = cur_images.shape 
             y_start = y//2 - IMAGE_SIZE[0]//2
             x_start = x//2 - IMAGE_SIZE[1]//2
             cur_images = cur_images[:, y_start:y_start + IMAGE_SIZE[0], x_start:x_start + IMAGE_SIZE[1]]
-            cur_images = ifft_2d_img(cur_images)
+            cur_images = ifft_2d_img(cur_images).numpy()
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
             k_space[..., (i-70)//3] = simulate_k_space(
@@ -74,13 +75,13 @@ def process_file(file, out_path, seed, noise, center_size):
 
 
 if __name__ == '__main__':
-    dir = '/home/brenden/Documents/data/subset'
-    save_dir = '/home/brenden/Documents/data/subset_sim'
+    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
+    save_dir = '/scratch/kadotab/simulated_brats'
     dataset_splits = ['train', 'test', 'val']
 
-    noise = float(sys.argv[2])
-    SAME_PHASE = bool(sys.argv[3])
-    center_size = int(sys.argv[4])
+    noise = float(sys.argv[1])
+    SAME_PHASE = bool(sys.argv[2])
+    center_size = int(sys.argv[3])
 
     # Create a pool of worker processes
     #num_processes = 1
