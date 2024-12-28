@@ -427,14 +427,11 @@ class LearnedSSLLightning(plReconModel):
                      on_epoch=True, on_step=False)
 
                      
-    def k_to_img(self, k_space):
-        return root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
-
-
     def calculate_inverse_k_loss(self, input_mask, loss_mask, inverse_k, undersampled_k):
         _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask, self.pass_through_size)
         k_loss_inverse = self.calculate_k_loss(inverse_k, undersampled_k, lambda_k_wo_acs, (1 - self.lambda_loss_scaling))
         return k_loss_inverse
+
     
     def partition_k_space(self, batch):
         # compute either learned or heuristic partioning masks

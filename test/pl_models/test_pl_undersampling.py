@@ -12,7 +12,7 @@ BATCH_SIZE = 2
 DATA_SIZE = (8, 4, 3, 128, 128)
 
 @pytest.fixture
-def temp_h5_directories():
+def temp_h5_directories(scope='session'):
     # Create a temporary directory to hold the structure
     with tempfile.TemporaryDirectory() as temp_dir:
         sub_dirs = ['train', 'test', 'val']
