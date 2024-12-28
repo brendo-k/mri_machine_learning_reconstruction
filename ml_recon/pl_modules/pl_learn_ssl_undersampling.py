@@ -29,6 +29,7 @@ class LearnedSSLLightning(plReconModel):
             is_learn_partitioning: bool = True,  
             warmup_training: bool = False,
             is_norm_loss: bool = False,
+            pass_through_size: int = 10,
             ):
         super().__init__(contrast_order=varnet_config.contrast_order)
         self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
@@ -46,6 +47,7 @@ class LearnedSSLLightning(plReconModel):
         self.is_training_warmup = warmup_training
         self.is_learn_partitioning = is_learn_partitioning
         self.is_norm_loss = is_norm_loss
+        self.pass_through_size = pass_through_size
 
         # loss function init
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
@@ -70,7 +72,7 @@ class LearnedSSLLightning(plReconModel):
             fully_sampled, 
             input_mask, 
             loss_mask,
-            return_all=False
+            return_all=False,
         )
 
         # estimated k-space from different paths
@@ -376,13 +378,13 @@ class LearnedSSLLightning(plReconModel):
 
     def compute_image_loss(self, kspace1, kspace2, undersampled_k, loss_scaling):
         scaling_factor = k_to_img(undersampled_k).amax((-1, -2), keepdim=True)
-        kspace1_img = k_to_img(kspace1)/scaling_factor
-        kspace2_img = k_to_img(kspace2)/scaling_factor
+        img_1 = k_to_img(kspace1)/scaling_factor
+        img_2 = k_to_img(kspace2)/scaling_factor
 
-        b, c, h, w = kspace1_img.shape
-        kspace1_img = kspace1_img.view(b * c, 1, h, w)
-        kspace2_img = kspace2_img.view(b * c, 1, h, w)
-        ssim_loss = self.image_loss_func(kspace1_img, kspace2_img)
+        b, c, h, w = img_1.shape
+        img_1 = img_1.view(b * c, 1, h, w)
+        img_2 = img_2.view(b * c, 1, h, w)
+        ssim_loss = self.image_loss_func(img_1, img_2)
 
         return ssim_loss * loss_scaling
 
@@ -430,7 +432,7 @@ class LearnedSSLLightning(plReconModel):
 
 
     def calculate_inverse_k_loss(self, input_mask, loss_mask, inverse_k, undersampled_k):
-        _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask)
+        _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask, self.pass_through_size)
         k_loss_inverse = self.calculate_k_loss(inverse_k, undersampled_k, lambda_k_wo_acs, (1 - self.lambda_loss_scaling))
         return k_loss_inverse
     

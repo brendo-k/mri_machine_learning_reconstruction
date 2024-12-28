@@ -15,12 +15,14 @@ class TriplePathway(nn.Module):
     """
     def __init__(
             self,
-            dual_domain_config: DualDomainConifg,
-            varnet_config: VarnetConfig
+            dual_domain_config: DualDomainConifg, # config for triple pathway dual domain 
+            varnet_config: VarnetConfig, # config for VarNet Reconstruction
+            pass_through_size: int = 10 # size of center region passed through to inverse mask
         ):
         super().__init__()
         self.config = dual_domain_config
         self.recon_model = MultiContrastVarNet(varnet_config)
+        self.pass_through_size = pass_through_size
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
@@ -61,7 +63,7 @@ class TriplePathway(nn.Module):
 
 
     def pass_through_inverse_path(self, undersampled, fs_k_space, lambda_set, inverse_set):
-        mask_inverse_w_acs, _ = TriplePathway.create_inverted_masks(lambda_set, inverse_set)
+        mask_inverse_w_acs, _ = TriplePathway.create_inverted_masks(lambda_set, inverse_set, self.pass_through_size)
 
         estimate_inverse = self.pass_through_model(undersampled*mask_inverse_w_acs, mask_inverse_w_acs, fs_k_space)
             
@@ -73,10 +75,13 @@ class TriplePathway(nn.Module):
         return estimate_lambda
 
     @staticmethod
-    def create_inverted_masks(lambda_set, inverse_set):
+    def create_inverted_masks(lambda_set, inverse_set, pass_through_size):
         _, _, _, h, w = lambda_set.shape
         mask_inverse_w_acs = inverse_set.clone()
         mask_lambda_wo_acs = lambda_set.clone()
-        mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 1
-        mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5] = 0
+        lower_bound = pass_through_size // 2
+        upper_bound = pass_through_size - lower_bound
+        center_slice = slice(h//2-lower_bound, h//2+upper_bound)
+        mask_inverse_w_acs[:, :, :, center_slice, center_slice] = 1
+        mask_lambda_wo_acs[:, :, :, center_slice, center_slice] = 0
         return mask_inverse_w_acs, mask_lambda_wo_acs
