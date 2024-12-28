@@ -196,18 +196,18 @@ class normalize_image_mean2(object):
 class test_transform(object):
     def __call__(self, data):
         data, img = data
-        gt_k_space = ifft_2d_img(img)
 
         k_space = data['undersampled']
         fs_k_space = data['fs_k_space'] 
         
         scaling_factor = k_space.abs().amax((1, 2, 3), keepdim=True)
-        gt_scaling_factor = gt_k_space.abs().amax((-1, -2), keepdim=True)
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
-
-        gt_k_space /= gt_scaling_factor
-        imgs = fft_2d_img(gt_k_space).abs()
+        noisy_imgs = root_sum_of_squares(ifft_2d_img(data['fs_k_space']), coil_dim=1)
+        noisy_imgs_max = noisy_imgs.amax((-1, -2), keepdim=True)
+    
+        img /= img.amax((-1, -2), keepdim=True)
+        img *= noisy_imgs_max
 
         return data, img
 
