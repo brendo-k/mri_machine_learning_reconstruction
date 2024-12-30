@@ -51,8 +51,8 @@ class BratsDatasetTest(Dataset):
         return len(self.undersampled_dataset)
 
     def __getitem__(self, index):
-        k_space = self.undersampled_dataset[index]
-        ground_truth = self.ground_truth_dataset[index]
+        k_space = torch.from_numpy(self.undersampled_dataset[index])
+        ground_truth = torch.from_numpy(self.ground_truth_dataset[index])
 
         if self.transforms:
             k_space, ground_truth = self.transforms((k_space, ground_truth))

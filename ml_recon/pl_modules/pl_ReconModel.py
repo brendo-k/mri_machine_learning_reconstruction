@@ -28,14 +28,10 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0.12
-        print("test_step, gt", ground_truth_image.abs().max())
+        image_background_mask = ground_truth_image > scaling_factor * 0.08
 
-        estimated_image = scaling_factor
+        estimated_image /= scaling_factor
         ground_truth_image_scaled = ground_truth_image / scaling_factor
-
-        print("test_step, estimate", estimated_image.abs().max())
-        print("test_step, gt", ground_truth_image.abs().max())
 
         estimated_image_mask = estimated_image * image_background_mask
         ground_truth_image_mask = ground_truth_image_scaled * image_background_mask
@@ -96,7 +92,7 @@ class plReconModel(pl.LightningModule):
         print("on batch enc, gt", ground_truth_image.abs().max())
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0.1
+        image_background_mask = ground_truth_image > scaling_factor * 0.08
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
