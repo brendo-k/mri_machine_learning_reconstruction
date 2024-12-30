@@ -49,7 +49,7 @@ class BratsDataset(Dataset):
             sample_file = [file for file in os.listdir(sample_path) if 'h5' in file]
             sample_file_path = os.path.join(sample_path, sample_file[0])
             with h5py.File(sample_file_path, 'r') as fr:
-                k_space = fr['k_space']
+                k_space = fr[self.data_key]
                 assert isinstance(k_space, h5py.Dataset)
                 num_slices = k_space.shape[0]
                 slices.append(num_slices)
@@ -108,6 +108,7 @@ class BratsDataset(Dataset):
         with h5py.File(file, 'r') as fr:
             dataset = fr[self.data_key]
             assert isinstance(dataset, h5py.Dataset)
+            print(dataset.shape)
             data = torch.as_tensor(dataset[slice_index, self.contrast_order_indexes])
             data = F.center_crop(data, [self.ny, self.nx]).numpy()
 

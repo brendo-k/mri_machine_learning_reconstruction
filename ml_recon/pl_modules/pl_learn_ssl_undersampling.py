@@ -333,6 +333,7 @@ class LearnedSSLLightning(plReconModel):
             mask += k_space['loss_mask'] # combine to get original sampliing mask
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
+        print("test_step, estimate_k", estimate_k.abs().max())
 
         return super().test_step((estimate_k, ground_truth_image), batch_index)
 
@@ -344,8 +345,9 @@ class LearnedSSLLightning(plReconModel):
         mask = k_space['mask']
         if (k_space['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
             mask += k_space['loss_mask'] # combine to get original sampliing mask
-        # pass inital data through the model
+        # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
+        print("on_test_batch_end", estimate_k.abs().max())
 
         return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
         

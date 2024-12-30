@@ -23,25 +23,30 @@ class plReconModel(pl.LightningModule):
 
     def test_step(self, batch, batch_index):
         estimate_k, ground_truth_image = batch
+        print("test_step, estimate_k", estimate_k.abs().max())
 
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
         image_background_mask = ground_truth_image > scaling_factor * 0.12
+        print("test_step, gt", ground_truth_image.abs().max())
 
-        estimated_image /= scaling_factor
-        ground_truth_image /= scaling_factor
+        estimated_image = scaling_factor
+        ground_truth_image_scaled = ground_truth_image / scaling_factor
 
-        estimated_image *= image_background_mask
-        ground_truth_image *= image_background_mask
+        print("test_step, estimate", estimated_image.abs().max())
+        print("test_step, gt", ground_truth_image.abs().max())
+
+        estimated_image_mask = estimated_image * image_background_mask
+        ground_truth_image_mask = ground_truth_image_scaled * image_background_mask
 
         average_ssim = 0
         average_psnr = 0
         average_nmse = 0
         for i in range(ground_truth_image.shape[0]):
             for contrast_index in range(len(self.contrast_order)):
-                contrast_ground_truth = ground_truth_image[i, contrast_index, :, :]
-                contrast_estimated = estimated_image[i, contrast_index, :, :]
+                contrast_ground_truth = ground_truth_image_mask[i, contrast_index, :, :]
+                contrast_estimated = estimated_image_mask[i, contrast_index, :, :]
                 contrast_ground_truth = contrast_ground_truth[None, None, :, :]
                 contrast_estimated = contrast_estimated[None, None, :, :]
 
@@ -85,17 +90,24 @@ class plReconModel(pl.LightningModule):
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
         estimate_k, ground_truth_image = batch
+        print("on batch end, est_k", estimate_k.abs().max())
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
+        print("on batch enc, est", estimated_image.abs().max())
+        print("on batch enc, gt", ground_truth_image.abs().max())
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
         image_background_mask = ground_truth_image > scaling_factor * 0.1
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
+        print("on batch end, gt", ground_truth_image.abs().max())
         difference_image = (ground_truth_image - estimated_image).abs()
 
         estimated_image *= image_background_mask
         ground_truth_image *= image_background_mask
+
+        print(estimated_image.abs().max())
+        print(ground_truth_image.abs().max())
 
         
         estimated_image = estimated_image[0].clamp(0, 1)
