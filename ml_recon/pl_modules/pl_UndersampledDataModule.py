@@ -199,7 +199,6 @@ class test_transform(object):
 
         k_space = data['undersampled']
         fs_k_space = data['fs_k_space'] 
-        print(fs_k_space.shape)
         
         scaling_factor = k_space.abs().amax((1, 2, 3), keepdim=True)
         data['undersampled'] /= scaling_factor
