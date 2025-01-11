@@ -39,7 +39,7 @@ def test_mask(sensitivity_model):
     real_mask = torch.zeros(3, 4, 20, 640, 320)
     real_mask[0, ..., 150:170] = 1
     real_mask[1, ..., 155:165] = 1
-    real_mask[2, ..., 156:164] = 1
+    real_mask[2, ..., 155:165] = 1
     real_mask = real_mask.to(torch.bool)
 
     torch.testing.assert_close(x_masked_indecies, real_mask)

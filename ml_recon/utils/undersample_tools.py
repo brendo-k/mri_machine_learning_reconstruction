@@ -281,15 +281,23 @@ def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
 
     loss_mask = np.zeros_like(input_mask)
     count = 0
+    required_points = int(np.ceil(np.sum(input_mask[:]) * rho))
+    remaning_points = required_points
+    while np.sum(loss_mask) < required_points:
 
-    while count <= int(np.ceil(np.sum(input_mask[:]) * rho)):
+        indx = np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale, size=remaning_points)).astype(int)
+        indy = np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale, size=remaning_points)).astype(int)
 
-        indx = int(np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale)))
-        indy = int(np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale)))
+        valid_x = np.logical_and(indx >= 0, indx < nrow)
+        valid_y = np.logical_and(indy >= 0, indy < ncol)
 
-        if (0 <= indx < nrow and 0 <= indy < ncol and temp_mask[indx, indy] == 1 and loss_mask[indx, indy] != 1):
-            loss_mask[indx, indy] = 1
-            count = count + 1
+        indx = indx[valid_x & valid_y]
+        indy = indy[valid_x & valid_y]
+
+        points = temp_mask[indy, indx]
+        loss_mask[indy, indx] = points
+        remaning_points = required_points - np.sum(loss_mask)
+
 
     trn_mask = input_mask ^ loss_mask
 

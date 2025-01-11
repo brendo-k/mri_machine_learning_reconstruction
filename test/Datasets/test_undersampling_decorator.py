@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 

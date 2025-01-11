@@ -86,4 +86,33 @@ def test_apply_undersampling_not_same():
     k_mask = undersampled_k != 0 
     np.testing.assert_allclose(k_mask[:, [0], ...], mask)
     assert not np.all(undersampled_k == k_space)
-    
+
+
+def test_ssdu_gaussian_selection_shape():
+    input_mask = np.ones((64, 64), dtype=bool)
+    trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
+    assert trn_mask.shape == input_mask.shape
+    assert loss_mask.shape == input_mask.shape
+
+def test_ssdu_gaussian_selection_no_overlap():
+    input_mask = np.ones((64, 64), dtype=bool)
+    trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
+    assert np.all((trn_mask & loss_mask) == 0)
+
+def test_ssdu_gaussian_selection_rho():
+    input_mask = np.ones((64, 64), dtype=bool)
+    rho = 0.4
+    trn_mask, loss_mask = ssdu_gaussian_selection(input_mask, rho=rho)
+    expected_loss_count = int(np.ceil(np.sum(input_mask) * rho))
+    actual_loss_count = np.sum(loss_mask)
+    assert expected_loss_count == actual_loss_count, f"Expected {expected_loss_count} loss pixels, got {actual_loss_count}"
+
+def test_ssdu_gaussian_selection_acs_region():
+    input_mask = np.ones((64, 64), dtype=bool)
+    trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
+    center_kx = input_mask.shape[1] // 2
+    center_ky = input_mask.shape[0] // 2
+    acs_shape = 10
+    acs_region = loss_mask[center_kx - acs_shape // 2:center_kx + acs_shape // 2,
+                           center_ky - acs_shape // 2:center_ky + acs_shape // 2]
+    assert np.all(acs_region == 0) 

@@ -2,9 +2,9 @@ from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares, fft_2d_img
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
-from ml_recon.dataset.m4raw_dataset import M4Raw
-from ml_recon.dataset.m4raw_test_dataset import M4RawTest
-from ml_recon.dataset.fastMRI_dataset import FastMRIDataset
+from ml_recon.dataset.M4Raw_dataset import M4Raw
+from ml_recon.dataset.M4Raw_test_dataset import M4RawTest
+from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose

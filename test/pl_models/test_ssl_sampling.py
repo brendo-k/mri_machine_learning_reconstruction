@@ -58,11 +58,11 @@ def test_partitioning_ssl_learned(build_model: LearnedSSLLightning, ssl_batch):
     assert input_mask.dtype == torch.float32
     assert loss_mask.dtype == torch.float32
 
-def test_partitioning_ssl_unlearned(build_model: LearnedSSLLightning, ssl_batch_data): 
+def test_partitioning_ssl_unlearned(build_model: LearnedSSLLightning, ssl_batch): 
     build_model.is_learn_partitioning = False
 
-    input_mask, loss_mask = build_model.partition_k_space(ssl_batch_data)
-    initial_mask = ssl_batch_data['undersampled'] != 0
+    input_mask, loss_mask = build_model.partition_k_space(ssl_batch)
+    initial_mask = ssl_batch['undersampled'] != 0
 
     torch.testing.assert_close(input_mask + loss_mask, initial_mask.to(torch.float32))
     assert input_mask.dtype == torch.float32

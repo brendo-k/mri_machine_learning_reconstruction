@@ -8,10 +8,27 @@ import h5py
 from torch.utils.data import Dataset
 
 class M4Raw(Dataset):
-    """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
-    dataset. It does not do any subsampling
-
     """
+    This is a dataloader for the M4Raw dataset. It loads a slice from the M4Raw 
+    dataset without any subsampling.
+    Attributes:
+        nx (int): The desired width of the k-space data.
+        ny (int): The desired height of the k-space data.
+        key (str): The key to access the k-space data in the HDF5 files.
+        transforms (Callable, optional): A function/transform to apply to the k-space data.
+        contrast_order (np.ndarray): The order of contrasts in the dataset.
+        contrast_order_indexes (np.ndarray): Boolean array indicating which contrasts are used.
+        slice_cumulative_sum (np.ndarray): Cumulative sum of slices in the dataset.
+        length (int): Total number of slices in the dataset.
+        file_names (List[str]): List of file paths for the dataset.
+    Methods:
+        __len__(): Returns the total number of slices in the dataset.
+        __getitem__(index): Returns the k-space data for the given index.
+        get_data_from_file(index): Retrieves the k-space data from the file for the given index.
+        center_k_space(contrast_k): Centers the k-space data for each contrast image.
+        resample_or_pad(k_space): Resamples or pads the k-space data to the desired height and width.
+    """
+
     def __init__(
             self,
             data_dir: Union[str, os.PathLike],
@@ -81,15 +98,32 @@ class M4Raw(Dataset):
             dataset = fr[self.key]
             assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
+            k_space = self.center_k_space(k_space)
+            k_space = M4Raw.fill_missing_k_space(k_space)
                 
-        k_space = np.stack([(contrast) for contrast in k_space], axis=0)
         return k_space 
 
     def center_k_space(self, contrast_k):
-        _, h_center, w_center = np.unravel_index(np.argmax(contrast_k), contrast_k.shape)
-        diff_h = h_center - contrast_k.shape[-2]//2
-        diff_w = w_center - contrast_k.shape[-1]//2
-        contrast_k = np.roll(contrast_k, (-diff_h, -diff_w), axis=(-2, -1))
+        """
+        Centers the k-space data for each contrast image in the input array.
+
+        This function finds the maximum value in each 2D k-space slice of the input
+        array `contrast_k` and shifts the k-space data such that the maximum value
+        is centered. The centering is done by rolling the array along the last two
+        axes.
+
+        Parameters:
+        contrast_k (numpy.ndarray): A 3D numpy array of k-space data with shape
+                                    (num_contrasts, height, width).
+
+        Returns:
+        numpy.ndarray: The centered k-space data with the same shape as the input.
+        """
+        for i in range(contrast_k.shape[0]):
+            _, h_center, w_center = np.unravel_index(np.argmax(contrast_k[i]), contrast_k[i].shape)
+            diff_h = h_center - contrast_k[i].shape[-2]//2
+            diff_w = w_center - contrast_k[i].shape[-1]//2
+            contrast_k[i] = np.roll(contrast_k[i], (-diff_h, -diff_w), axis=(-2, -1))
         return contrast_k
 
     def resample_or_pad(self, k_space):
@@ -107,3 +141,26 @@ class M4Raw(Dataset):
         resample_width = self.nx
 
         return F.center_crop(torch.from_numpy(k_space), [resample_height, resample_width]).numpy()
+    
+    @staticmethod
+    def fill_missing_k_space(k_space):
+        # if there is missing data on one of the coils, we replace it with the average of the other coils
+        
+        contrast, coils, h, w = k_space.shape
+        zero_fill_mask = np.zeros_like(k_space) 
+        zero_fill_mask[:, :, :, 31:-30] = 1
+
+        zeros_mask = k_space == 0
+
+        # Compute the indices of the maximum absolute values along the channel (c) dimension
+        max_indices = np.argmax(np.abs(k_space), axis=1, keepdims=True)  # Shape: (b, 1, h, w)
+
+        # Use take_along_axis to gather the maximum values while retaining the complex data
+        averaged_k = np.take_along_axis(k_space, max_indices, axis=1)
+
+        averaged_k = np.tile(averaged_k, (1, coils, 1, 1))
+
+        k_space[zeros_mask] = averaged_k[zeros_mask]
+
+        return k_space
+

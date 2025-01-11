@@ -78,7 +78,7 @@ def test_final_dc_step(dual_domain_ssl, mock_inputs):
 def test_create_inverted_masks(dual_domain_ssl, mock_inputs):
     _, _, lambda_set, inverse_set = mock_inputs
 
-    mask_inverse_w_acs, mask_lambda_wo_acs = dual_domain_ssl.create_inverted_masks(lambda_set, inverse_set)
+    mask_inverse_w_acs, mask_lambda_wo_acs = dual_domain_ssl.create_inverted_masks(lambda_set, inverse_set, 10)
 
     _, _, _, h, w = lambda_set.shape
     assert mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5].sum() > 0

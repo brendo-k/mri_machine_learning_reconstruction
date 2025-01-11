@@ -65,7 +65,7 @@ class UndersampleDecorator(Dataset):
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
         fully_sampled_k_space = k_space.copy()
-        first_undersampled, omega_mask = self.generate_inital_mask(index, k_space)
+        first_undersampled, omega_mask = self.generate_first_mask(index, k_space)
         omega_mask = omega_mask.astype(np.float32)
 
         output = {
@@ -76,7 +76,7 @@ class UndersampleDecorator(Dataset):
                 }
 
         if self.self_supervised:
-            input_mask, loss_mask = self.generate_ssl_masks(index, first_undersampled, omega_mask, output)
+            input_mask, loss_mask = self.create_self_supervised_masks(index, first_undersampled, omega_mask, output)
             output.update(
                 {
                     'mask': input_mask.astype(np.float32),
@@ -92,7 +92,7 @@ class UndersampleDecorator(Dataset):
 
         return output
 
-    def generate_ssl_masks(self, index, under, mask_omega, output):
+    def create_self_supervised_masks(self, index, under, mask_omega, output):
         if self.original_ssdu_partioning:
             input_mask = []
             loss_mask = []
@@ -122,7 +122,7 @@ class UndersampleDecorator(Dataset):
 
         return input_mask, loss_mask
 
-    def generate_inital_mask(self, index, k_space):
+    def generate_first_mask(self, index, k_space):
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             line_constrained = self.sampling_type == '1d'
             under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 

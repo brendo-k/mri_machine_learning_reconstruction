@@ -20,7 +20,8 @@ class FastMRIDataset(Dataset):
             nx:int = 256,
             ny:int = 256,
             transforms: Optional[Callable] = None,
-            contrasts: List[str] = ['t1']
+            contrasts: List[str] = ['t1'], 
+            key = 'kspace'
             ):
 
         # call super constructor
@@ -32,6 +33,7 @@ class FastMRIDataset(Dataset):
 
         self.transforms = transforms
         self.contrast_order = ['t1']
+        self.key = key
 
         files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
         files.sort()
@@ -42,7 +44,7 @@ class FastMRIDataset(Dataset):
             full_path = os.path.join(data_dir, file)
             with h5py.File(full_path, 'r') as fr:
                 # loop through all the slices
-                dataset = fr['kspace']
+                dataset = fr[self.key]
                 assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[0])
                 self.file_names.append(full_path)
@@ -73,7 +75,7 @@ class FastMRIDataset(Dataset):
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         file_name = self.file_names[volume_index]
         with h5py.File(file_name, 'r') as fr:
-            dataset = fr['kspace']
+            dataset = fr[self.key]
             assert isinstance(dataset, h5py.Dataset)
             k_space = torch.as_tensor(dataset[slice_index])
 
