@@ -98,8 +98,11 @@ class M4Raw(Dataset):
             dataset = fr[self.key]
             assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
-            k_space = self.center_k_space(k_space)
-            k_space = M4Raw.fill_missing_k_space(k_space)
+            
+            # extra processing for k-space data
+            if self.key == 'kspace':
+                k_space = self.center_k_space(k_space)
+                k_space = M4Raw.fill_missing_k_space(k_space)
                 
         return k_space 
 

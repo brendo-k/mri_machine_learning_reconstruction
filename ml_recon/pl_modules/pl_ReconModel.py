@@ -98,9 +98,6 @@ class plReconModel(pl.LightningModule):
         estimated_image *= image_background_mask
         ground_truth_image *= image_background_mask
 
-        print(estimated_image.abs().max())
-        print(ground_truth_image.abs().max())
-
         
         estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]
