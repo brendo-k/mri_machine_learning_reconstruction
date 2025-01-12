@@ -65,8 +65,13 @@ class UndersampleDecorator(Dataset):
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
         fully_sampled_k_space = k_space.copy()
-        first_undersampled, omega_mask = self.generate_first_mask(index, k_space)
+        
+        zero_fill_mask = fully_sampled_k_space != 0 
+        first_undersampled, omega_mask = self.compute_initial_mask(index, k_space)
         omega_mask = omega_mask.astype(np.float32)
+        
+        # only mask where there is data. Exlcude zero filled data
+        omega_mask = omega_mask * zero_fill_mask
 
         output = {
                 'undersampled': first_undersampled, 
@@ -108,7 +113,7 @@ class UndersampleDecorator(Dataset):
                 # scale pdf
             scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
             line_constrained = self.sampling_type == '1d'
-            doub_under, mask_lambda = apply_undersampling_from_dist(
+            _, mask_lambda = apply_undersampling_from_dist(
                         index,
                         scaled_new_prob,
                         under,
@@ -116,13 +121,13 @@ class UndersampleDecorator(Dataset):
                         line_constrained=line_constrained,
                         )
                 
-                # loss mask is what is not in double undersampled
+            # loss mask is the disjoint set of the input mask
             input_mask = mask_omega * mask_lambda
             loss_mask = mask_omega * (1 - mask_lambda)
 
         return input_mask, loss_mask
 
-    def generate_first_mask(self, index, k_space):
+    def compute_initial_mask(self, index, k_space):
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             line_constrained = self.sampling_type == '1d'
             under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
