@@ -20,7 +20,7 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name,)
+    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name, save_dir='/home/kadotab/scratch/')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -71,7 +71,8 @@ def main(args):
             contrasts=args.contrasts,
             sampling_method=args.sampling_method,
             R=args.R,
-            self_supervsied=(not args.supervised)
+            self_supervsied=(not args.supervised), 
+            ssdu_partioning=args.ssdu_partitioning
             ) 
 
     data_module.setup('train')
@@ -159,6 +160,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--ny', type=int, default=256)
     dataset_group.add_argument('--limit_batches', type=float, default=1.0)
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
+    dataset_group.add_argument('--ssdu_partitioning', action='store_true')
 
 
     model_group = parser.add_argument_group('Model Parameters')

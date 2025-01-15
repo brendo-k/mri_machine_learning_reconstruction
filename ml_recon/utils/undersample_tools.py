@@ -285,8 +285,8 @@ def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
     remaning_points = required_points
     while np.sum(loss_mask) < required_points:
 
-        indx = np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale, size=remaning_points)).astype(int)
-        indy = np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale, size=remaning_points)).astype(int)
+        indx = np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale, size=int(remaning_points))).astype(int)
+        indy = np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale, size=int(remaning_points))).astype(int)
 
         valid_x = np.logical_and(indx >= 0, indx < nrow)
         valid_y = np.logical_and(indy >= 0, indy < ncol)
