@@ -267,21 +267,21 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
 
     return prob_map
 
-def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
+def ssdu_gaussian_selection(initial_mask, std_scale=4, rho=0.4):
 
-    ncol, nrow = input_mask.shape
+    ncol, nrow = initial_mask.shape
     
     center_kx = nrow//2
     center_ky = ncol//2
 
     acs_shape = 10
-    temp_mask = np.copy(input_mask)
+    temp_mask = np.copy(initial_mask)
     temp_mask[center_kx - acs_shape // 2:center_kx + acs_shape // 2,
     center_ky - acs_shape // 2:center_ky + acs_shape // 2] = 0
 
-    loss_mask = np.zeros_like(input_mask)
+    loss_mask = np.zeros_like(initial_mask)
     count = 0
-    required_points = int(np.ceil(np.sum(input_mask[:]) * rho))
+    required_points = int(np.ceil(np.sum(initial_mask[:]) * rho))
     remaning_points = required_points
     while np.sum(loss_mask) < required_points:
 
@@ -299,6 +299,6 @@ def ssdu_gaussian_selection(input_mask, std_scale=4, rho=0.4):
         remaning_points = required_points - np.sum(loss_mask)
 
 
-    trn_mask = input_mask ^ loss_mask
+    input_mask = initial_mask - loss_mask
 
-    return trn_mask, loss_mask
+    return input_mask, loss_mask
