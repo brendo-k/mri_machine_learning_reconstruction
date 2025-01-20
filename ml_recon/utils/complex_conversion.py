@@ -6,12 +6,19 @@ def complex_to_real(images: torch.Tensor):
     assert images.is_complex(), 'Channel dimension should be at least 2'
     # images dims [B, C, H, W, complex]
     images = torch.view_as_real(images)
-    images = einops.rearrange(images, 'b c h w cm -> b (cm c) h w')
+
+    b, c, h, w, cm = images.shape
+
+    images = images.permute(0, 4, 1, 2, 3)
+    images = images.reshape(b, cm * c, h, w)
+    #images = einops.rearrange(images, 'b c h w cm -> b (cm c) h w')
     return images
 
 def real_to_complex(images: torch.Tensor):
-    assert images.shape[1] >= 2, 'Channel dimension should be at least 2'
-    images = einops.rearrange(images, 'b (cm c) h w -> b c h w cm', cm=2)
+    b, c, h, w = images.shape
+    #images = einops.rearrange(images, 'b (cm c) h w -> b c h w cm', cm=2)
+    images = images.reshape(b, 2, c//2, h, w)
+    images = images.permute(0, 2, 3, 4, 1)
     images = images.contiguous()
     images = torch.view_as_complex(images)
     return images

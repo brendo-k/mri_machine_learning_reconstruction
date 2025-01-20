@@ -36,6 +36,7 @@ class LearnedSSLLightning(plReconModel):
 
         if is_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
+            self.partition_model = torch.compile(self.partition_model)
 
         self.recon_model = TriplePathway(dual_domain_config, varnet_config)
 

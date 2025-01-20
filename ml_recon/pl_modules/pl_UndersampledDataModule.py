@@ -5,6 +5,7 @@ from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
 from ml_recon.dataset.M4Raw_dataset import M4Raw
 from ml_recon.dataset.M4Raw_test_dataset import M4RawTest
 from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
+from ml_recon.dataset.FastMRI_test_dataset import FastMRIDatasetTest
 
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
@@ -31,6 +32,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self_supervsied: bool = False,
             sampling_method: str = '2d',
             ssdu_partioning: bool = False,
+            acs_lines: int = 10
             ):
 
         super().__init__()
@@ -42,6 +44,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self.test_dataset_class = BratsDatasetTest
         elif dataset_name == 'fastmri':
             self.dataset_class = FastMRIDataset
+            self.test_dataset_class = FastMRIDatasetTest
         elif dataset_name == 'm4raw':
             self.dataset_class = M4Raw
             self.test_dataset_class = M4RawTest
@@ -49,6 +52,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.data_dir = data_dir
         self.test_dir = test_dir
         self.contrasts = contrasts
+        self.acs_lines = acs_lines
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.resolution = resolution
@@ -92,6 +96,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'sampling_method': self.sampling_method,
                 'self_supervised': self.self_supervised,
+                'acs_lines' : self.acs_lines
         }
 
         self.train_dataset = self.dataset_class(

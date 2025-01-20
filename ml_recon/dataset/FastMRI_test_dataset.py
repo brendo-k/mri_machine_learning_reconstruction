@@ -5,6 +5,7 @@ from typing import Optional, Callable, Union
 import torchvision.transforms.functional as F
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
+from ml_recon.utils import k_to_img
 import torch
 import h5py
 from typing import List
@@ -41,7 +42,7 @@ class FastMRIDatasetTest(Dataset):
                 self_supervised=self_supervised, 
                 )
 
-        self.ground_truth_dataset = FastMRIDataset(data_dir, nx, ny, None, contrasts, key='reconstruction_rss')
+        self.ground_truth_dataset = FastMRIDataset(data_dir, nx, ny, None, contrasts, key='kspace')
 
 
     def __len__(self):
@@ -50,6 +51,8 @@ class FastMRIDatasetTest(Dataset):
     def __getitem__(self, index):
         k_space = self.undersampled_dataset[index]
         ground_truth = torch.from_numpy(self.ground_truth_dataset[index])
+        print(ground_truth.shape)
+        ground_truth = k_to_img(ground_truth, coil_dim=1)
 
         if self.transforms:
             k_space, ground_truth = self.transforms((k_space, ground_truth))

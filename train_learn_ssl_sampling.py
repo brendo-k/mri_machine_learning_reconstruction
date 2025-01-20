@@ -20,7 +20,7 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -52,7 +52,7 @@ def main(args):
                          limit_train_batches=args.limit_batches,
                          limit_val_batches=args.limit_batches,
                          limit_test_batches=args.limit_batches,
-                         #precision="bf16-mixed", 
+                         #precision="16", 
                          #profiler=pytorch_profiler
                          )
 
@@ -72,7 +72,8 @@ def main(args):
             sampling_method=args.sampling_method,
             R=args.R,
             self_supervsied=(not args.supervised), 
-            ssdu_partioning=args.ssdu_partitioning
+            ssdu_partioning=args.ssdu_partitioning,
+            acs_lines=args.acs_lines
             ) 
 
     data_module.setup('train')
@@ -83,8 +84,8 @@ def main(args):
         cascades=args.cascades, 
         channels=args.chans,
         split_contrast_by_phase=args.split_contrast_by_phase,
-        sensetivity_estimation=args.sense_method
-
+        sensetivity_estimation=args.sense_method,
+        dropout=args.dropout
     )
     
     partitioning_config = LearnPartitionConfig(
@@ -115,7 +116,7 @@ def main(args):
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
         is_learn_partitioning=args.learn_sampling, 
-        is_norm_loss = args.norm_loss_by_masks,
+        is_norm_loss=args.norm_loss_by_masks,
         )
     torch.set_float32_matmul_precision('medium')
 
@@ -152,6 +153,7 @@ if __name__ == '__main__':
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
     dataset_group.add_argument('--R', type=float, default=6.0)
+    dataset_group.add_argument('--acs_lines', type=int, default=10)
     dataset_group.add_argument('--dataset', type=str, default='m4raw')
     dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
     dataset_group.add_argument('--data_dir', type=str, default="/Users/brend/Documents/Data")
@@ -185,6 +187,7 @@ if __name__ == '__main__':
     model_group.add_argument('--split_contrast_by_phase', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
     model_group.add_argument('--norm_loss_by_masks', action='store_true')
+    model_group.add_argument('--dropout', type=float, default=0.0) 
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

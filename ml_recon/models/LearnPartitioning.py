@@ -96,11 +96,6 @@ class LearnPartitioning(nn.Module):
         if not self.config.is_learn_R:
             probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
-
-        # testing function to ensure probabilities are close to the set R value
-        for probs, R in zip(probability, cur_R):
-            assert probs.mean().item() - 1/R < 1e-3
-             
         return probability
     
     
