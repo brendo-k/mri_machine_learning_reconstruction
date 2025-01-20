@@ -108,7 +108,6 @@ class BratsDataset(Dataset):
         with h5py.File(file, 'r') as fr:
             dataset = fr[self.data_key]
             assert isinstance(dataset, h5py.Dataset)
-            print(dataset.shape)
             data = torch.as_tensor(dataset[slice_index, self.contrast_order_indexes])
             data = F.center_crop(data, [self.ny, self.nx]).numpy()
 

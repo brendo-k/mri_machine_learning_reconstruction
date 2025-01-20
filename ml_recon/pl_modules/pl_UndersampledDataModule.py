@@ -118,6 +118,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         self.val_dataset = UndersampleDecorator(
                 self.val_dataset,
+                original_ssdu_partioning=self.ssdu_partioning,
                 transforms=self.transforms,
                 **undersample_keyword_args
                 )
