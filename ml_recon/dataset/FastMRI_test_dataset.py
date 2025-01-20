@@ -28,7 +28,8 @@ class FastMRIDatasetTest(Dataset):
             R_hat: float = 4,
             R: float = 4,
             sampling_method: str = '2d',
-            self_supervised: bool = False
+            self_supervised: bool = False,
+            acs_lines: int = 10
             ):
 
         super().__init__()
@@ -40,6 +41,7 @@ class FastMRIDatasetTest(Dataset):
                 R=R,
                 sampling_method=sampling_method,
                 self_supervised=self_supervised, 
+                acs_lines=acs_lines
                 )
 
         self.ground_truth_dataset = FastMRIDataset(data_dir, nx, ny, None, contrasts, key='kspace')

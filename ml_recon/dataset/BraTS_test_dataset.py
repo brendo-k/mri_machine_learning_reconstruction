@@ -29,6 +29,7 @@ class BratsDatasetTest(Dataset):
             transforms: Optional[Callable] = None,
             R: int=4,
             R_hat: int=2,
+            acs_lines: int=10,
             sampling_method:str='2d',
             self_supervised:bool=False
             ):
@@ -43,6 +44,7 @@ class BratsDatasetTest(Dataset):
                 R=R,
                 sampling_method=sampling_method,
                 self_supervised=self_supervised, 
+                acs_lines=acs_lines
                 )
 
         self.ground_truth_dataset = BratsDataset(ground_truth_dir, nx, ny, contrasts, data_key='rss_images')

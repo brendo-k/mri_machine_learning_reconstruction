@@ -25,7 +25,8 @@ class M4RawTest(Dataset):
             R: int = 4, 
             R_hat: int = 2,
             self_supervised: bool = True, 
-            sampling_method: str = '2d'
+            sampling_method: str = '2d',
+            acs_lines: int = 10
             ):
 
         # call super constructor
@@ -41,7 +42,8 @@ class M4RawTest(Dataset):
                 R=R, 
                 R_hat=R_hat, 
                 sampling_method = sampling_method,
-                self_supervised = self_supervised
+                self_supervised = self_supervised, 
+                acs_lines=acs_lines
                 )
         self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='rss_images')
 
