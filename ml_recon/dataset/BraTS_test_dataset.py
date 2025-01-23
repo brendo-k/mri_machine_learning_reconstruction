@@ -47,7 +47,7 @@ class BratsDatasetTest(Dataset):
                 acs_lines=acs_lines
                 )
 
-        self.ground_truth_dataset = BratsDataset(ground_truth_dir, nx, ny, contrasts, data_key='rss_images')
+        self.ground_truth_dataset = BratsDataset(ground_truth_dir, nx, ny, contrasts, data_key='reconstruction_rss')
 
     def __len__(self):
         return len(self.undersampled_dataset)

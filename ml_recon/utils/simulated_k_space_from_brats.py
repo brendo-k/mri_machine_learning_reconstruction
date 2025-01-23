@@ -1,5 +1,6 @@
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
+import torch
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
@@ -12,7 +13,7 @@ def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=1
     image_w_sense = apply_sensetivities(image, coil_size)
     #image_w_sense [Contrast coil height width]
     image_w_phase = generate_and_apply_phase(image_w_sense, seed, center_region=center_region)
-    k_space = fft_2d_img(image_w_phase)
+    k_space = fft_2d_img(torch.from_numpy(image_w_phase))
     k_space = apply_noise(k_space, seed, noise_std)
     return k_space
 
@@ -26,10 +27,8 @@ def apply_sensetivities(image, coil_size):
 
     sense_map = np.load('/home/brenden/Documents/data/compressed_maps_10.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
-    print(sense_map.shape)
     sense_map = np.transpose(sense_map, (0, 2, 1))
     sense_map = sense_map[:, 25:-25, 25:-25]
-    print(sense_map.shape)
     rng = np.random.default_rng()
     #image [Contrast height width]
 
@@ -92,16 +91,16 @@ def build_phase_from_same_dist(data, seed):
 def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
     rng = np.random.default_rng(seed)
 
-    phase_frequency = np.zeros((1, nx, ny), dtype=np.complex64)
+    phase_frequency = torch.zeros((1, nx, ny), dtype=torch.complex64)
     if not same_phase:
-        phase_frequency = np.tile(phase_frequency, (nc, 1, 1))
+        phase_frequency = torch.tile(phase_frequency, (nc, 1, 1))
 
     center = (nx//2, ny//2)
     center_box_x = slice(center[0] - center_region//2, center[0] + np.ceil(center_region/2).astype(int))
     center_box_y = slice(center[1] - center_region//2, center[1] + np.ceil(center_region/2).astype(int))
     coeff = rng.random(size=(phase_frequency.shape[0], center_region, center_region)) + 1j * rng.random(size=(phase_frequency.shape[0], center_region, center_region))
     coeff -= 0.5 + 1j * 0.5
-    phase_frequency[:, center_box_x, center_box_y] = coeff
+    phase_frequency[:, center_box_x, center_box_y] = torch.from_numpy(coeff)
 
     phase = fft_2d_img(phase_frequency)
     phase = np.angle(phase)

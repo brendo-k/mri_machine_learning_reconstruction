@@ -6,7 +6,7 @@ import h5py
 import os
 import multiprocessing
 from itertools import repeat
-from ml_recon.utils import fft_2d_img, ifft_2d_img
+from ml_recon.utils import fft_2d_img, ifft_2d_img, k_to_img
 import sys
 
 IMAGE_SIZE = (240, 240)
@@ -35,14 +35,7 @@ def process_file(file, out_path, seed, noise, center_size):
         if i >= images.shape[-1]-36:
             break
         if i % 3 == 0:
-            #cur_images = SimulatedBrats.resample(images[..., i], IMAGE_SIZE[0], IMAGE_SIZE[1])
             cur_images = images[..., i]
-            cur_images = fft_2d_img(torch.from_numpy(cur_images))
-            _, y, x = cur_images.shape 
-            y_start = y//2 - IMAGE_SIZE[0]//2
-            x_start = x//2 - IMAGE_SIZE[1]//2
-            cur_images = cur_images[:, y_start:y_start + IMAGE_SIZE[0], x_start:x_start + IMAGE_SIZE[1]]
-            cur_images = ifft_2d_img(cur_images).numpy()
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
             k_space[..., (i-70)//3] = simulate_k_space(
@@ -64,6 +57,7 @@ def process_file(file, out_path, seed, noise, center_size):
             dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64, chunks=chunk_size)
             dset[...] = k_space
             dset = fr.create_dataset("contrasts", data=modality_name)
+            dset = fr.create_dataset("reconstruction_rss", data=k_to_img(torch.from_numpy(k_space), coil_dim=2))
         print(f'saved to file: {save_file}')
 
     except Exception as e:
@@ -75,8 +69,8 @@ def process_file(file, out_path, seed, noise, center_size):
 
 
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/scratch/kadotab/simulated_brats'
+    dir = '/home/brenden/Documents/data/subset'
+    save_dir = '/home/brenden/Documents/data/sim_subset'
     dataset_splits = ['train', 'test', 'val']
 
     noise = float(sys.argv[1])
@@ -84,9 +78,9 @@ if __name__ == '__main__':
     center_size = int(sys.argv[3])
 
     # Create a pool of worker processes
-    #num_processes = 1
+    num_processes = 2
     #print(num_processes)
-    #pool = multiprocessing.Pool(processes=num_processes)
+    pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
@@ -95,29 +89,19 @@ if __name__ == '__main__':
         files = [os.path.join(dir, split, file) for file in files]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
 
-        #for file in files:
-        #    process_file(file, os.path.join(save_dir, split), np.random.randint(0, 1_000_000_000))
-
-        #k_space = process_file(files[0], os.path.join(save_dir, split), seeds[0])
-        #fig, ax = plt.subplots(2, 2)
-        #ax[0, 0].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 0, :, :, :]), 128)), coil_dim = 0))
-        #ax[1, 0].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 1, :, :, :]), 128)), coil_dim = 0))
-        #ax[0, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 2, :, :, :]), 128)), coil_dim = 0))
-        #ax[1, 1].imshow(root_sum_of_squares(ifft_2d_img(center_crop(torch.from_numpy(k_space[0, 3, :, :, :]), 128)), coil_dim = 0))
-        #plt.show()
-        for file, seed in zip(files, seeds):
-            process_file(
-                file, 
-                os.path.join(save_dir, split),
-                seed, 
-                noise, 
-                center_size
-            )
-        #pool.starmap(process_file, 
-        #             zip(
-        #                 files.__iter__(), 
-        #                 repeat(os.path.join(save_dir, split)),
-        #                 seeds,
-        #                 repeat(noise),
-        #                 repeat(center_size))
-        #             )
+        #for file, seed in zip(files, seeds):
+        #    process_file(
+        #        file, 
+        #        os.path.join(save_dir, split),
+        #        seed, 
+        #        noise, 
+        #        center_size
+        #    )
+        pool.starmap(process_file, 
+                     zip(
+                         files.__iter__(), 
+                         repeat(os.path.join(save_dir, split)),
+                         seeds,
+                         repeat(noise),
+                         repeat(center_size))
+                     )
