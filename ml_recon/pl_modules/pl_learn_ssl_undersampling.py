@@ -58,11 +58,6 @@ class LearnedSSLLightning(plReconModel):
 
     def training_step(self, batch, batch_idx):
         # init loss tensors (some may be unused)
-        image_loss_full_lambda = torch.tensor([0.0], device=self.device) 
-        image_loss_inverse_lambda = torch.tensor([0.0], device=self.device) 
-        image_loss_inverse_full = torch.tensor([0.0], device=self.device) 
-        k_loss_lambda = torch.tensor([0.0], device=self.device) 
-        k_loss_inverse = torch.tensor([0.0], device=self.device)
 
         fully_sampled = batch['fs_k_space']
         undersampled_k = batch['undersampled']
@@ -76,56 +71,13 @@ class LearnedSSLLightning(plReconModel):
             return_all=False,
         )
 
-        # estimated k-space from different paths
-        lambda_k = estimates['lambda_path']
-        full_k = estimates['full_path']
-        inverse_k = estimates['inverse_path']
 
-        k_loss_lambda = self.calculate_k_loss(lambda_k, fully_sampled, loss_mask, self.lambda_loss_scaling)
+        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
+        loss: torch.Tensor = sum(loss for loss in loss_dict.values()) # type: ignore
 
-        # calculate full lambda image loss pathway
-        if full_k is not None:
-            image_loss_full_lambda = self.compute_image_loss(
-                full_k, 
-                lambda_k, 
-                undersampled_k, 
-                self.image_scaling_lam_full
-                )
+        for key, value in loss_dict.items():
+            self.log_scalar(f"train/{key}", value)
 
-        # calculate inverse lambda image and k-space loss pathway 
-        if inverse_k is not None:
-            # k space loss
-            k_loss_inverse = self.calculate_inverse_k_loss(input_mask, loss_mask, inverse_k, undersampled_k)
-            # image space loss
-            image_loss_inverse_lambda = self.compute_image_loss(
-                lambda_k, 
-                inverse_k,
-                undersampled_k,
-                self.image_scaling_lam_inv
-                )
-        # calculate inverse full loss image pathway
-        if (inverse_k is not None) and (full_k is not None):
-            image_loss_inverse_full = self.compute_image_loss(
-                full_k, 
-                inverse_k,
-                undersampled_k,
-                self.image_scaling_full_inv
-                )
-        
-
-        loss = k_loss_inverse + k_loss_lambda + image_loss_full_lambda + image_loss_inverse_full + image_loss_inverse_lambda
-
-
-        if image_loss_inverse_lambda.item() != 0:
-            self.log_scalar("train/image_loss_inverse_lambda", image_loss_inverse_lambda)
-        if image_loss_full_lambda.item() != 0:
-            self.log_scalar("train/image_loss_full_lambda", image_loss_full_lambda)
-        if image_loss_inverse_full.item() != 0:
-            self.log_scalar('train/image_loss_inverse_full', image_loss_inverse_full)
-        if k_loss_inverse.item() != 0:
-            self.log_scalar("train/loss_inverse", k_loss_inverse)
-
-        self.log_scalar("train/loss_lambda", k_loss_lambda, on_step=True, prog_bar=True)
         self.log_scalar("train/loss", loss, on_step=True, prog_bar=True)
         
         if self.is_learn_partitioning:
@@ -151,18 +103,6 @@ class LearnedSSLLightning(plReconModel):
         # log first batch of every 10th epoch
         if batch_idx != 0 or self.current_epoch % 10 != 0:
             return 
-        fully_sampled = batch['fs_k_space']
-        undersampled_k = batch['undersampled']
-
-        input_mask, loss_mask = self.partition_k_space(batch)
-        estimates = self.recon_model.forward(
-            undersampled_k,
-            fully_sampled, 
-            input_mask, 
-            loss_mask,
-            return_all=False
-        )
-
 
         wandb_logger = self.logger
         fully_sampled = batch['fs_k_space']
@@ -209,15 +149,31 @@ class LearnedSSLLightning(plReconModel):
 
 
     def validation_step(self, batch, batch_idx):
-        under = batch['undersampled']
-        fs_k_space = batch['fs_k_space']
+        undersampled_k = batch['undersampled']
+        fully_sampled = batch['fs_k_space']
 
-        lambda_set, loss_set = self.partition_k_space(batch)
+        input_mask, loss_mask = self.partition_k_space(batch)
+        estimates = self.recon_model.forward(
+            undersampled_k,
+            fully_sampled, 
+            input_mask, 
+            loss_mask,
+            return_all=False,
+        )
+
+        # log loss
+        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
+        loss = sum(loss for loss in loss_dict.values())
+
+        self.log_scalar(f"val/loss", loss, prog_bar=True)
+        for key, value in loss_dict.items():
+            self.log_scalar(f"val/{key}", value)
+
         estimates = self.recon_model(
-            under, 
-            fs_k_space, 
-            lambda_set, 
-            loss_set, 
+            undersampled_k, 
+            fully_sampled, 
+            input_mask, 
+            loss_mask, 
             return_all=True
         )
 
@@ -225,13 +181,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_full = estimates['full_path']
         estimate_inverse = estimates['inverse_path']
 
-        loss_lambda = self.calculate_k_loss(estimate_lambda, fs_k_space, loss_set, self.lambda_loss_scaling)
-        loss_inverse = self.calculate_inverse_k_loss(lambda_set, loss_set, estimate_inverse, under)
-
-        self.log_scalar("val/val_loss_inverse", loss_inverse, prog_bar=True)
-        self.log_scalar("val/val_loss_lambda", loss_lambda, prog_bar=True)
-        
-        self.log_image_metrics(fs_k_space, estimate_lambda, estimate_inverse, estimate_full)
+        self.log_image_metrics(fully_sampled, estimates)
     
 
     def on_train_epoch_start(self):
@@ -277,16 +227,20 @@ class LearnedSSLLightning(plReconModel):
         wandb_logger.log_image('val/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
     
     
-    def log_image_metrics(self, fs_k_space, estimate_lambda, estimate_inverse=None, estimate_full=None):
+    def log_image_metrics(self, fs_k_space, estimates):
         """
         Logs SSIM and NMSE metrics for different reconstructions against the ground truth and each other.
 
         Args:
             fs_k_space (torch.Tensor): Fully sampled k-space data (ground truth).
-            estimate_lambda (torch.Tensor): Lambda-based estimated k-space data.
-            estimate_inverse (torch.Tensor, optional): Inverse estimated k-space data. Defaults to None.
-            estimate_full (torch.Tensor, optional): Fully estimated k-space data. Defaults to None.
+            estimates (dict): Dictionary containing estimated k-space data with keys:
+                - 'lambda_path' (torch.Tensor): Lambda-based estimated k-space data.
+                - 'inverse_path' (torch.Tensor, optional): Inverse estimated k-space data.
+                - 'full_path' (torch.Tensor, optional): Fully estimated k-space data.
         """
+        estimate_lambda = estimates['lambda_path']
+        estimate_full = estimates['full_path']
+        estimate_inverse = estimates['inverse_path']
         # Get scaling factor
         image_scaling = k_to_img(fs_k_space).amax(dim=(-1, -2), keepdim=True)
 
@@ -447,3 +401,64 @@ class LearnedSSLLightning(plReconModel):
 
     def split_along_contrasts(self, image):
         return np.split(image.cpu().detach().numpy(), image.shape[0], 0)
+
+    def calculate_loss(self, estimates, undersampled_k, fully_sampled, input_mask, dc_mask):
+        """
+        Calculate the loss for different pathways in the reconstruction process.
+        Args:
+            estimates (dict): Dictionary containing estimated k-space data from different paths.
+                - 'lambda_path': Estimated k-space from the lambda path.
+                - 'full_path': Estimated k-space from the full path.
+                - 'inverse_path': Estimated k-space from the inverse path.
+            undersampled_k (torch.Tensor): The undersampled k-space data.
+            fully_sampled (torch.Tensor): The fully sampled k-space data.
+            input_mask (torch.Tensor): The input mask for the k-space data.
+            dc_mask (torch.Tensor): The data consistency mask.
+        Returns:
+            dict: A dictionary containing the calculated losses for different pathways if available.
+            Only the losses for the available pathways are returned.
+                - 'k_loss_lambda': Loss for the lambda path in k-space.
+                - 'image_loss_full_lambda': Image loss for the full lambda path.
+                - 'k_loss_inverse': Loss for the inverse path in k-space.
+                - 'image_loss_inverse_lambda': Image loss for the inverse lambda path.
+                - 'image_loss_inverse_full': Image loss for the inverse full path.
+        """
+        # estimated k-space from different paths
+        lambda_k = estimates['lambda_path']
+        full_k = estimates['full_path']
+        inverse_k = estimates['inverse_path']
+
+        loss_dict = {}
+
+        loss_dict['k_loss_lambda'] = self.calculate_k_loss(lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling)
+        # calculate full lambda image loss pathway
+        if full_k is not None:
+            loss_dict["image_loss_full_lambda"] = self.compute_image_loss(
+            full_k, 
+            lambda_k, 
+            undersampled_k, 
+            self.image_scaling_lam_full
+            )
+
+        # calculate inverse lambda image and k-space loss pathway 
+        if inverse_k is not None:
+            # k space loss
+            loss_dict["k_loss_inverse"] = self.calculate_inverse_k_loss(input_mask, dc_mask, inverse_k, undersampled_k)
+            # image space loss
+            loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
+            lambda_k, 
+            inverse_k,
+            undersampled_k,
+            self.image_scaling_lam_inv
+            )
+        # calculate inverse full loss image pathway
+        if (inverse_k is not None) and (full_k is not None):
+            loss_dict["image_loss_inverse_full"] = self.compute_image_loss(
+            full_k, 
+            inverse_k,
+            undersampled_k,
+            self.image_scaling_full_inv
+            )
+            
+            
+        return loss_dict
