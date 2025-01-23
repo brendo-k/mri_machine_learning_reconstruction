@@ -78,3 +78,9 @@ def test_non_deterministic_self_supervsied(mock_brats_dataset_dir, sampling_meth
 
 
 
+def test_inital_mask_determenistic(supervised_dataset):
+    data1 = supervised_dataset[0]
+    data2 = supervised_dataset[0]
+    
+    # should have the same mask
+    assert ((data1['undersampled'] != 0) == (data2['undersampled'] != 0)).all()
