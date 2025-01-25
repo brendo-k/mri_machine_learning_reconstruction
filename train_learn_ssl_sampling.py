@@ -20,7 +20,7 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name)
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     #checkpoint_callback = ModelCheckpoint(
@@ -49,9 +49,6 @@ def main(args):
     )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         limit_train_batches=args.limit_batches,
-                         limit_val_batches=args.limit_batches,
-                         limit_test_batches=args.limit_batches,
                          #precision="16", 
                          #profiler=pytorch_profiler
                          )
@@ -73,7 +70,8 @@ def main(args):
             R=args.R,
             self_supervsied=(not args.supervised), 
             ssdu_partioning=args.ssdu_partitioning,
-            acs_lines=args.acs_lines
+            acs_lines=args.acs_lines,
+            norm_method='k'
             ) 
 
     data_module.setup('train')
@@ -115,8 +113,8 @@ def main(args):
         lambda_scaling=args.lambda_scaling, 
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
-        is_learn_partitioning=args.learn_sampling, 
-        is_norm_loss=args.norm_loss_by_masks,
+        enable_learn_partitioning=args.learn_sampling, 
+        use_supervised_image_loss=args.supervised_image,
         )
     torch.set_float32_matmul_precision('medium')
 
@@ -171,23 +169,27 @@ if __name__ == '__main__':
     model_group.add_argument('--warm_start', action='store_true')
     model_group.add_argument('--chans', type=int, default=32)
     model_group.add_argument('--cascades', type=int, default=6)
-    model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
-    model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
-    model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
-    model_group.add_argument('--lambda_scaling', type=float, default=1)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
-    model_group.add_argument('--pass_inverse_data', action='store_true')
-    model_group.add_argument('--pass_all_data', action='store_true')
-    model_group.add_argument('--learn_sampling', action='store_true')
-    model_group.add_argument('--supervised', action='store_true')
-    model_group.add_argument('--image_loss', type=str, default='ssim')
+    model_group.add_argument('--dropout', type=float, default=0.0) 
+
+    model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
     model_group.add_argument('--k_loss', type=str, default='l1l2')
+    model_group.add_argument('--image_loss', type=str, default='ssim')
+    model_group.add_argument('--lambda_scaling', type=float, default=1)
+
     model_group.add_argument('--warmup_training', action='store_true')
     model_group.add_argument('--split_contrast_by_phase', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
     model_group.add_argument('--norm_loss_by_masks', action='store_true')
-    model_group.add_argument('--dropout', type=float, default=0.0) 
+    model_group.add_argument('--pass_inverse_data', action='store_true')
+    model_group.add_argument('--pass_all_data', action='store_true')
+    model_group.add_argument('--learn_sampling', action='store_true')
+
+    model_group.add_argument('--supervised', action='store_true')
+    model_group.add_argument('--supervised_image', action='store_true')
 
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')

@@ -7,14 +7,7 @@ import torch.nn.functional as F
 from argparse import ArgumentParser
 
 class Unet(nn.Module):
-    """
-    PyTorch implementation of a U-Net model.
 
-    O. Ronneberger, P. Fischer, and Thomas Brox. U-net: Convolutional networks
-    for biomedical image segmentation. In International Conference on Medical
-    image computing and computer-assisted intervention, pages 234–241.
-    Springer, 2015.
-    """
 
     def __init__(
             self, 

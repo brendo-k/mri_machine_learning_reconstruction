@@ -9,9 +9,9 @@ LICENSE file in the root directory of this source tree.
 import torch
 
 
-def mse(gt: torch.Tensor, pred: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+def mse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Mean Squared Error (MSE)"""
-    return ((gt - pred) ** 2).sum()/torch.sum(mask, dim=(-1, -2), keepdim=True)
+    return ((gt - pred) ** 2).sum()
 
 
 def nmse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
@@ -24,9 +24,9 @@ def nmse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
 
 
 def psnr(
-    gt: torch.Tensor, pred: torch.Tensor, mask) -> torch.Tensor:
+    gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Peak Signal to Noise Ratio metric (PSNR)"""
-    error = mse(gt, pred, mask)
+    error = mse(gt, pred)
     psnr = 10 * torch.log10(pred.amax(dim=(-1, -2)).pow(2)/error)
     return psnr.mean()
 

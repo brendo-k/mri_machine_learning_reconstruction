@@ -71,6 +71,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             self.transforms = normalize_image_mean() 
         elif norm_method == 'image_mean2':
             self.transforms = normalize_image_mean2() 
+        else:
+            self.transforms = None
 
     def setup(self, stage):
         super().setup(stage)

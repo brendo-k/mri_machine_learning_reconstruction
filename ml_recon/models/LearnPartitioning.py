@@ -75,7 +75,7 @@ class LearnPartitioning(nn.Module):
         sampling_weights = self.sampling_weights
 
         # get probability from sampling weights. Pass through sigmoid. 
-        # NOTE this list is needed because of errors in autograd otherwise. It is due to 
+        # NOTE this list comprehension is needed because of errors in autograd otherwise. It is due to 
         # multiplying each probability map per contrast by a different scalar.
         probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
 
@@ -88,7 +88,7 @@ class LearnPartitioning(nn.Module):
         return norm_probability
     
     
-    def norm_prob(self, probability:List[torch.Tensor], center_region=10,):
+    def norm_prob(self, probability:List[torch.Tensor], center_region=10):
         image_shape = probability[0].shape
         cur_R = self.get_R()
 
