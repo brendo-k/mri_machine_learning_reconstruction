@@ -118,6 +118,7 @@ def main(args):
         k_space_loss_function=args.k_loss,
         enable_learn_partitioning=args.learn_sampling, 
         use_supervised_image_loss=args.supervised_image,
+        weight_decay=args.weight_decay
         )
     torch.set_float32_matmul_precision('medium')
 
@@ -175,6 +176,7 @@ if __name__ == '__main__':
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--dropout', type=float, default=0.0) 
+    model_group.add_argument('--weight_decay', type=float, default=0.0) 
 
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)

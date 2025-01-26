@@ -28,7 +28,8 @@ class LearnedSSLLightning(plReconModel):
             enable_learn_partitioning: bool = True,  
             enable_warmup_training: bool = False,
             pass_through_size: int = 10,
-            use_supervised_image_loss: bool = False
+            use_supervised_image_loss: bool = False, 
+            weight_decay: float = 0
             ):
         super().__init__(contrast_order=varnet_config.contrast_order)
         self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
@@ -48,6 +49,7 @@ class LearnedSSLLightning(plReconModel):
         self.enable_learn_partitioning = enable_learn_partitioning
         self.pass_through_size = pass_through_size
         self.use_superviesd_image_loss = use_supervised_image_loss
+        self.weight_decay = weight_decay
         
 
         # loss function init
@@ -240,7 +242,7 @@ class LearnedSSLLightning(plReconModel):
         
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         #warmup_scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1) 
         #step_lr = StepLR(optimizer, step_size=50)
         return optimizer
