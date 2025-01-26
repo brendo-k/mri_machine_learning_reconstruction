@@ -73,7 +73,8 @@ def main(args):
             self_supervsied=(not args.supervised), 
             ssdu_partioning=args.ssdu_partitioning,
             acs_lines=args.acs_lines,
-            norm_method='k'
+            norm_method='k',
+            limit_volumes=args.limit_volumes
             ) 
 
     data_module.setup('train')
@@ -160,7 +161,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--test_dir', type=str, default="/Users/brend/Documents/Data")
     dataset_group.add_argument('--nx', type=int, default=256)
     dataset_group.add_argument('--ny', type=int, default=256)
-    dataset_group.add_argument('--limit_batches', type=float, default=1.0)
+    dataset_group.add_argument('--limit_volumes', type=float, default=1.0)
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
 

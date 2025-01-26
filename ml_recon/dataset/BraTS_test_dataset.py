@@ -31,7 +31,8 @@ class BratsDatasetTest(Dataset):
             R_hat: int=2,
             acs_lines: int=10,
             sampling_method:str='2d',
-            self_supervised:bool=False
+            self_supervised:bool=False, 
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         assert contrasts, 'Contrast list should not be empty!'
@@ -39,15 +40,22 @@ class BratsDatasetTest(Dataset):
 
         self.transforms = transforms
         self.undersampled_dataset = UndersampleDecorator(
-                BratsDataset(data_dir, nx, ny, contrasts),
+                BratsDataset(data_dir, nx, ny, contrasts, limit_volumes=limit_volumes),
                 R_hat=R_hat,
                 R=R,
                 sampling_method=sampling_method,
                 self_supervised=self_supervised, 
-                acs_lines=acs_lines
+                acs_lines=acs_lines, 
                 )
 
-        self.ground_truth_dataset = BratsDataset(ground_truth_dir, nx, ny, contrasts, data_key='reconstruction_rss')
+        self.ground_truth_dataset = BratsDataset(
+            ground_truth_dir, 
+            nx, 
+            ny, 
+            contrasts, 
+            data_key='reconstruction_rss', 
+            limit_volumes=limit_volumes
+        )
 
     def __len__(self):
         return len(self.undersampled_dataset)

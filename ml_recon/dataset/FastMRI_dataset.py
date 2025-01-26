@@ -1,11 +1,10 @@
 import numpy as np
 import os
 import json
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, List
 import torchvision.transforms.functional as F
 import torch
 import h5py
-from typing import List
 
 from torch.utils.data import Dataset
 
@@ -21,7 +20,8 @@ class FastMRIDataset(Dataset):
             ny:int = 256,
             transforms: Optional[Callable] = None,
             contrasts: List[str] = ['t1'], 
-            key = 'kspace'
+            key = 'kspace',
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         # call super constructor
@@ -35,13 +35,18 @@ class FastMRIDataset(Dataset):
         self.contrast_order = ['t1']
         self.key = key
 
-        files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
-        files.sort()
+        sample_dir = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+        sample_dir.sort()
 
         slices = []
         self.file_names = []
-        for file in files:
-            full_path = os.path.join(data_dir, file)
+        if limit_volumes is None:
+            limit_volumes = len(sample_dir)
+        elif isinstance(limit_volumes, float):
+            limit_volumes = int(limit_volumes * len(sample_dir))
+            
+        for sample in sample_dir[:limit_volumes]:
+            full_path = os.path.join(data_dir, sample)
             with h5py.File(full_path, 'r') as fr:
                 # loop through all the slices
                 dataset = fr[self.key]

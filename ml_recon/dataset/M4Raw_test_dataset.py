@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from typing import Union, Callable, List
+from typing import Union, Callable, List, Optional
 import torchvision.transforms.functional as F
 from ml_recon.dataset.M4Raw_dataset import M4Raw
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
@@ -26,7 +26,8 @@ class M4RawTest(Dataset):
             R_hat: int = 2,
             self_supervised: bool = True, 
             sampling_method: str = '2d',
-            acs_lines: int = 10
+            acs_lines: int = 10, 
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         # call super constructor
@@ -38,14 +39,14 @@ class M4RawTest(Dataset):
         self.transforms = transforms
 
         self.k_space_dataset = UndersampleDecorator(
-                dataset=M4Raw(data_dir, nx, ny, contrasts=contrasts),
+                dataset=M4Raw(data_dir, nx, ny, contrasts=contrasts, limit_volumes=limit_volumes),
                 R=R, 
                 R_hat=R_hat, 
                 sampling_method = sampling_method,
                 self_supervised = self_supervised, 
                 acs_lines=acs_lines
                 )
-        self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='rss_images')
+        self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='rss_images', limit_volumes=limit_volumes)
 
     def __len__(self):
         return len(self.k_space_dataset)

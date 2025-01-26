@@ -9,6 +9,7 @@ import torch
 import numpy as np
 
 
+from typing import Union, Optional
 from torch.utils.data import Dataset
 
 class BratsDataset(Dataset):
@@ -24,7 +25,8 @@ class BratsDataset(Dataset):
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
             transforms: Optional[Callable] = None,
-            data_key: str = "k_space"
+            data_key: str = "k_space",
+            limit_volumes: Optional[Union[int, float]] = None   
             ):
         assert contrasts, 'Contrast list should not be empty!'
 
@@ -44,7 +46,13 @@ class BratsDataset(Dataset):
         
         start = time.time()
         first = True
-        for sample in sample_dir:
+        
+        if limit_volumes is None:
+            limit_volumes = len(sample_dir)
+        elif isinstance(limit_volumes, float):
+            limit_volumes = int(limit_volumes * len(sample_dir))
+            
+        for sample in sample_dir[:limit_volumes]:
             sample_path = os.path.join(data_dir, sample)
             sample_file = [file for file in os.listdir(sample_path) if 'h5' in file]
             sample_file_path = os.path.join(sample_path, sample_file[0])

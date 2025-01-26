@@ -6,6 +6,7 @@ import torch
 import h5py
 
 from torch.utils.data import Dataset
+from typing import Union, Optional
 
 class M4Raw(Dataset):
     """
@@ -36,7 +37,8 @@ class M4Raw(Dataset):
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
             key:str = 'kspace',
-            contrasts: List[str] = ['t1', 't2', 'flair']
+            contrasts: List[str] = ['t1', 't2', 'flair'], 
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         # call super constructor
@@ -53,7 +55,13 @@ class M4Raw(Dataset):
         contrast_order = []
 
         files.sort()
-        for file in files:
+
+        if limit_volumes is None:
+            limit_volumes = len(files)
+        elif isinstance(limit_volumes, float):
+            limit_volumes = int(limit_volumes * len(files))
+            
+        for file in files[:limit_volumes]:
             file_path = os.path.join(data_dir, file)
             self.file_names.append(file_path)
 

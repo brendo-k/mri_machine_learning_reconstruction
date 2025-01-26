@@ -29,14 +29,15 @@ class FastMRIDatasetTest(Dataset):
             R: float = 4,
             sampling_method: str = '2d',
             self_supervised: bool = False,
-            acs_lines: int = 10
+            acs_lines: int = 10, 
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         super().__init__()
 
         self.transforms = transforms
         self.undersampled_dataset = UndersampleDecorator(
-                FastMRIDataset(data_dir, nx, ny, None, contrasts),
+                FastMRIDataset(data_dir, nx, ny, None, contrasts, limit_volumes=limit_volumes),
                 R_hat=R_hat,
                 R=R,
                 sampling_method=sampling_method,
@@ -44,7 +45,7 @@ class FastMRIDatasetTest(Dataset):
                 acs_lines=acs_lines
                 )
 
-        self.ground_truth_dataset = FastMRIDataset(data_dir, nx, ny, None, contrasts, key='kspace')
+        self.ground_truth_dataset = FastMRIDataset(data_dir, nx, ny, None, contrasts, key='kspace', limit_volumes=limit_volumes)
 
 
     def __len__(self):

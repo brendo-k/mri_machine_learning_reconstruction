@@ -1,5 +1,5 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares, fft_2d_img
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
 from ml_recon.dataset.M4Raw_dataset import M4Raw
@@ -8,11 +8,10 @@ from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.FastMRI_test_dataset import FastMRIDatasetTest
 
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
+from typing import Optional, Union
 
 import pytorch_lightning as pl
 
-from dataclasses import asdict
 import os
 
 
@@ -32,7 +31,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             self_supervsied: bool = False,
             sampling_method: str = '2d',
             ssdu_partioning: bool = False,
-            acs_lines: int = 10
+            acs_lines: int = 10, 
+            limit_volumes: Optional[Union[int, float]] = None
             ):
 
         super().__init__()
@@ -62,6 +62,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.ssdu_partioning = ssdu_partioning
         self.sampling_method = sampling_method
         self.norm_method = norm_method
+        self.limit_volumes = limit_volumes
         
         if norm_method == 'img':
             self.transforms = normalize_image_max()
@@ -90,7 +91,8 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_keyword_args = {
             'nx': self.resolution[0], 
             'ny': self.resolution[1],
-            'contrasts': self.contrasts
+            'contrasts': self.contrasts, 
+            'limit_volumes': self.limit_volumes
         }
 
         undersample_keyword_args = {
