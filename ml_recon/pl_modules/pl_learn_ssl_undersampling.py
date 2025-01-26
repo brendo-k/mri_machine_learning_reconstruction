@@ -189,10 +189,6 @@ class LearnedSSLLightning(plReconModel):
         self.log_image_metrics(fully_sampled, estimates)
     
 
-    def on_train_epoch_start(self):
-        if self.current_epoch >= 50 and self.is_training_warmup:
-            self.sampling_weights.requires_grad = True
-    
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
         if batch_idx != 0 or not isinstance(self.logger, WandbLogger) or self.current_epoch % 10 != 0:
             return
