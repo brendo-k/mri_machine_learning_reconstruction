@@ -86,6 +86,13 @@ class UndersampleDecorator(Dataset):
                 {
                     'mask': input_mask.astype(np.float32),
                     'loss_mask': loss_mask.astype(np.float32),
+                    'is_self_supervised': np.array([True])
+                }
+            )
+        else:
+            output.update(
+                {
+                    'is_self_supervised':np.array([False])
                 }
             )
         
