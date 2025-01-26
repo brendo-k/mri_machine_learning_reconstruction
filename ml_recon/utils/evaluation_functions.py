@@ -7,11 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 
 import torch
+from torchmetrics.functional.image import peak_signal_noise_ratio as psnr_torch
 
 
 def mse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
     """Compute Mean Squared Error (MSE)"""
-    return ((gt - pred) ** 2).sum()
+    return ((gt - pred) ** 2).mean()
 
 
 def nmse(gt: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:

@@ -16,20 +16,21 @@ from torch.profiler import ProfilerActivity, schedule
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name)
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
-    #checkpoint_callback = ModelCheckpoint(
-    #    dirpath='checkpoints/',  # Directory to save the checkpoints
-    #    filename=file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
-    #    save_top_k=1,  # Save the top 3 models
-    #    monitor='val/val_loss_lambda',  # Metric to monitor for saving the best models
-    #    mode='min',  # Save the model with the minimum val_loss
-    #)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints/',  # Directory to save the checkpoints
+        filename = file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
+        save_top_k=1,  # Save the top 3 models
+        monitor='val/loss',  # Metric to monitor for saving the best models
+        mode='min',  # Save the model with the minimum val_loss
+    )
     activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
     prof_scheduler = schedule(
         warmup=2,
@@ -49,6 +50,7 @@ def main(args):
     )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
+                         callbacks=checkpoint_callback
                          #precision="16", 
                          #profiler=pytorch_profiler
                          )
