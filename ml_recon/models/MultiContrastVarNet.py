@@ -21,16 +21,22 @@ class VarnetConfig:
     sensetivity_estimation: str = 'first' # can be first, joint, individual
     split_contrast_by_phase: bool = False
     dropout: float = 0
+    depth: int = 4
 
 
 class MultiContrastVarNet(nn.Module):
-    def __init__(self, 
-                config: VarnetConfig
-                 ):
+    def __init__(self, config: VarnetConfig):
         super().__init__()
         contrasts = len(config.contrast_order)
         if config.model == 'unet':
-            model_backbone = partial(Unet, in_chan=contrasts*2, out_chan=contrasts*2, chans=config.channels, drop_prob=config.dropout)
+            model_backbone = partial(
+                Unet, 
+                in_chan=contrasts*2, 
+                out_chan=contrasts*2, 
+                chans=config.channels, 
+                drop_prob=config.dropout, 
+                depth=config.depth
+                )
             model_backbone = torch.compile(model_backbone)
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)

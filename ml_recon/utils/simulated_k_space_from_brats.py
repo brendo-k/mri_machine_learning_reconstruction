@@ -81,7 +81,7 @@ def build_phase_from_same_dist(data, seed):
     rng = np.random.default_rng(seed=seed)
     coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
     k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1)) 
-    phase_images = fft_2d_img(np.abs(k_space) * coeffs)
+    phase_images = fft_2d_img(torch.abs(k_space) * coeffs)
     phase = np.angle(phase_images)
 
     return phase
@@ -102,8 +102,9 @@ def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
     coeff -= 0.5 + 1j * 0.5
     phase_frequency[:, center_box_x, center_box_y] = torch.from_numpy(coeff)
 
-    phase = fft_2d_img(phase_frequency)
-    phase = np.angle(phase)
+    phase = fft_2d_img(phase_frequency).real
+    phase /= phase.max()
+    phase *= torch.pi/4
     
     return phase
 

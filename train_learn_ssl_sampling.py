@@ -84,6 +84,7 @@ def main(args):
         contrast_order=data_module.contrast_order,
         cascades=args.cascades, 
         channels=args.chans,
+        depth=args.depth,
         split_contrast_by_phase=args.split_contrast_by_phase,
         sensetivity_estimation=args.sense_method,
         dropout=args.dropout
@@ -172,6 +173,7 @@ if __name__ == '__main__':
     model_group.add_argument('--learn_R', action='store_true')
     model_group.add_argument('--warm_start', action='store_true')
     model_group.add_argument('--chans', type=int, default=32)
+    model_group.add_argument('--depth', type=int, default=4)
     model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
