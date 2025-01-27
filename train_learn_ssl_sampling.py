@@ -28,8 +28,9 @@ def main(args):
         dirpath='checkpoints/',  # Directory to save the checkpoints
         filename = file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
         save_top_k=1,  # Save the top 3 models
-        monitor='val/loss',  # Metric to monitor for saving the best models
-        mode='min',  # Save the model with the minimum val_loss
+        monitor='val/ssim_full',  # Metric to monitor for saving the best models
+        mode='max',  # Save the model with the minimum val_loss
+        save_last=True
     )
     activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
     prof_scheduler = schedule(
