@@ -69,8 +69,8 @@ def process_file(file, out_path, seed, noise, center_size):
 
 
 if __name__ == '__main__':
-    dir = '/home/brenden/Documents/data/subset'
-    save_dir = '/home/brenden/Documents/data/sim_subset'
+    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
+    save_dir = '/home/kadotab/scratch/sim_subset'
     dataset_splits = ['train', 'test', 'val']
 
     noise = float(sys.argv[1])
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     center_size = int(sys.argv[3])
 
     # Create a pool of worker processes
-    num_processes = 2
+    num_processes = 10
     #print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 

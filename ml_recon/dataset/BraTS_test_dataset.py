@@ -53,7 +53,7 @@ class BratsDatasetTest(Dataset):
             nx, 
             ny, 
             contrasts, 
-            data_key='reconstruction_rss', 
+            data_key='rss_images', 
             limit_volumes=limit_volumes
         )
 
