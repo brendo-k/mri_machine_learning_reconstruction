@@ -175,7 +175,7 @@ class LearnedSSLLightning(plReconModel):
         loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
         loss = sum(loss for loss in loss_dict.values())
 
-        self.log_scalar(f"val/loss", loss, prog_bar=True)
+        self.log_scalar(f"val/loss", loss, prog_bar=True, sync_dist=True)
         for key, value in loss_dict.items():
             self.log_scalar(f"val/{key}", value)
     
@@ -221,10 +221,10 @@ class LearnedSSLLightning(plReconModel):
         ssim_lambda = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_lambda_img)
         nmse_val_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
 
-        self.log(f"val/ssim_full", ssim_full, on_epoch=True)
-        self.log(f"val/nmse_full", nmse_val_full, on_epoch=True)
-        self.log(f"val/ssim_lambda", ssim_lambda, on_epoch=True)
-        self.log(f"val/nmse_lambda", nmse_val_lambda, on_epoch=True)
+        self.log(f"val/ssim_full", ssim_full, on_epoch=True, sync_dist=True)
+        self.log(f"val/nmse_full", nmse_val_full, on_epoch=True, sync_dist=True)
+        self.log(f"val/ssim_lambda", ssim_lambda, on_epoch=True, sync_dist=True)
+        self.log(f"val/nmse_lambda", nmse_val_lambda, on_epoch=True, sync_dist=True)
 
     def test_step(self, batch, batch_index):
         k_space = batch[0]
