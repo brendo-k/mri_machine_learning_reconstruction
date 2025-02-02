@@ -84,7 +84,7 @@ class LearnPartitioning(nn.Module):
         norm_probability = self.norm_prob(probability)
 
         # we can now concat the list together now. We are safe
-        norm_probability = torch.stack(probability, dim=0)
+        norm_probability = torch.stack(norm_probability, dim=0)
 
         return norm_probability
     

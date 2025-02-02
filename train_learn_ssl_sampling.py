@@ -99,7 +99,6 @@ def main(args):
         sigmoid_slope_sampling = args.sigmoid_slope2,
         is_learn_R = args.learn_R,
         is_warm_start = args.warm_start,
-        
     )
 
     tripple_pathway_config = DualDomainConifg(
@@ -120,7 +119,8 @@ def main(args):
         k_space_loss_function=args.k_loss,
         enable_learn_partitioning=args.learn_sampling, 
         use_supervised_image_loss=args.supervised_image,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        pass_through_size=args.pass_through_size,
         )
     torch.set_float32_matmul_precision('medium')
 
@@ -178,6 +178,7 @@ if __name__ == '__main__':
     model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
+    model_group.add_argument('--pass_through_size', type=int, default=10)
     model_group.add_argument('--dropout', type=float, default=0.0) 
     model_group.add_argument('--weight_decay', type=float, default=0.0) 
 
