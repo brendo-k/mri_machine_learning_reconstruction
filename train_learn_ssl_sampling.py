@@ -21,11 +21,11 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch/')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='.')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints/',  # Directory to save the checkpoints
+        dirpath='/home/kadotab/scratch/checkpoints/',  # Directory to save the checkpoints
         filename = file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
         save_top_k=1,  # Save the top 3 models
         monitor='val/ssim_full',  # Metric to monitor for saving the best models
@@ -51,7 +51,7 @@ def main(args):
     )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         callbacks=checkpoint_callback
+                         callbacks=checkpoint_callback,
                          #precision="16", 
                          #profiler=pytorch_profiler
                          )
@@ -127,7 +127,7 @@ def main(args):
     if args.checkpoint: 
         print("Loading Checkpoint!")
         model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
-        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint)
+        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir)
         data_module.setup('train')
 
     ## AUTOMATIC HYPERPARAMETER TUNING

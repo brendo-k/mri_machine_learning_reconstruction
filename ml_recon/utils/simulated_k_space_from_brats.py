@@ -104,7 +104,7 @@ def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
 
     phase = fft_2d_img(phase_frequency).real
     phase /= phase.max()
-    phase *= torch.pi/4
+    phase *= torch.pi
     
     return phase
 

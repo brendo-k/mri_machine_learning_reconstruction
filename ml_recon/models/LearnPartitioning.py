@@ -84,7 +84,8 @@ class LearnPartitioning(nn.Module):
         norm_probability = self.norm_prob(probability)
 
         # we can now concat the list together now. We are safe
-        norm_probability = torch.stack(norm_probability, dim=0)
+        norm_probability = torch.stack(probability, dim=0)
+
         return norm_probability
     
     
@@ -95,6 +96,17 @@ class LearnPartitioning(nn.Module):
         # if not learn probability, no need to norm
         if not self.config.is_learn_R:
             probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
+        else:
+            modified_probability = [prob.clone() for prob in probability]
+            center = [image_shape[0]//2, image_shape[1]//2]
+
+            center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
+            center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
+            # acs box is now ones and everything else is zeros
+            for i in range(len(probability)):
+                modified_probability[i][center_bb_y, center_bb_x] = 1
+
+            probability = modified_probability
 
         return probability
     

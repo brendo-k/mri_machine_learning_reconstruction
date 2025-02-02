@@ -108,8 +108,8 @@ class M4Raw(Dataset):
             k_space = dataset[self.contrast_order_indexes, slice_index]
             
             # extra processing for k-space data
-            #if self.key == 'kspace':
-            #    k_space = self.center_k_space(k_space)
+            if self.key == 'kspace':
+                k_space = self.center_k_space(k_space)
             #    k_space = M4Raw.fill_missing_k_space(k_space)
                 
         return k_space 
