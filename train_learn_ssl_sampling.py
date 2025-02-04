@@ -21,7 +21,7 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='.')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     checkpoint_callback = ModelCheckpoint(
@@ -135,9 +135,9 @@ def main(args):
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
     #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
 
-    #wandb_logger.experiment.config.update(model.hparams)
 
     print(model.hparams)
+    wandb_logger.experiment.config.update(model.hparams)
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 

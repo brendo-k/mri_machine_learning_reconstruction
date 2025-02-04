@@ -37,7 +37,7 @@ class MultiContrastVarNet(nn.Module):
                 drop_prob=config.dropout, 
                 depth=config.depth
                 )
-            model_backbone = torch.compile(model_backbone)
+            #model_backbone = torch.compile(model_backbone)
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
         

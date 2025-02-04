@@ -110,7 +110,7 @@ class M4Raw(Dataset):
             # extra processing for k-space data
             if self.key == 'kspace':
                 k_space = self.center_k_space(k_space)
-            #    k_space = M4Raw.fill_missing_k_space(k_space)
+                k_space = M4Raw.fill_missing_k_space(k_space)
                 
         return k_space 
 
@@ -158,20 +158,13 @@ class M4Raw(Dataset):
         # if there is missing data on one of the coils, we replace it with the average of the other coils
         
         contrast, coils, h, w = k_space.shape
-        zero_fill_mask = np.zeros_like(k_space) 
-        zero_fill_mask[:, :, :, 31:-30] = 1
-
-        zeros_mask = k_space == 0
-
-        # Compute the indices of the maximum absolute values along the channel (c) dimension
-        max_indices = np.argmax(np.abs(k_space), axis=1, keepdims=True)  # Shape: (b, 1, h, w)
-
-        # Use take_along_axis to gather the maximum values while retaining the complex data
-        averaged_k = np.take_along_axis(k_space, max_indices, axis=1)
-
-        averaged_k = np.tile(averaged_k, (1, coils, 1, 1))
-
-        k_space[zeros_mask] = averaged_k[zeros_mask]
+        zero_fill_mask = np.ones_like(k_space) 
+        zero_fill_mask[:, :, :, :31] = 0
+        zero_fill_mask[:, :, :, -30:] = 0
+    
+        
+        k_space[k_space == 0] = 1e-3
+        k_space = k_space * zero_fill_mask
 
         return k_space
 

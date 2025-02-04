@@ -33,7 +33,7 @@ class TriplePathway(nn.Module):
         estimate_inverse = None
         if self.config.is_pass_inverse or return_all:
             # create new masks with inverted acs lines
-            estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, undersampled_k, target_set)
+            estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
 
         # these pathways only make sense in the self-supervised case, pass through original udnersampled data
         estimate_full = None
@@ -82,6 +82,6 @@ class TriplePathway(nn.Module):
         lower_bound = pass_through_size // 2
         upper_bound = pass_through_size - lower_bound
         center_slice = slice(h//2-lower_bound, h//2+upper_bound)
-        mask_inverse_w_acs[:, :, :, center_slice, center_slice] = 1
-        mask_lambda_wo_acs[:, :, :, center_slice, center_slice] = 0
+        mask_inverse_w_acs[:, :, :, center_slice, center_slice] = lambda_set[:, :, :, center_slice, center_slice]
+        mask_lambda_wo_acs[:, :, :, center_slice, center_slice] = inverse_set[:, :, :, center_slice, center_slice]
         return mask_inverse_w_acs, mask_lambda_wo_acs

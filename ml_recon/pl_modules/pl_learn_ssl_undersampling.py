@@ -36,9 +36,9 @@ class LearnedSSLLightning(plReconModel):
 
         if enable_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
-            self.partition_model_compiled = torch.compile(self.partition_model)
+            #self.partition_model_compiled = torch.compile(self.partition_model)
 
-        self.recon_model = TriplePathway(dual_domain_config, varnet_config)
+        self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
 
         self.lr = lr
         self.image_scaling_lam_inv = ssim_scaling_set
@@ -197,8 +197,12 @@ class LearnedSSLLightning(plReconModel):
 
         image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
         fully_sampling_img = self.k_to_img_scaled(fs_k_space, image_scaling)
+        mask = fully_sampling_img > 0.09
         estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
+        estimate_full_img *= mask
+        estimate_lambda_img *= mask
+        fully_sampling_img *= mask
         
         diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10
         diff_est_lambda_plot = (estimate_lambda_img - fully_sampling_img).abs()*10
@@ -346,7 +350,7 @@ class LearnedSSLLightning(plReconModel):
         if self.enable_learn_partitioning: 
             assert (batch['mask'] * batch['loss_mask'] == 0).all()
             initial_mask = batch['mask'] + batch['loss_mask']
-            input_mask, loss_mask = self.partition_model_compiled(initial_mask)
+            input_mask, loss_mask = self.partition_model(initial_mask)
         else: 
             input_mask, loss_mask = batch['mask'], batch['loss_mask']
 
