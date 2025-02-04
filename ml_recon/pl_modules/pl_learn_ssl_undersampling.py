@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
+from typing import Literal
 
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
@@ -24,7 +25,7 @@ class LearnedSSLLightning(plReconModel):
             ssim_scaling_inverse: float = 1e-4,
             lambda_scaling: float = 1, 
             image_loss_function: str = 'ssim',
-            k_space_loss_function: str = 'l1l2',
+            k_space_loss_function: Literal['l1l2', 'l1', 'l2'] = 'l1l2',
             enable_learn_partitioning: bool = True,  
             enable_warmup_training: bool = False,
             pass_through_size: int = 10,
@@ -200,8 +201,8 @@ class LearnedSSLLightning(plReconModel):
         mask = fully_sampling_img > 0.09
         estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
-        estimate_full_img *= mask
         estimate_lambda_img *= mask
+        estimate_full_img *= mask
         fully_sampling_img *= mask
         
         diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10

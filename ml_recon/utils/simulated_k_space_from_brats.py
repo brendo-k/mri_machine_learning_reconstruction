@@ -15,7 +15,7 @@ def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=1
     image_w_phase = generate_and_apply_phase(image_w_sense, seed, center_region=center_region)
     k_space = fft_2d_img(torch.from_numpy(image_w_phase))
     k_space = apply_noise(k_space, seed, noise_std)
-    return k_space
+    return k_space.numpy()
 
 
 def apply_sensetivities(image, coil_size):
@@ -25,7 +25,7 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_maps_10.npy')
+    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_10_norm_coils.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     sense_map = np.transpose(sense_map, (0, 2, 1))
     sense_map = sense_map[:, 25:-25, 25:-25]
@@ -82,7 +82,7 @@ def build_phase_from_same_dist(data, seed):
     coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
     k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1)) 
     phase_images = fft_2d_img(torch.abs(k_space) * coeffs)
-    phase = np.angle(phase_images)
+    phase = torch.angle(phase_images)
 
     return phase
 
@@ -102,9 +102,8 @@ def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
     coeff -= 0.5 + 1j * 0.5
     phase_frequency[:, center_box_x, center_box_y] = torch.from_numpy(coeff)
 
-    phase = fft_2d_img(phase_frequency).real
-    phase /= phase.max()
-    phase *= torch.pi
+    phase = fft_2d_img(phase_frequency)
+    phase = torch.angle(phase)
     
     return phase
 

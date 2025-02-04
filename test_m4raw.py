@@ -11,16 +11,18 @@ import wandb
 
 def main():
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_chunked/'
-    test_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_chunked//'
-    checkpoint = '/home/kadotab/python/ml/checkpoints/last.ckpt'
+    test_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/M4raw_averaged/'
+    checkpoint = '/home/kadotab/python/ml/checkpoints/last-v9.ckpt'
     model = LearnedSSLLightning.load_from_checkpoint(checkpoint)
-    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint, data_dir=data_dir, test_dir=test_dir)
-    
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint, data_dir=data_dir, test_dir=test_dir, batch_size=1)
     config = dict(model.hparams)
-    config.update(dict(datamodule.hparams))
+    config.update(datamodule.hparams)
+    print(config)
 
-    wandb.init(project='Figure 3 M4Raw', name='0', config=config)
-    logger = WandbLogger(project='Figure 3 M4Raw', name='')
+
+    wandb.init(project='M4Raw', name='9', config=config)
+    logger = WandbLogger(project='M4Raw')
+
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
     trainer.test(model, datamodule=datamodule)

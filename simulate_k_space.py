@@ -71,11 +71,12 @@ def process_file(file, out_path, seed, noise, center_size):
 if __name__ == '__main__':
     dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
     save_dir = '/home/kadotab/scratch/sim_subset'
+    SAME_PHASE = False
     dataset_splits = ['train', 'test', 'val']
 
     noise = float(sys.argv[1])
-    SAME_PHASE = bool(sys.argv[2])
-    center_size = int(sys.argv[3])
+    center_size = int(sys.argv[2])
+    save_dir = str(sys.argv[3])
 
     # Create a pool of worker processes
     num_processes = 10
