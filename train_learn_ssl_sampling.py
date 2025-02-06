@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import torch
+import wandb
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
@@ -21,7 +22,6 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/')
     unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     file_name = 'pl_learn_ssl-' + unique_id
     checkpoint_callback = ModelCheckpoint(
@@ -49,12 +49,6 @@ def main(args):
     advanced_prof = AdvancedProfiler(
         dirpath='.', filename='prof'
     )
-    trainer = pl.Trainer(max_epochs=args.max_epochs, 
-                         logger=wandb_logger, 
-                         callbacks=checkpoint_callback,
-                         #precision="16", 
-                         #profiler=pytorch_profiler
-                         )
 
 
     data_dir = args.data_dir
@@ -103,7 +97,9 @@ def main(args):
 
     tripple_pathway_config = DualDomainConifg(
         is_pass_inverse=args.pass_inverse_data,
-        is_pass_original=args.pass_all_data
+        is_pass_original=args.pass_all_data,
+        inverse_no_grad=args.inverse_data_no_grad,
+        original_no_grad=args.all_data_no_grad
     )
 
     model = LearnedSSLLightning(
@@ -134,9 +130,18 @@ def main(args):
     #tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
     #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
+    hparams = model.hparams
+    hparams.update(data_module.hparams)
+    wandb.init(project=args.project, name=args.run_name, config=dict(hparams), dir='/home/kadotab/')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/')
+    trainer = pl.Trainer(max_epochs=args.max_epochs, 
+                         logger=wandb_logger, 
+                         callbacks=checkpoint_callback,
+                         #precision="16", 
+                         #profiler=pytorch_profiler
+                         )
 
-
-    print(model.hparams)
+    print(hparams)
     wandb_logger.experiment.config.update(model.hparams)
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
@@ -195,6 +200,8 @@ if __name__ == '__main__':
     model_group.add_argument('--norm_loss_by_masks', action='store_true')
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
+    model_group.add_argument('--inverse_data_no_grad', action='store_true')
+    model_group.add_argument('--all_data_no_grad', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
 
     model_group.add_argument('--supervised', action='store_true')

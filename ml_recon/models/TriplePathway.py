@@ -2,11 +2,14 @@
 import torch.nn as nn
 from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
 from dataclasses import dataclass
+import torch
 
 @dataclass
 class DualDomainConifg:
     is_pass_inverse: bool = False
     is_pass_original: bool = False 
+    inverse_no_grad: bool = False
+    original_no_grad: bool = False
 
 class TriplePathway(nn.Module):
     """
@@ -32,13 +35,21 @@ class TriplePathway(nn.Module):
         # these pathways only make sense in the self-supervised case
         estimate_inverse = None
         if self.config.is_pass_inverse or return_all:
-            # create new masks with inverted acs lines
-            estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
+            if self.config.inverse_no_grad:
+                with torch.no_grad():
+                    estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
+            else:
+                estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
+
 
         # these pathways only make sense in the self-supervised case, pass through original udnersampled data
         estimate_full = None
         if self.config.is_pass_original or return_all:
-            estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
+            if self.config.original_no_grad:
+                with torch.no_grad():
+                    estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
+            else:
+                estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
 
 
         return {
