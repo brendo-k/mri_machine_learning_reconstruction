@@ -5,21 +5,31 @@ from pytorch_lightning.loggers import CSVLogger
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 import os
-from ml_recon.pl_modules.pl_varnet import pl_VarNet
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
+import argparse
 
 
-def main():
-    data_dir = '/home/kadotab/scratch/simulated_brats_1e-3_10/'
-    logger = WandbLogger(project='SSL Characterization', name='mc ssl, 1e-3')
-    artifact = logger.use_artifact('chiew-lab/MRI Reconstruction/model-pe7ert72:v1')
-    artifact_dir = artifact.download()
-    model = pl_VarNet.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'))
-    datamodule = UndersampledDataModule.load_from_checkpoint(os.path.join(artifact_dir, 'model.ckpt'), data_dir=data_dir, batch_size=10)
+def main(args):
+    data_dir = args.data_dir
+    checkpoint_path = args.checkpoint
+    logger = WandbLogger(project='MRI Reconstruction')
+    if args.wandb_artifact:
+        artifact = logger.use_artifact(args.wandb_artifact)
+        artifact_dir = artifact.download()
+        checkpoint_path = os.path.join(artifact_dir, 'model.ckpt')
+    
+    model = LearnedSSLLightning.load_from_checkpoint(checkpoint_path)
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, test_dir=data_dir, batch_size=10)
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
     trainer.test(model, datamodule=datamodule)
 
 
 if __name__ == '__main__': 
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, default='/home/kadotab/scratch/simulated_brats_1e-3_10/')
+    parser.add_argument('--checkpoint', type=str)
+    parser.add_argument('--wandb_artifact', type=str)
+    
+    args = parser.parse_args()    
+    main(args)
