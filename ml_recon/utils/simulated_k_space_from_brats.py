@@ -4,7 +4,7 @@ import torch
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
-def simulate_k_space(image, seed, center_region=20, noise_std=0.001, coil_size=12, same_phase=False):
+def simulate_k_space(image, seed, center_region=8, noise_std=0.001, coil_size=12, same_phase=False):
     #simulate some random motion
     rng = np.random.default_rng(seed)
     x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
@@ -25,7 +25,7 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/compressed_10_norm_coils.npy')
+    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     sense_map = np.transpose(sense_map, (0, 2, 1))
     sense_map = sense_map[:, 25:-25, 25:-25]
