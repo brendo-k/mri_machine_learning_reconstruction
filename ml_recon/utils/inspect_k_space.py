@@ -22,6 +22,8 @@ def main():
         if 'kspace' in fr:
             kspace = fr['kspace'][:]
     kspace.astype(np.complex64)
+    if kspace.ndim == 4:  
+        kspace = np.expand_dims(kspace, axis=1)
     if args.slice_index:
         kspace = kspace[[args.slice_index]]
 
@@ -30,7 +32,7 @@ def main():
         plotting_aray = root_sum_of_squares(ifft_2d_img(torch.from_numpy(kspace)).numpy().astype(np.complex64), coil_dim=2)[:, args.contrast_index]
     else: 
         plotting_aray = np.abs(kspace[:, args.contrast_index, 0, :, :])**0.02
-
+    plotting_aray /= plotting_aray.max()
     image_slices(plotting_aray, cmap='gray')
     plt.show()
 

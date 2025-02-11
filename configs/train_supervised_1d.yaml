@@ -1,9 +1,8 @@
 # Supervised config file for train.py
 
-model: 'unet'
 max_epochs: 50
 line_constrained: true
-batch_size: 1
+batch_size: 2
 lr: 0.001
 R: 6.0
 R_hat: 2.0
@@ -15,12 +14,10 @@ data_dir: '/home/brenden/Documents/data/M4raw_chunked'
 test_dir: '/home/brenden/Documents/data/M4raw_chunked'
 num_workers: 2
 contrasts:
-  - 't1'
-  - 't2'
   - 'flair'
-chans: 12
+chans: 8
 depth: 3
-cascades: 5
+cascades: 6
 dataset: 'm4raw'
 project: 'MRI Reconstruction'
 k_loss: 'l1'

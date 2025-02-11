@@ -21,13 +21,30 @@ def test_line_probability_mask(resolution):
     assert pdf.shape == (resolution[1], resolution[0])
     torch.testing.assert_close(pdf[:, resolution[0]//2 - 5: resolution[0]//2 + 5], np.ones((resolution[1], 10)))
 
-def test_bern_2d():
+
+@pytest.mark.parametrize("acceleration_factor", [2, 4, 6, 8])
+def test_bern_2d(acceleration_factor):
     
-    pdf = gen_pdf_bern(120, 320, 1/8, 8, 10)
+    pdf = gen_pdf_bern(120, 320, 1/acceleration_factor, 8, 10)
     
     assert pdf.shape == (320, 120)
     torch.testing.assert_close(pdf[320//2-5:320//2+5, 120//2 - 5: 120//2 + 5], np.ones((10, 10)))
-    assert 1/8, torch.from_numpy(pdf).mean().item()
+    assert 1/acceleration_factor, torch.from_numpy(pdf).mean().item()
+    assert pdf.max() <= 1
+    assert pdf.min() >= 0
+    
+
+@pytest.mark.parametrize("acceleration_factor", [2, 4, 6, 8])
+def test_columns(acceleration_factor):
+    
+    pdf = gen_pdf_columns(120, 320, 1/acceleration_factor, 8, 10)
+    
+    assert pdf.shape == (320, 120)
+    torch.testing.assert_close(pdf[:, 120//2 - 5: 120//2 + 5], np.ones((320, 10)))
+    assert 1/acceleration_factor, torch.from_numpy(pdf).mean().item()
+    assert pdf.max() <= 1
+    assert pdf.min() >= 0
+
 
 def test_bern_segregated():
     

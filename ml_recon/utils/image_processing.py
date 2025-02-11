@@ -4,22 +4,37 @@ from typing import Union
 
 from numpy.typing import NDArray
 
-def ifft_2d_img(data: torch.Tensor, axes=[-1, -2]) -> torch.Tensor:
-    data = torch.fft.ifftshift(data, dim=axes)
-    data = torch.fft.ifft2(data, dim=axes, norm='ortho')
-    data = torch.fft.fftshift(data, dim=axes)
+def ifft_2d_img(data, axes=[-1, -2]):
+    if isinstance(data, torch.Tensor):
+        data = torch.fft.ifftshift(data, dim=axes)
+        data = torch.fft.ifft2(data, dim=axes, norm='ortho')
+        data = torch.fft.fftshift(data, dim=axes)
+    elif isinstance(data, np.ndarray):
+        data = np.fft.ifftshift(data, axes=axes)
+        data = np.fft.ifft2(data, axes=axes)
+        data = np.fft.fftshift(data, axes=axes)
+    else:
+        assert ValueError(f'{type(data)}, is not allowed')
+    
     return data
 
-def fft_2d_img(data: torch.Tensor, axes=[-1, -2]) -> torch.Tensor:
-    data = torch.fft.ifftshift(data, dim=axes)
-    data = torch.fft.fft2(data, dim=axes, norm='ortho')
-    data = torch.fft.fftshift(data, dim=axes)
+def fft_2d_img(data, axes=[-1, -2]):
+    if isinstance(data, torch.Tensor):
+        data = torch.fft.ifftshift(data, dim=axes)
+        data = torch.fft.fft2(data, dim=axes, norm='ortho')
+        data = torch.fft.fftshift(data, dim=axes)
+    elif isinstance(data, np.ndarray):
+        data = np.fft.ifftshift(data, axes=axes)
+        data = np.fft.ifft2(data, axes=axes)
+        data = np.fft.fftshift(data, axes=axes)
+    else:
+        assert ValueError(f'{type(data)}, is not allowed')
     return data
 
 def k_to_img(k_space, coil_dim=2, ft_dim=[-1, -2]):
     return root_sum_of_squares(ifft_2d_img(k_space, axes=ft_dim), coil_dim=coil_dim)
 
-def root_sum_of_squares(data: torch.Tensor, coil_dim=0):  # type: ignore
+def root_sum_of_squares(data, coil_dim=0):  # type: ignore
     """ Takes asquare root sum of squares of the abosolute value of complex data along the coil dimension
 
     Args:

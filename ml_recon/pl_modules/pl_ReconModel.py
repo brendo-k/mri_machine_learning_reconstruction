@@ -38,37 +38,46 @@ class plReconModel(pl.LightningModule):
         average_ssim = 0
         average_psnr = 0
         average_nmse = 0
-        for i in range(ground_truth_image.shape[0]):
-            for contrast_index in range(len(self.contrast_order)):
+        for contrast_index in range(len(self.contrast_order)):
+            contrast_ssim = 0
+            contrast_psnr = 0
+            contrast_nmse = 0
+            for i in range(ground_truth_image.shape[0]):
                 contrast_ground_truth = ground_truth_image_mask[i, contrast_index, :, :]
                 contrast_estimated = estimated_image_mask[i, contrast_index, :, :]
                 contrast_ground_truth = contrast_ground_truth[None, None, :, :]
                 contrast_estimated = contrast_estimated[None, None, :, :]
 
 
-                nmse_contrast = nmse(contrast_ground_truth, contrast_estimated)
-                ssim_contrast = ssim(
+                nmse_val = nmse(contrast_ground_truth, contrast_estimated)
+                ssim_val, ssim_image = ssim(
                     contrast_ground_truth, 
                     contrast_estimated, 
-                    data_range=(0, contrast_ground_truth.max().item())
+                    data_range=(0, contrast_ground_truth.max().item()),
+                    return_full_image=True
                     )
-                assert isinstance(ssim_contrast, torch.Tensor)          
-                psnr_contrast = psnr(contrast_ground_truth, contrast_estimated)
+                assert isinstance(ssim_val, torch.Tensor)          
+                psnr_val = psnr(contrast_ground_truth, contrast_estimated)
+                
+                contrast_ssim += ssim_val
+                contrast_psnr += psnr_val
+                contrast_nmse += nmse_val
 
-                # remove mask points that would equal to 1 (possibly some estimated points
-                # will be removed here but only if matches completely in the kernel)
-                self.log(f"metrics/nmse_" + self.contrast_order[contrast_index], nmse_contrast, sync_dist=True, on_step=True)
-                self.log(f"metrics/ssim_torch_" + self.contrast_order[contrast_index], ssim_contrast, sync_dist=True, on_step=True)
-                self.log(f"metrics/psnr_" + self.contrast_order[contrast_index], psnr_contrast, sync_dist=True, on_step=True)
+            contrast_ssim /= ground_truth_image.shape[0]
+            contrast_nmse /= ground_truth_image.shape[0]
+            contrast_psnr /= ground_truth_image.shape[0]
+            self.log(f"metrics/nmse_{self.contrast_order[contrast_index]}", contrast_nmse, sync_dist=True, on_step=True)
+            self.log(f"metrics/ssim_{self.contrast_order[contrast_index]}", contrast_ssim, sync_dist=True, on_step=True)
+            self.log(f"metrics/psnr_{self.contrast_order[contrast_index]}", contrast_psnr, sync_dist=True, on_step=True)
 
-                average_ssim += ssim_contrast
-                average_psnr += psnr_contrast
-                average_nmse += nmse_contrast
+            average_ssim += contrast_ssim
+            average_psnr += contrast_psnr
+            average_nmse += contrast_nmse
 
 
-        average_nmse /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
-        average_psnr /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
-        average_ssim /= (ground_truth_image.shape[0] * ground_truth_image.shape[1])
+        average_nmse /= ground_truth_image.shape[1]
+        average_psnr /= ground_truth_image.shape[1]
+        average_ssim /= ground_truth_image.shape[1]
         self.log(f'metrics/mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
         self.log(f'metrics/mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
         self.log(f'metrics/mean_nmse', average_nmse, on_epoch=True, sync_dist=True)

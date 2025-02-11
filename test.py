@@ -11,6 +11,7 @@ import argparse
 
 def main(args):
     data_dir = args.data_dir
+    test_dir = args.test_dir
     checkpoint_path = args.checkpoint
     logger = WandbLogger(project='MRI Reconstruction')
     if args.wandb_artifact:
@@ -19,7 +20,7 @@ def main(args):
         checkpoint_path = os.path.join(artifact_dir, 'model.ckpt')
     
     model = LearnedSSLLightning.load_from_checkpoint(checkpoint_path)
-    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, test_dir=data_dir, batch_size=10)
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, test_dir=test_dir, batch_size=10, data_dir=data_dir)
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
     trainer.test(model, datamodule=datamodule)
@@ -27,7 +28,8 @@ def main(args):
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/home/kadotab/scratch/simulated_brats_1e-3_10/')
+    parser.add_argument('--test_dir', type=str)
+    parser.add_argument('--data_dir', type=str)
     parser.add_argument('--checkpoint', type=str)
     parser.add_argument('--wandb_artifact', type=str)
     

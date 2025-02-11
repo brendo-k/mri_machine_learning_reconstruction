@@ -46,7 +46,7 @@ class M4RawTest(Dataset):
                 self_supervised = self_supervised, 
                 acs_lines=acs_lines
                 )
-        self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='rss_images', limit_volumes=limit_volumes)
+        self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='reconstruction_rss', limit_volumes=limit_volumes)
 
     def __len__(self):
         return len(self.k_space_dataset)

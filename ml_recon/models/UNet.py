@@ -31,6 +31,7 @@ class Unet(nn.Module):
             self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope))
             cur_chan //= 2
         self.conv1d = nn.Conv2d(chans, out_chan, 1, bias=False)
+        self.depth = depth
 
     def forward(self, x):
         x, pad_sizes = self.pad(x)
@@ -51,8 +52,15 @@ class Unet(nn.Module):
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, Tuple[List[int], List[int], int, int]]:
         _, _, h, w = x.shape
-        w_mult = w + (16 - w % 16) # move to next multiple of 16
-        h_mult = h + (16 - h % 16) # h that is the next multiple of 16
+        resize_factor = 2**self.depth
+        if w % resize_factor == 0:
+            w_mult = w
+        else:
+            w_mult = w + (resize_factor - w % resize_factor) # move to next multiple of 16
+        if h % resize_factor == 0:
+            h_mult = h
+        else:
+            h_mult = h + (resize_factor - h % resize_factor) # h that is the next multiple of 16
         w_pad = [math.floor((w_mult - w) / 2), math.ceil((w_mult - w) / 2)]
         h_pad = [math.floor((h_mult - h) / 2), math.ceil((h_mult - h) / 2)]
         x = F.pad(x, w_pad + h_pad)

@@ -4,6 +4,7 @@ from pytorch_lightning.loggers import WandbLogger
 from typing import Literal
 
 from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.losses import L1L2Loss
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
@@ -198,7 +199,7 @@ class LearnedSSLLightning(plReconModel):
 
         image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
         fully_sampling_img = self.k_to_img_scaled(fs_k_space, image_scaling)
-        mask = fully_sampling_img > 0.09
+        mask = fully_sampling_img > 0.00
         estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
         estimate_lambda_img *= mask
@@ -225,11 +226,12 @@ class LearnedSSLLightning(plReconModel):
         nmse_val_full = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_full_img)
         ssim_lambda = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_lambda_img)
         nmse_val_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
-
-        self.log(f"val/ssim_full", ssim_full, on_epoch=True, sync_dist=True)
-        self.log(f"val/nmse_full", nmse_val_full, on_epoch=True, sync_dist=True)
-        self.log(f"val/ssim_lambda", ssim_lambda, on_epoch=True, sync_dist=True)
-        self.log(f"val/nmse_lambda", nmse_val_lambda, on_epoch=True, sync_dist=True)
+        for i, contrast in enumerate(self.contrast_order):
+            self.log(f"val/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"val/nmse_full_{contrast}", nmse_val_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"val/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
+            self.log(f"val/nmse_lambda_{contrast}", nmse_val_lambda[i], on_epoch=True, sync_dist=True)
+        self.log(f"val/mean_nmse_full", sum(nmse_val_full)/len(nmse_val_full), on_epoch=True, sync_dist=True)
 
     def test_step(self, batch, batch_index):
         k_space = batch[0]
@@ -396,8 +398,9 @@ class LearnedSSLLightning(plReconModel):
         if self.use_superviesd_image_loss:
             target_img = k_to_img(fully_sampled, coil_dim=2)
             lambda_img = k_to_img(lambda_k, coil_dim=2) 
-            ssim = StructuralSimilarityIndexMeasure(data_range=(0, target_img.max().item())).to(self.device)
-            loss_dict['image_loss'] = 1 - ssim(target_img, lambda_img)
+            ssim_val = ssim(target_img, lambda_img, data_range=(0, target_img.max().item()))
+            assert isinstance(ssim_val, torch.Tensor)
+            loss_dict['image_loss'] = 1 - ssim_val
 
         loss_dict['k_loss_lambda'] = self.calculate_k_loss(lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling)
         # calculate full lambda image loss pathway
