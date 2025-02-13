@@ -29,6 +29,7 @@ def process_file(file, out_path, seed, noise, center_size):
     images = np.stack(images, axis=0)
     images = images/np.max(images, axis=(1, 2), keepdims=True)
     k_space = np.zeros((4, int(10), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    gt_img = np.zeros((4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3))
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
@@ -38,12 +39,18 @@ def process_file(file, out_path, seed, noise, center_size):
             cur_images = images[..., i]
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            k_space[..., (i-70)//3] = simulate_k_space(
-                                        cur_images, seed+i,
-                                        center_region=center_size, noise_std=noise, coil_size=10, same_phase=SAME_PHASE
+            sim_k_space, gt = simulate_k_space(
+                                        cur_images, 
+                                        seed+i,
+                                        center_region=center_size, 
+                                        noise_std=noise, 
+                                        coil_size=10, 
                                         )
+            k_space[..., (i-70)//3] = sim_k_space
+            gt_img[..., (i-70)//3] = gt
 
     k_space = np.ascontiguousarray(np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64))
+    gt_img = np.ascontiguousarray(np.transpose(gt_img, (3, 0, 1, 2)))
 
     try:
         os.makedirs(os.path.join(out_path, patient_name))
@@ -58,6 +65,7 @@ def process_file(file, out_path, seed, noise, center_size):
             dset[...] = k_space
             dset = fr.create_dataset("contrasts", data=modality_name)
             dset = fr.create_dataset("reconstruction_rss", data=k_to_img(torch.from_numpy(k_space), coil_dim=2))
+            dset = fr.create_dataset("ground_truth", data=gt_img)
         print(f'saved to file: {save_file}')
 
     except Exception as e:
@@ -69,8 +77,8 @@ def process_file(file, out_path, seed, noise, center_size):
 
 
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
-    save_dir = '/home/kadotab/scratch/sim_subset'
+    dir = '/home/brenden/Documents/data/subset'
+    save_dir = '/home/brenden/Documents/data/sim_test'
     SAME_PHASE = False
     dataset_splits = ['train', 'test', 'val']
 
@@ -79,7 +87,7 @@ if __name__ == '__main__':
     save_dir = str(sys.argv[3])
 
     # Create a pool of worker processes
-    num_processes = 10
+    num_processes = 5
     #print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
@@ -90,19 +98,19 @@ if __name__ == '__main__':
         files = [os.path.join(dir, split, file) for file in files]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
 
-        #for file, seed in zip(files, seeds):
-        #    process_file(
-        #        file, 
-        #        os.path.join(save_dir, split),
-        #        seed, 
-        #        noise, 
-        #        center_size
-        #    )
-        pool.starmap(process_file, 
-                     zip(
-                         files.__iter__(), 
-                         repeat(os.path.join(save_dir, split)),
-                         seeds,
-                         repeat(noise),
-                         repeat(center_size))
-                     )
+        for file, seed in zip(files, seeds):
+            process_file(
+                file, 
+                os.path.join(save_dir, split),
+                seed, 
+                noise, 
+                center_size
+            )
+        #pool.starmap(process_file, 
+        #             zip(
+        #                 files.__iter__(), 
+        #                 repeat(os.path.join(save_dir, split)),
+        #                 seeds,
+        #                 repeat(noise),
+        #                 repeat(center_size))
+        #             )
