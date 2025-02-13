@@ -10,6 +10,7 @@ import argparse
 
 
 def main(args):
+    pl.seed_everything(8)
     data_dir = args.data_dir
     test_dir = args.test_dir
     checkpoint_path = args.checkpoint

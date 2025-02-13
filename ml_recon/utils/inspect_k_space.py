@@ -18,9 +18,13 @@ def main():
 
     with h5py.File(args.filename) as fr:
         if 'k_space' in fr:
-            kspace = fr['k_space'][:]
+            kspace = fr['k_space'][:] # type: ignore
         if 'kspace' in fr:
-            kspace = fr['kspace'][:]
+            kspace = fr['kspace'][:] # type: ignore
+        else:
+            raise ValueError('Could not find k_space or kspace')
+
+    assert isinstance(kspace, np.ndarray)
     kspace.astype(np.complex64)
     if kspace.ndim == 4:  
         kspace = np.expand_dims(kspace, axis=1)
@@ -29,10 +33,11 @@ def main():
 
     print(kspace.shape)
     if args.images: 
-        plotting_aray = root_sum_of_squares(ifft_2d_img(torch.from_numpy(kspace)).numpy().astype(np.complex64), coil_dim=2)[:, args.contrast_index]
+        plotting_aray = root_sum_of_squares(ifft_2d_img(kspace), coil_dim=2)[:, args.contrast_index]
     else: 
         plotting_aray = np.abs(kspace[:, args.contrast_index, 0, :, :])**0.02
     plotting_aray /= plotting_aray.max()
+    assert isinstance(plotting_aray, np.ndarray)
     image_slices(plotting_aray, cmap='gray')
     plt.show()
 

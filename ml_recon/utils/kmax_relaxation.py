@@ -1,6 +1,12 @@
 import torch
 
 class KMaxSoftmaxFunction(torch.autograd.Function):
+    """Relaxation of the sampling operation. In the forward pass, the sampling 
+    operation is discrete. However, in the backwards pass, we relax the gradients 
+    to a sigmoid with a slope. This allows for backprop through discrete nodes
+
+    """
+
     @staticmethod
     def forward(ctx, input: torch.Tensor, slope: float):
         # Save input for backward pass

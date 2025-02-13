@@ -15,7 +15,7 @@ def simulate_k_space(image, seed, center_region=8, noise_std=0.001, coil_size=12
     image_w_phase = generate_and_apply_phase(image_w_sense, seed, center_region=center_region)
     k_space = fft_2d_img(torch.from_numpy(image_w_phase))
     k_space = apply_noise(k_space, seed, noise_std)
-    return k_space.numpy()
+    return k_space, image
 
 
 def apply_sensetivities(image, coil_size):
@@ -25,7 +25,7 @@ def apply_sensetivities(image, coil_size):
         image = np.expand_dims(image, 1)
         return image
 
-    sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy')
+    sense_map = np.load('/home/brenden/Documents/data/compressed_maps_10.npy')
     #sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
     sense_map = np.transpose(sense_map, (0, 2, 1))
     sense_map = sense_map[:, 25:-25, 25:-25]
@@ -71,8 +71,8 @@ def zero_pad_or_crop(arr, target_shape):
 
 def generate_and_apply_phase(data, seed, center_region=20, same_phase=False):
     nc = data.shape[0]
-    phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
-    #phase = build_phase_from_same_dist(data, seed)
+    #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, same_phase=same_phase, seed=seed)
+    phase = build_phase_from_same_dist(data, seed)
     data = apply_phase_map(data, phase)
     return data
 
@@ -81,8 +81,8 @@ def build_phase_from_same_dist(data, seed):
     rng = np.random.default_rng(seed=seed)
     coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
     k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1)) 
-    phase_images = fft_2d_img(torch.abs(k_space) * coeffs)
-    phase = torch.angle(phase_images)
+    phase_images = fft_2d_img(np.abs(k_space) * coeffs)
+    phase = np.angle(phase_images)
 
     return phase
 
@@ -103,7 +103,7 @@ def build_phase(center_region, nx, ny, nc, same_phase=False, seed=None):
     phase_frequency[:, center_box_x, center_box_y] = torch.from_numpy(coeff)
 
     phase = fft_2d_img(phase_frequency)
-    phase = torch.angle(phase)
+    phase = np.angle(phase)
     
     return phase
 

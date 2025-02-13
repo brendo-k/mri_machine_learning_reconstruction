@@ -2,6 +2,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
+    """
+    Helper function to plot multiple images. Dimensions assumed: Contrast, coil, height, width
+
+    Args:
+        data (np.ndarray): The input data array, expected to be 3D or 4D.
+        coil_num (int, optional): The coil number to display. Defaults to 0.
+        vmin (float, optional): The minimum data value that colormap covers. Defaults to None.
+        vmax (float, optional): The maximum data value that colormap covers. Defaults to None.
+        cmap (str or Colormap, optional): The colormap to use. Defaults to None.
+
+    Raises:
+        ValueError: If the input data does not have 3 or 4 dimensions.
+
+    Returns:
+        tuple: A tuple containing the figure and axes objects.
+    """
     if data.ndim != 3 and data.ndim !=4:
         raise ValueError('Data needs 3 or 4 dimensions')
 

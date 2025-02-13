@@ -24,7 +24,7 @@ def mock_brats_dataset_dir():
             os.makedirs(sample_dir)
             
             # Create a mock HDF5 file in each sample directory
-            file_path = os.path.join(sample_dir, 'data.h5')
+            file_path = os.path.join(sample_dir, 'data_i.h5')
             with h5py.File(file_path, 'w') as f:
                 # Create a mock k-space dataset
                 kspace_data = np.random.rand(10, 4, 256, 256) + 1j * np.random.rand(10, 4, 256, 256)

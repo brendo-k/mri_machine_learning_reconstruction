@@ -267,7 +267,7 @@ def scale_pdf(input_prob, R, center_square, line_constrained=False):
 
     return prob_map
 
-def ssdu_gaussian_selection(initial_mask, std_scale=4, rho=0.4):
+def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=0.4):
 
     ncol, nrow = initial_mask.shape
     
