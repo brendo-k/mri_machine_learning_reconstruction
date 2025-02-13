@@ -80,10 +80,10 @@ def test_scaling_multiple_dims():
     np.testing.assert_allclose(pdf_R8, pdf_R8_copy) 
     
 def test_ssdu_selection():
-    mask = np.random.randn(128, 128) > 0
+    mask = (np.random.randn(128, 128) > 0).astype(np.float32)
     input, loss = ssdu_gaussian_selection(mask)
 
-    torch.testing.assert_close(input ^ loss, mask)
+    torch.testing.assert_close(input + loss, mask)
 
 
 def test_apply_undersampling_not_same():
@@ -106,18 +106,18 @@ def test_apply_undersampling_not_same():
 
 
 def test_ssdu_gaussian_selection_shape():
-    input_mask = np.ones((64, 64), dtype=bool)
+    input_mask = np.ones((64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
     assert trn_mask.shape == input_mask.shape
     assert loss_mask.shape == input_mask.shape
 
 def test_ssdu_gaussian_selection_no_overlap():
-    input_mask = np.ones((64, 64), dtype=bool)
+    input_mask = np.ones((64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
-    assert np.all((trn_mask & loss_mask) == 0)
+    assert np.all((trn_mask * loss_mask) == 0)
 
 def test_ssdu_gaussian_selection_rho():
-    input_mask = np.ones((64, 64), dtype=bool)
+    input_mask = np.ones((64, 64), dtype=np.float32)
     rho = 0.4
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask, rho=rho)
     expected_loss_count = int(np.ceil(np.sum(input_mask) * rho))
@@ -125,7 +125,7 @@ def test_ssdu_gaussian_selection_rho():
     assert expected_loss_count == actual_loss_count, f"Expected {expected_loss_count} loss pixels, got {actual_loss_count}"
 
 def test_ssdu_gaussian_selection_acs_region():
-    input_mask = np.ones((64, 64), dtype=bool)
+    input_mask = np.ones((64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
     center_kx = input_mask.shape[1] // 2
     center_ky = input_mask.shape[0] // 2

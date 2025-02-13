@@ -2,11 +2,33 @@
 import pytest
 import numpy as np
 from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space
+import tempfile
+import h5py
+
 
 @pytest.fixture
 def sample_image():
     # Generate a sample image [contrast, height, width] for testing
-    return np.random.rand(3, 64, 64)  # 3 contrasts, 64x64 image
+    return np.random.rand(3, 128, 128)  # 3 contrasts, 64x64 image
+
+@pytest.fixture(scope="session")
+def sensetivity_file(tmp_path_factory):
+    shape = (10, 128, 128)
+    sensetivity_f = np.zeros(shape, dtype=np.complex64)
+    sensetivity_f[:, shape[1]//2-3:shape[1]+3, shape[2]//2-4:shape[2]+3] = np.random.randn(10, 6, 6) + 1j*np.random.randn(10, 6, 6)
+    sensetivities = np.fft.fftshift(np.fft.fft2(np.fft.fftshift(sensetivity_f, axes=(-1, -2)), axes=(1, -2)), axes=(-1, -2))
+
+    xx, yy = np.meshgrid(np.arange(-shape[1]//2, shape[1]//2), np.arange(-shape[2]//2, shape[2]//2))
+
+    circle_index = (np.power(xx, 2) + np.power(yy, 2)) > 96**2
+    for i in range(sensetivities.shape[0]):
+        sensetivities[i][circle_index] = 0
+
+    file_path = tmp_path_factory.mktemp("data") / "compressed_10_norm_coils.npy"
+
+    np.save(file_path, sensetivities)
+    return file_path
+    
 
 def test_simulate_k_space_output_shape(sample_image):
     seed = 42

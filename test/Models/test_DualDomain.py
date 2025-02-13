@@ -81,5 +81,22 @@ def test_create_inverted_masks(dual_domain_ssl, mock_inputs):
     mask_inverse_w_acs, mask_lambda_wo_acs = dual_domain_ssl.create_inverted_masks(lambda_set, inverse_set, 10)
 
     _, _, _, h, w = lambda_set.shape
-    assert mask_inverse_w_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5].sum() > 0
-    assert mask_lambda_wo_acs[:, :, :, h//2-5:h//2+5, w//2-5:w//2+5].sum() == 0
+    
+    slice_y = slice(h//2-5, h//2+5)
+    slice_x = slice(w//2-5, w//2+5)
+    # Ensure pass through center region works
+    torch.testing.assert_close(mask_inverse_w_acs[:, :, :, slice_y, slice_x], lambda_set[:, :, :, slice_y, slice_x])
+    torch.testing.assert_close(mask_lambda_wo_acs[:, :, :, slice_y, slice_x], inverse_set[:, :, :, slice_y, slice_x])
+
+    # ensure the remaining values are the same
+    torch.testing.assert_close(mask_inverse_w_acs[:, :, :, :h//2-5, :], inverse_set[:, :, :, :h//2-5, :])
+    torch.testing.assert_close(mask_lambda_wo_acs[:, :, :, :h//2-5, :], lambda_set[:, :, :, :h//2-5, :])
+
+    torch.testing.assert_close(mask_inverse_w_acs[:, :, :, h//2+5:, :], inverse_set[:, :, :, h//2+5:, :])
+    torch.testing.assert_close(mask_lambda_wo_acs[:, :, :, h//2+5:, :], lambda_set[:, :, :, h//2+5:, :])
+
+    torch.testing.assert_close(mask_inverse_w_acs[:, :, :, :, :w//2-5], inverse_set[:, :, :, :, :w//2-5])
+    torch.testing.assert_close(mask_lambda_wo_acs[:, :, :, :, :w//2-5], lambda_set[:, :, :, :, :w//2-5])
+
+    torch.testing.assert_close(mask_inverse_w_acs[:, :, :, :, w//2+5:], inverse_set[:, :, :, :, w//2+5:])
+    torch.testing.assert_close(mask_lambda_wo_acs[:, :, :, :, w//2+5:], lambda_set[:, :, :, :, w//2+5:])
