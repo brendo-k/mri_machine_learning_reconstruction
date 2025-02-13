@@ -2,22 +2,22 @@
 
 max_epochs: 50
 batch_size: 2
-lr: 0.0001
+lr: 0.001
 R: 6.0
 R_hat: 2.0
 nx: 256
 ny: 256
 norm_method: 'k'
 supervised: false
-data_dir: '/home/brenden/Documents/data/M4raw_chunked'
-test_dir: '/home/brenden/Documents/data/M4raw_chunked'
+data_dir: '/home/brenden/Documents/data/M4Raw_first_repetition'
+test_dir: '/home/brenden/Documents/data/M4Raw_Averaged'
 num_workers: 2
 contrasts:
   - 't1'
   - 't2'
   - 'flair'
-chans: 8
-depth: 3
+chans: 32
+depth: 4
 cascades: 6
 dataset: 'm4raw'
 project: 'MRI Reconstruction'
