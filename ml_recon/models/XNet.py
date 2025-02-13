@@ -3,6 +3,11 @@ import torch
 from ml_recon.models.UNet import double_conv, Unet_down, Unet_up, down
 
 class XNet(nn.Module):
+    """Implementation of X-Net from:
+    Do, Won-Joon, Sunghun Seo, Yoseob Han, Jong Chul Ye, Seung Hong Choi, and Sung-Hong Park. 2020. 
+    “Reconstruction of Multicontrast MR Images through Deep Learning.” Medical Physics 47(3): 983–97. doi:10.1002/mp.14006.
+    """
+
     def __init__(self, contrast_order: list, channels: int, depth: int = 4, drop_prob: float = 0.0):
         super().__init__()
         self.contrast_order = contrast_order

@@ -1,5 +1,5 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares
+from ml_recon.utils import ifft_2d_img, root_sum_of_squares, k_to_img
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
 from ml_recon.dataset.M4Raw_dataset import M4Raw
@@ -214,13 +214,7 @@ class test_transform(object):
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
 
-        noisy_imgs = root_sum_of_squares(ifft_2d_img(data['fs_k_space']), coil_dim=1)
-        noisy_imgs_max = noisy_imgs.amax((-1, -2), keepdim=True)
-    
-        img /= img.amax((-1, -2), keepdim=True)
-        img *= noisy_imgs_max
-
-        return data, img
+        return data, img, scaling_factor
 
 
 

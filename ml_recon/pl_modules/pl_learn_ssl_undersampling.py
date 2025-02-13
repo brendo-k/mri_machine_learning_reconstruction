@@ -55,7 +55,7 @@ class LearnedSSLLightning(plReconModel):
         
 
         # loss function init
-        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
+        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=1).to(self.device)
         self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
 
@@ -199,7 +199,7 @@ class LearnedSSLLightning(plReconModel):
 
         image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
         fully_sampling_img = self.k_to_img_scaled(fs_k_space, image_scaling)
-        mask = fully_sampling_img > 0.00
+        mask = fully_sampling_img > 0.09
         estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
         estimate_lambda_img *= mask
@@ -236,6 +236,7 @@ class LearnedSSLLightning(plReconModel):
     def test_step(self, batch, batch_index):
         k_space = batch[0]
         ground_truth_image = batch[1]
+        scaling_factor = batch[2]
         fully_sampled_k = k_space['fs_k_space']
         undersampled = k_space['undersampled']
         mask = k_space['mask']
@@ -243,6 +244,7 @@ class LearnedSSLLightning(plReconModel):
             mask += k_space['loss_mask'] # combine to get original sampliing mask
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
+        estimate_k *= scaling_factor
 
         return super().test_step((estimate_k, ground_truth_image), batch_index)
 
@@ -250,6 +252,7 @@ class LearnedSSLLightning(plReconModel):
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         k_space = batch[0]
         ground_truth_image = batch[1]
+        scaling_factor = batch[2]
         fully_sampled_k = k_space['fs_k_space']
         undersampled = k_space['undersampled']
         mask = k_space['mask']
@@ -257,6 +260,7 @@ class LearnedSSLLightning(plReconModel):
             mask += k_space['loss_mask'] # combine to get original sampliing mask
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
+        estimate_k *= scaling_factor
 
         return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
         

@@ -53,7 +53,7 @@ class BratsDatasetTest(Dataset):
             nx, 
             ny, 
             contrasts, 
-            data_key='rss_images', 
+            data_key='ground_truth', 
             limit_volumes=limit_volumes
         )
 
@@ -63,9 +63,9 @@ class BratsDatasetTest(Dataset):
     def __getitem__(self, index):
         k_space = self.undersampled_dataset[index]
         ground_truth = torch.from_numpy(self.ground_truth_dataset[index])
-
+        scaling_factor = 1
         if self.transforms:
-            k_space, ground_truth = self.transforms((k_space, ground_truth))
+            k_space, ground_truth, scaling_factor = self.transforms((k_space, ground_truth))
 
-        return k_space, ground_truth
+        return k_space, ground_truth, scaling_factor
         

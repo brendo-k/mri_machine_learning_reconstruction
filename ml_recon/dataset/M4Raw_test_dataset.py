@@ -10,8 +10,8 @@ import h5py
 from torch.utils.data import Dataset
 
 class M4RawTest(Dataset):
-    """This is a dataloader for m4Raw. All it does is load a slice from the M4Raw 
-    dataset. It does not do any subsampling
+    """This is a test dataloader for m4Raw. It loads one k-space slice from the first 
+    average and an image slice from the averaged data
 
     """
     def __init__(
