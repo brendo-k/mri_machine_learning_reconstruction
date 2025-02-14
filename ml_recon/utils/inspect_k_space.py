@@ -19,7 +19,7 @@ def main():
     with h5py.File(args.filename) as fr:
         if 'k_space' in fr:
             kspace = fr['k_space'][:] # type: ignore
-        if 'kspace' in fr:
+        elif 'kspace' in fr:
             kspace = fr['kspace'][:] # type: ignore
         else:
             raise ValueError('Could not find k_space or kspace')
