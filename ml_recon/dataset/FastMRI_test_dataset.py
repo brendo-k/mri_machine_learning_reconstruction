@@ -55,8 +55,8 @@ class FastMRIDatasetTest(Dataset):
         k_space = self.undersampled_dataset[index]
         ground_truth = torch.from_numpy(self.ground_truth_dataset[index])
         ground_truth = k_to_img(ground_truth, coil_dim=1)
-
+        scaling_factor = 1
         if self.transforms:
-            k_space, ground_truth = self.transforms((k_space, ground_truth))
+            k_space, ground_truth, scaling_factor = self.transforms((k_space, ground_truth))
 
-        return k_space, ground_truth
+        return k_space, ground_truth, scaling_factor

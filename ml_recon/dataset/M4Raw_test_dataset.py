@@ -54,7 +54,8 @@ class M4RawTest(Dataset):
     def __getitem__(self, index):
         k_space = self.k_space_dataset[index]
         image = torch.from_numpy(self.average_dataset[index])
+        scaling_factor = 1
         if self.transforms: 
-            k_space, image = self.transforms((k_space, image))
-        return k_space, image
+            k_space, image, scaling_factor = self.transforms((k_space, image))
+        return k_space, image, scaling_factor
 
