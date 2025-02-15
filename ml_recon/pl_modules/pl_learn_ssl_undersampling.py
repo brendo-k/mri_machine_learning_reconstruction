@@ -193,15 +193,19 @@ class LearnedSSLLightning(plReconModel):
 
         lambda_set, loss_set = self.partition_k_space(batch)
         mask = lambda_set + loss_set
-            
+        
+        # get recon estimates 
         estimate_full = self.recon_model.pass_through_model(under, mask, fs_k_space) 
         estimate_lambda = self.recon_model.pass_through_model(under, lambda_set, fs_k_space) 
 
+        # ifft and root sum of squares. All iamges scaled by the max of fully sampled images.
         image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
         fully_sampling_img = self.k_to_img_scaled(fs_k_space, image_scaling)
-        mask = fully_sampling_img > 0.09
         estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
+
+        # Mask background
+        mask = fully_sampling_img > 0.09
         estimate_lambda_img *= mask
         estimate_full_img *= mask
         fully_sampling_img *= mask
@@ -209,6 +213,7 @@ class LearnedSSLLightning(plReconModel):
         diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10
         diff_est_lambda_plot = (estimate_lambda_img - fully_sampling_img).abs()*10
 
+        # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
             wandb_logger.log_image('val/estimate_full', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
@@ -222,16 +227,19 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
             wandb_logger.log_image('val/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
 
+        
+        # log image space metrics 
         ssim_full = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_full_img)
-        nmse_val_full = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_full_img)
+        nmse_full = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_full_img)
         ssim_lambda = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_lambda_img)
-        nmse_val_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
+        nmse_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
         for i, contrast in enumerate(self.contrast_order):
             self.log(f"val/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
-            self.log(f"val/nmse_full_{contrast}", nmse_val_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"val/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
             self.log(f"val/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
-            self.log(f"val/nmse_lambda_{contrast}", nmse_val_lambda[i], on_epoch=True, sync_dist=True)
-        self.log(f"val/mean_nmse_full", sum(nmse_val_full)/len(nmse_val_full), on_epoch=True, sync_dist=True)
+            self.log(f"val/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
+        self.log(f"val/mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
+        self.log(f"val/mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
 
     def test_step(self, batch, batch_index):
         k_space = batch[0]

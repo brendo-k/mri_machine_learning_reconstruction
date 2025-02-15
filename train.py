@@ -22,16 +22,18 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    unique_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    #file_name = 'pl_learn_ssl-' + unique_id
-    #checkpoint_callback = ModelCheckpoint(
-    #    dirpath='/',  # Directory to save the checkpoints
-    #    filename = file_name + '-{epoch:02d}-{val_loss:.2f}',  # Filename pattern
-    #    save_top_k=1,  # Save the top 3 models
-    #    monitor='val/ssim_full',  # Metric to monitor for saving the best models
-    #    mode='max',  # Save the model with the minimum val_loss
-    #    save_last=True
-    #)
+    unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    file_name = unique_id
+    if args.run_name: 
+        file_name = args.run_name + unique_id
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='/home/kadotab/scratch/checkpoints',  # Directory to save the checkpoints
+        filename = file_name + '-{epoch:02d}-{val_loss:.03g}',  # Filename pattern
+        save_top_k=1,  # Save the top 3 models
+        monitor='val/mean_nmse_full',  # Metric to monitor for saving the best models
+        mode='min',  # Save the model with the minimum val_loss
+        save_last=True
+    )
     activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
     prof_scheduler = schedule(
         warmup=2,
@@ -133,10 +135,10 @@ def main(args):
     hparams = model.hparams
     hparams.update(data_module.hparams)
     #wandb.init(project=args.project, name=args.run_name, config=dict(hparams), dir='/home/kadotab/')
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(project=args.project, log_model='best_and_last', name=args.run_name, dir='/home/kadotab/scratch')
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         #callbacks=checkpoint_callback,
+                         callbacks=checkpoint_callback,
                          #precision="16", 
                          #profiler=pytorch_profiler
                          )
