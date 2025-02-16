@@ -106,7 +106,7 @@ class M4Raw(Dataset):
             dataset = fr[self.key]
             assert isinstance(dataset, h5py.Dataset)
             k_space = dataset[self.contrast_order_indexes, slice_index]
-            
+            k_space = self.fill_missing_k_space(k_space) 
                 
         return k_space 
 
@@ -155,8 +155,8 @@ class M4Raw(Dataset):
         
         contrast, coils, h, w = k_space.shape
         zero_fill_mask = np.ones_like(k_space) 
-        zero_fill_mask[:, :, :, :31] = 0
-        zero_fill_mask[:, :, :, -30:] = 0
+        zero_fill_mask[:, :, :, :29] = 0
+        zero_fill_mask[:, :, :, -29:] = 0
     
         
         k_space[k_space == 0] = 1e-3
