@@ -55,7 +55,7 @@ class LearnedSSLLightning(plReconModel):
         
 
         # loss function init
-        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=1).to(self.device)
+        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
         self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
 

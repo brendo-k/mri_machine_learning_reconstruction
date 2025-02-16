@@ -25,7 +25,7 @@ def fft_2d_img(data, axes=[-1, -2]):
         data = torch.fft.fftshift(data, dim=axes)
     elif isinstance(data, np.ndarray):
         data = np.fft.ifftshift(data, axes=axes)
-        data = np.fft.ifft2(data, axes=axes, norm='ortho')
+        data = np.fft.fft2(data, axes=axes, norm='ortho')
         data = np.fft.fftshift(data, axes=axes)
     else:
         assert ValueError(f'{type(data)}, is not allowed')
