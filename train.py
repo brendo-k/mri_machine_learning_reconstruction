@@ -132,10 +132,10 @@ def main(args):
     #tuner = Tuner(trainer)
     #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
     #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
+
     hparams = model.hparams
     hparams.update(data_module.hparams)
-    #wandb.init(project=args.project, name=args.run_name, config=dict(hparams), dir='/home/kadotab/')
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
+    wandb_logger = WandbLogger(project=args.project, log_model=true, name=args.run_name, dir='/home/kadotab/scratch')
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=checkpoint_callback,

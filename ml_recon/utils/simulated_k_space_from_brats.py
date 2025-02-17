@@ -42,7 +42,8 @@ def apply_sensetivities(image, coil_file):
 
 def generate_and_apply_phase(data, seed, center_region=20):
     nc = data.shape[0]
-    phase = build_phase_from_same_dist(data, seed)
+    #phase = build_phase_from_same_dist(data, seed)
+    phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, seed)
     data = apply_phase_map(data, phase)
     return data
 
