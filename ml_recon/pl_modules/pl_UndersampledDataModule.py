@@ -100,7 +100,8 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'R_hat': self.R_hat,
                 'sampling_method': self.sampling_method,
                 'self_supervised': self.self_supervised,
-                'acs_lines' : self.acs_lines
+                'acs_lines' : self.acs_lines, 
+                'poly_order': 10
         }
 
         self.train_dataset = self.dataset_class(

@@ -77,7 +77,11 @@ class SensetivityModel_mc(nn.Module):
         return images
 
     def mask_center(self, coil_k_spaces, mask):
-        # coil_k: [b cont chan height width]
+        # I did some strange things here. Before, I tried to find the largest 2d box 
+        # that was continuously contained in k-space. However, that added some extra 
+        # bugs in self-suprvised trainign as the center box size could change depending
+        # on the sets. I have just hard coded this for now, but could be interesting to 
+        # test different coil estimation methods 
         acs_box_size = 10
         height = mask.shape[-2]
         width = mask.shape[-1]
@@ -86,9 +90,8 @@ class SensetivityModel_mc(nn.Module):
         
         mask = torch.zeros((height, width), dtype=torch.bool, device=coil_k_spaces.device) 
 
-        acs_slice_y = slice(center_y-acs_box_size//2, center_y+acs_box_size//2)
         acs_slice_x = slice(center_x-acs_box_size//2, center_x+acs_box_size//2)
-        mask[acs_slice_y, acs_slice_x] = 1
+        mask[:, acs_slice_x] = 1
 
         return coil_k_spaces * mask
         

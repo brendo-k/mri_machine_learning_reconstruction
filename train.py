@@ -135,7 +135,7 @@ def main(args):
     hparams = model.hparams
     hparams.update(data_module.hparams)
     #wandb.init(project=args.project, name=args.run_name, config=dict(hparams), dir='/home/kadotab/')
-    wandb_logger = WandbLogger(project=args.project, log_model='best_and_last', name=args.run_name, dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=checkpoint_callback,

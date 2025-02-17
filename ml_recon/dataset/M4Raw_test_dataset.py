@@ -27,7 +27,8 @@ class M4RawTest(Dataset):
             self_supervised: bool = True, 
             sampling_method: str = '2d',
             acs_lines: int = 10, 
-            limit_volumes: Optional[Union[int, float]] = None
+            limit_volumes: Optional[Union[int, float]] = None, 
+            poly_order: int = 8,
             ):
 
         # call super constructor
@@ -44,7 +45,8 @@ class M4RawTest(Dataset):
                 R_hat=R_hat, 
                 sampling_method = sampling_method,
                 self_supervised = self_supervised, 
-                acs_lines=acs_lines
+                acs_lines=acs_lines, 
+                poly_order=poly_order
                 )
         self.average_dataset = M4Raw(test_dir, nx, ny, contrasts=contrasts, key='reconstruction_rss', limit_volumes=limit_volumes)
 

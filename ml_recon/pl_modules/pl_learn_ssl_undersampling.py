@@ -183,7 +183,7 @@ class LearnedSSLLightning(plReconModel):
     
 
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
-        if batch_idx != 0 or self.current_epoch % 10 != 0:
+        if batch_idx > 4 or self.current_epoch % 10 != 0:
             plot_images = False
         else:
             plot_images = True
@@ -205,7 +205,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
 
         # Mask background
-        mask = fully_sampling_img > 0.09
+        mask = fully_sampling_img > 0.15
         estimate_lambda_img *= mask
         estimate_full_img *= mask
         fully_sampling_img *= mask
@@ -216,11 +216,11 @@ class LearnedSSLLightning(plReconModel):
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
-            wandb_logger.log_image('val/estimate_full', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
-            wandb_logger.log_image('val/estimate_lambda', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
-            wandb_logger.log_image('val/ground_truth', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
-            wandb_logger.log_image('val/estimate_full_diff', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image('val/estimate_lambda_diff', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val/estimate_lambda_{batch_idx}', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val/ground_truth_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val/estimate_full_diff_{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val/estimate_lambda_diff_{batch_idx}', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
 
             lambda_set_plot = lambda_set[0, :, 0, : ,:]
             loss_mask = loss_set[0, :, 0, : ,:]
