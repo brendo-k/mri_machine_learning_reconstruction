@@ -36,7 +36,7 @@ class M4Raw(Dataset):
             nx:int = 256,
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
-            key:str = 'kspace',
+            data_key:str = 'kspace',
             contrasts: List[str] = ['t1', 't2', 'flair'], 
             limit_volumes: Optional[Union[int, float]] = None
             ):
@@ -45,7 +45,7 @@ class M4Raw(Dataset):
         super().__init__()
         self.nx = nx
         self.ny = ny
-        self.key = key
+        self.key = data_key
 
         self.transforms = transforms
 

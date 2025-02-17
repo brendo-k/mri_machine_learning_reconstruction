@@ -1,11 +1,9 @@
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares, k_to_img
 from ml_recon.dataset.BraTS_dataset import BratsDataset
-from ml_recon.dataset.BraTS_test_dataset import BratsDatasetTest
 from ml_recon.dataset.M4Raw_dataset import M4Raw
-from ml_recon.dataset.M4Raw_test_dataset import M4RawTest
 from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
-from ml_recon.dataset.FastMRI_test_dataset import FastMRIDatasetTest
+from ml_recon.dataset.test_dataset import TestDataset
 
 from torch.utils.data import DataLoader
 from typing import Optional, Union
@@ -41,13 +39,13 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
             self.dataset_class = BratsDataset
-            self.test_dataset_class = BratsDatasetTest
+            self.test_dataset_key = 'ground_truth'
         elif dataset_name == 'fastmri':
             self.dataset_class = FastMRIDataset
-            self.test_dataset_class = FastMRIDatasetTest
+            self.test_dataset_key = 'kspace'
         elif dataset_name == 'm4raw':
             self.dataset_class = M4Raw
-            self.test_dataset_class = M4RawTest
+            self.test_dataset_key = 'reconstruction_rss'
 
         self.data_dir = data_dir
         self.test_dir = test_dir
@@ -86,7 +84,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         train_dir = os.path.join(self.data_dir, train_file)
         val_dir = os.path.join(self.data_dir, val_file)
         test_dir = os.path.join(self.data_dir, test_file)
-        test_img_dir = os.path.join(self.test_dir, test_file)
+        test_gt_dir = os.path.join(self.test_dir, test_file)
 
         dataset_keyword_args = {
             'nx': self.resolution[0], 
@@ -114,6 +112,25 @@ class UndersampledDataModule(pl.LightningDataModule):
                 **dataset_keyword_args
                 )
 
+        noisy_test_dataset = self.dataset_class(
+                test_dir, 
+                **dataset_keyword_args
+                )
+        
+        gt_test_dataset = self.dataset_class(
+            test_gt_dir, 
+            data_key=self.test_dataset_key, 
+            **dataset_keyword_args
+        )
+
+        # NO TRANSFORM HERE. TRANSFORM LATER DURING TEST DATASET
+        noisy_test_dataset = UndersampleDecorator(
+                noisy_test_dataset,
+                original_ssdu_partioning=self.ssdu_partioning,
+                **undersample_keyword_args
+                )
+        
+
         self.train_dataset = UndersampleDecorator(
                 self.train_dataset,
                 original_ssdu_partioning=self.ssdu_partioning,
@@ -128,13 +145,11 @@ class UndersampledDataModule(pl.LightningDataModule):
                 **undersample_keyword_args
                 )
 
-        self.test_dataset = self.test_dataset_class(
-                test_dir,
-                test_img_dir,
-                transforms=test_transform(),
-                **dataset_keyword_args,
-                **undersample_keyword_args
-                )
+        self.test_dataset = TestDataset(
+            noisy_test_dataset,
+            gt_test_dataset, 
+            transforms=test_transform()
+        )
         
 
         self.contrast_order = self.train_dataset.contrast_order

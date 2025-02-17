@@ -20,7 +20,7 @@ class FastMRIDataset(Dataset):
             ny:int = 256,
             transforms: Optional[Callable] = None,
             contrasts: List[str] = ['t1'], 
-            key = 'kspace',
+            data_key = 'kspace',
             limit_volumes: Optional[Union[int, float]] = None
             ):
 
@@ -33,7 +33,7 @@ class FastMRIDataset(Dataset):
 
         self.transforms = transforms
         self.contrast_order = ['t1']
-        self.key = key
+        self.key = data_key
 
         sample_dir = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
         sample_dir.sort()
