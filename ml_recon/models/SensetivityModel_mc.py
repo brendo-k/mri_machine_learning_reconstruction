@@ -78,42 +78,20 @@ class SensetivityModel_mc(nn.Module):
 
     def mask_center(self, coil_k_spaces, mask):
         # coil_k: [b cont chan height width]
-        masked_k_space = coil_k_spaces.clone()
-
-        center_x = mask.shape[-1] // 2
-        center_y = mask.shape[-2] // 2
+        acs_box_size = 10
+        height = mask.shape[-2]
+        width = mask.shape[-1]
+        center_x = width // 2
+        center_y = height // 2
         
-        # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
-        squeezed_mask_hor = (mask[:, :, 0, center_y, :]).to(torch.int8)
-        squeezed_mask_vert = (mask[:, :, 0, :, center_x]).to(torch.int8)
+        mask = torch.zeros((height, width), dtype=torch.bool, device=coil_k_spaces.device) 
 
-        # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
-        left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
-        top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
-        bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
+        acs_slice_y = slice(center_y-acs_box_size//2, center_y+acs_box_size//2)
+        acs_slice_x = slice(center_x-acs_box_size//2, center_x+acs_box_size//2)
+        mask[acs_slice_y, acs_slice_x] = 1
 
-
-        # if phase encoding lines, acquire whole line for acs calculations
-        if (top == 0).all():
-            top = torch.full(top.shape, center_y)
-            bottom = torch.full(top.shape, center_y)
-
-        # force symmetric left and right acs boundries
-        low_freq_x = torch.min(left, right)
-        low_freq_y = torch.min(top, bottom)
-        low_freq_x[low_freq_x < 5] = 5
-        low_freq_y[low_freq_y < 5] = 5
-        center_mask = torch.zeros_like(masked_k_space[:, :, 0, :, :], dtype=torch.bool)
-        # loop through num_low freq tensor and set acs lines to true
-        for i in range(low_freq_x.shape[0]):
-            for j in range(low_freq_y.shape[1]):
-                center_mask[i, j, 
-                            center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], 
-                            center_x - low_freq_x[i, j]:center_x + low_freq_x[i, j]
-                            ] = True
-
-        return masked_k_space * center_mask.unsqueeze(2)
+        return coil_k_spaces * mask
+        
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
