@@ -1,25 +1,25 @@
 # Supervised config file for train.py
 
-max_epochs: 20
+max_epochs: 50
 batch_size: 2
 lr: 0.001
-R: 4.0
-nx: 240
-ny: 240
+R: 8.0
+nx: 256
+ny: 256
 norm_method: 'k'
 supervised: true
-data_dir: '/home/brenden/Documents/data/sim_test'
-test_dir: '/home/brenden/Documents/data/brats_ground_truth'
+data_dir: '/home/brenden/Documents/data/M4Raw_first_repetition'
+test_dir: '/home/brenden/Documents/data/M4Raw_Averaged'
 num_workers: 2
 contrasts:
   - 't1'
 chans: 32
 depth: 4
 cascades: 6
-dataset: 'brats'
+dataset: 'm4raw'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
 lambda_scaling: 1
-limit_volumes: 1
+limit_volumes: 0.1
 sampling_method: '2d'
 norm_method: 'k'

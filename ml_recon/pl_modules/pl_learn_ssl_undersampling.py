@@ -216,16 +216,16 @@ class LearnedSSLLightning(plReconModel):
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
-            wandb_logger.log_image(f'val/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val/estimate_lambda_{batch_idx}', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val/ground_truth_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val/estimate_full_diff_{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image(f'val/estimate_lambda_diff_{batch_idx}', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/estimate_lambda_{batch_idx}', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/estimate_full_diff_{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images/estimate_lambda_diff_{batch_idx}', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
 
             lambda_set_plot = lambda_set[0, :, 0, : ,:]
             loss_mask = loss_set[0, :, 0, : ,:]
-            wandb_logger.log_image('val/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
-            wandb_logger.log_image('val/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
+            wandb_logger.log_image('val_masks/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
+            wandb_logger.log_image('val_masks/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
 
         
         # log image space metrics 
@@ -234,10 +234,10 @@ class LearnedSSLLightning(plReconModel):
         ssim_lambda = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_lambda_img)
         nmse_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
         for i, contrast in enumerate(self.contrast_order):
-            self.log(f"val/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
-            self.log(f"val/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
-            self.log(f"val/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
-            self.log(f"val/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
+            self.log(f"val_ssim/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"val_nmse/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"val_ssim/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
+            self.log(f"val_nmse/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
         self.log(f"val/mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
         self.log(f"val/mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
 

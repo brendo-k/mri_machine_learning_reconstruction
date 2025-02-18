@@ -21,7 +21,13 @@ def main(args):
         checkpoint_path = os.path.join(artifact_dir, 'model.ckpt')
     
     model = LearnedSSLLightning.load_from_checkpoint(checkpoint_path)
-    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, test_dir=test_dir, batch_size=10, data_dir=data_dir)
+    data_module_kwargs = {}
+    if test_dir: 
+        data_module_kwargs['test_dir'] = test_dir
+    if data_dir:
+        data_module_kwargs['data_dir'] = data_dir
+
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, batch_size=10, **data_module_kwargs)
 
     trainer = pl.Trainer(logger=logger, accelerator='cuda')
     trainer.test(model, datamodule=datamodule)

@@ -52,7 +52,7 @@ class MultiContrastVarNet(nn.Module):
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones(config.cascades, 1))
+        self.lambda_reg = nn.Parameter(torch.ones(config.cascades, contrasts))
 
     # k-space sent in [B, C, H, W]
     def forward(self, undersampled_k, mask):
