@@ -58,7 +58,11 @@ class LearnedSSLLightning(plReconModel):
         self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
         self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
-
+    
+    
+    def forward(self, k_space, mask, fs_k_space):
+        estimate_k = self.recon_model.pass_through_model(k_space * mask, mask, fs_k_space)
+        return estimate_k
 
     def training_step(self, batch, batch_idx):
         # init loss tensors (some may be unused)
