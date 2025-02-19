@@ -1,5 +1,7 @@
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
+from scipy.ndimage import gaussian_filter
+
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
@@ -23,39 +25,38 @@ def apply_sensetivities(image, coil_file):
         return image
 
     sense_map = np.load(coil_file)
-    sense_map = np.transpose(sense_map, (0, 2, 1))
-    sense_map = sense_map[:, 25:-25, 25:-25]
 
-    mag_sense_real = np.real(sense_map)
-    mag_sense_imag = np.imag(sense_map)
-
-    # chose nearest here because getting some weird phase artifacts when using linear
-    # hypothesis: indian blot artifacts as we interpolate between fast phase changes
-    resampled_sense_real = resample(mag_sense_real, image.shape[1], image.shape[2], 'nearest')
-    resampled_sense_imag = resample(mag_sense_imag, image.shape[1], image.shape[2], 'nearest')
-    resampled_sense = resampled_sense_real + 1j * resampled_sense_imag 
-
-    sense_map = np.expand_dims(resampled_sense, 0)
+    sense_map = np.expand_dims(sense_map, 0)
     image_sense = sense_map * np.expand_dims(image, 1)
     return image_sense      
 
 
 def generate_and_apply_phase(data, seed, center_region=20):
     nc = data.shape[0]
-    #phase = build_phase_from_same_dist(data, seed)
-    phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, seed)
-    data = apply_phase_map(data, phase)
-    return data
+    phase = build_phase_from_same_dist(data, seed)
+    #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, seed)
+    phase_data = apply_phase_map(data, phase)
+    return phase_data
 
 
 def build_phase_from_same_dist(data, seed): 
     rng = np.random.default_rng(seed=seed)
+    temp = np.copy(data)
     coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
-    k_space = ifft_2d_img(root_sum_of_squares(data, coil_dim=1))[0] 
-    phase_images = fft_2d_img(np.abs(k_space) * coeffs)
-    phase = np.angle(phase_images)
+    smoothed_data = gaussian_filter(temp, 10, axes=(-1, -2))
+    k_space = ifft_2d_img(root_sum_of_squares(smoothed_data, coil_dim=1))    
+    phase_images = np.abs(fft_2d_img(np.abs(k_space) * coeffs))
+    
+    # center on zero
+    phase_images -= phase_images.min()
+    # [0, 2]
+    phase_images /= (np.max(phase_images) / 2)
+    # [-1, 1]
+    phase_images -= -1
+    #scale between -2pi and 2pi
+    phase_images *= (np.pi)
 
-    return phase
+    return phase_images
 
 
 
