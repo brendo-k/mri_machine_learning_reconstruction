@@ -21,25 +21,26 @@ from torchvision.transforms import Compose
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    path = '/home/kadotab/python/ismrm_figures/6-flair-ssdu/weight_dir/50.pt'
-    data_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset/'
+    path = 'logs/4-t1-supervised/weight_dir/50.pt'
+    data_dir = '/home/brenden/Documents/data/ismrm_brats_2024'
 
     checkpoint = torch.load(path, map_location=device)
 
-    new_dict = {}
-    for key, values in checkpoint['model'].items():
-        new_key = '.'.join(key.split('.')[1:])
-        new_dict[new_key] = values
+    #new_dict = {}
+    #for key, values in checkpoint['model'].items():
+    #    new_key = '.'.join(key.split('.')[1:])
+    #    new_dict[new_key] = values
 
-    model = setup_model(new_dict)
-    dataloader = setup_dataloader(data_dir, 'flair')
+    model = setup_model(checkpoint['model'], device)
+    dataloader = setup_dataloader(data_dir, ['t1'])
 
-    test(model, dataloader, num_contrasts=1, profile=False)
+    test(model, dataloader, num_contrasts=1, profile=False, mask_output=True)
 
-def setup_model(weights):
+def setup_model(weights, device):
     backbone = partial(Unet, 2, 2)
     model = VarNet_mc(backbone)
     model.load_state_dict(weights)
+    model.to(device)
     return model
 
 def setup_dataloader(data_dir, contrasts):

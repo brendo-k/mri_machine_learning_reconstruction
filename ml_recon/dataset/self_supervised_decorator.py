@@ -32,9 +32,8 @@ class UndersampleDecorator(Dataset):
         one_minus_eps = 1 - 1e-3
         self.lambda_prob[self.lambda_prob > one_minus_eps] = one_minus_eps
         self.random_index = random.randint(0, 10000)
-
-        self.k = torch.from_numpy(calc_k(self.lambda_prob, self.omega_prob)).float()
         self.transforms = transforms
+
 
     def __len__(self):
         return self.dataset.__len__()
@@ -45,7 +44,7 @@ class UndersampleDecorator(Dataset):
         under, mask_omega = apply_undersampling(self.random_index + index, self.omega_prob, k_space, deterministic=True)
         doub_under, mask_lambda = apply_undersampling(index, self.lambda_prob, under, deterministic=False)
 
-        data = (doub_under, under, k_space, self.k, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
+        data = (doub_under, under, k_space, torch.from_numpy(mask_omega), torch.from_numpy(mask_lambda))
         if self.transforms:
             data = self.transforms(data)
         return data

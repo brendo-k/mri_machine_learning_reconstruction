@@ -23,7 +23,7 @@ def process_file(file, out_path, seed):
             images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
         
     images = np.stack(images, axis=0)
-    k_space = np.zeros((4, 12, 256, 256, (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, 10, 256, 256, (images.shape[-1] - 106)//3), dtype=np.complex64)
     print(k_space.shape)
     for i in range(images.shape[-1]):
         if i < 70: 
@@ -46,7 +46,7 @@ def process_file(file, out_path, seed):
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
         print(save_file)
         with h5py.File(save_file, 'w') as fr:
-            dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64)
+            dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64, chunks=(1, 1, 10, 256, 256))
             dset[...] = k_space
             dset = fr.create_dataset("contrasts", data=modality_name)
         print(f'saved to file: {save_file}')
@@ -63,8 +63,8 @@ def process_file(file, out_path, seed):
 
 
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset4/'
-    save_dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/simulated_subset_diff_phase4/'
+    dir = '/home/brenden/Documents/data/subset_10'
+    save_dir = '/home/brenden/Documents/data/ismrm_brats_2024'
     dataset_splits = ['train', 'test', 'val']
 
     # Create a pool of worker processes

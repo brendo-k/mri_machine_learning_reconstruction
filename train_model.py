@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
-from ml_recon.models import Unet, ResNet, DnCNN, SwinUNETR
+from ml_recon.models import Unet, ResNet, DnCNN 
 from ml_recon.models.varnet_mc import VarNet_mc
 from ml_recon.dataset.m4raw_dataset import M4Raw 
 from ml_recon.dataset.kspace_brats import KSpaceBrats
@@ -39,6 +39,7 @@ PROFILE = False
 
 def main():
     print("Starting code")
+    torch.set_float32_matmul_precision('medium')
     args = parser.parse_args()
 
     current_device, distributed = setup_devices(args.dist_backend, args.init_method, args.world_size)
@@ -114,7 +115,7 @@ def main():
         save_model(os.path.join(writer_dir, 'weight_dir/'), model, optimizer, args.max_epochs, current_device)
 
 
-        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=False)
+        nmse, ssim, psnr = test(model, test_loader, len(args.contrasts), PROFILE, mask_output=True)
         metrics = {}
         dataset = test_loader.dataset
         print(test_loader)
@@ -137,7 +138,7 @@ def main():
             metrics['psnr-' + contrast] = 0
             
 
-        hparams_writer = SummaryWriter('/home/kadotab/scratch/runs/metrics')
+        hparams_writer = SummaryWriter(os.path.join(writer_dir, 'metrics'))
         args.contrasts = ','.join(args.contrasts)
         hparams = vars(args)
         print(hparams)
@@ -177,9 +178,9 @@ def prepare_data(arg: argparse.Namespace, distributed: bool):
     test_dataset = UndersampleDecorator(test_dataset, **undersampling_args)
     
     if arg.use_subset:
-        train_dataset, _ = random_split(train_dataset, [0.1, 0.9])
-        val_dataset, _ = random_split(val_dataset, [0.1, 0.9])
-        test_dataset, _ = random_split(test_dataset, [0.1, 0.9])
+        train_dataset, _ = random_split(train_dataset, [0.5, 0.5])
+        val_dataset, _ = random_split(val_dataset, [0.5, 0.5])
+        test_dataset, _ = random_split(test_dataset, [0.5, 0.5])
 
     if distributed:
         print('Setting up distributed sampler')
@@ -312,9 +313,6 @@ def setup_model_backbone(model_name, current_device, input_channels=8, chans=18,
         backbone = partial(ResNet, in_chan=input_channels, out_chan=input_channels, itterations=15, chans=32)
     elif model_name == 'dncnn':
         backbone = partial(DnCNN, in_chan=input_channels, out_chan=input_channels, feature_size=32, num_of_layers=15)
-    elif model_name == 'transformer':
-        backbone = partial(SwinUNETR, img_size=(128, 128), in_channels=2, out_channels=2, spatial_dims=2, feature_size=12)
-        print('loaded swinunet!')
     else:
         raise ValueError(f'Backbone should be either unet resnet or dncnn but found {model_name}')
 

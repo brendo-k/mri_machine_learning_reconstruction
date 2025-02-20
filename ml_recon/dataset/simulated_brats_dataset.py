@@ -166,7 +166,7 @@ class SimulatedBrats(KSpaceDataset):
 
     @staticmethod
     def apply_sensetivities(image):
-        sense_map = np.load('/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed.npy')
+        sense_map = np.load('/home/brenden/Documents/data/coil_compressed_10.npy')
         #sense_map = np.squeeze(sense_map)
         sense_map = np.transpose(sense_map, (0, 2, 1))
         sense_map = sense_map[:, 25:-26, 25:-25]

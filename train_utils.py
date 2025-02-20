@@ -106,7 +106,7 @@ def setup_profile_context_manager(profile, train_type):
     Returns:
         context manager: returns profile context manager
     """
-    prof_files = [file for file in os.listdir('/home/kadotab/scratch/runs/') if 'profile' in file]
+    prof_files = [file for file in os.listdir('.') if 'profile' in file]
     file_numbers = [int(file.split('-')[-1]) for file in prof_files]
     if file_numbers:
         max_files_number = max(file_numbers)
@@ -213,7 +213,7 @@ def to_device(data: tuple, device: str, loss_type: str):
     Returns:
         torch.Tensor: returns multiple tensors now on the device
     """
-    double_undersaple, undersample, k_space, k, omega_mask, lambda_mask = data
+    double_undersaple, undersample, k_space, omega_mask, lambda_mask = data
     zero_fill_mask = k_space != 0
     if loss_type == 'supervised':
         input_slice = undersample.to(device)
@@ -225,16 +225,16 @@ def to_device(data: tuple, device: str, loss_type: str):
         target_slice = undersample.to(device)
         mask = omega_mask * lambda_mask
 
-        if loss_type == 'nosier2noise':
+        if loss_type == 'noiser2noise':
             loss_mask = omega_mask
         elif loss_type == 'ssdu' or loss_type == 'k-weighted':
             loss_mask = omega_mask & ~lambda_mask
         else:
             raise ValueError(f'loss mask should be ssdu, noiser2noise, k-weighted, or supervised but got {loss_type}')
 
-        if loss_type == 'k-weighted' or loss_type == 'nosier2noise':
-            loss_mask = loss_mask.type(torch.float32)
-            loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
+        #if loss_type == 'k-weighted' or loss_type == 'nosier2noise':
+        #    loss_mask = loss_mask.type(torch.float32)
+        #    loss_mask /= torch.sqrt(1 - k.unsqueeze(1))
             
     zero_fill_mask = zero_fill_mask.to(device)
     mask = mask.to(device)
