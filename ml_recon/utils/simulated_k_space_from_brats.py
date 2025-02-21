@@ -42,6 +42,20 @@ def generate_and_apply_phase(data, seed, center_region=20):
 def build_phase_from_same_dist(data, seed): 
     rng = np.random.default_rng(seed=seed)
     temp = np.copy(data)
+    smoothed_base = gaussian_filter(temp.mean(0, keepdims=True), 10, axes=(-1, -2))
+    k_base = ifft_2d_img(root_sum_of_squares(smoothed_base, coil_dim=1))    
+    coeffs = rng.uniform(-1, 1, size=(data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[2], data.shape[3]))
+    base_phase_image = np.abs(fft_2d_img(np.abs(k_base) * coeffs))
+    # center on zero
+    base_phase_image -= base_phase_image.min()
+    # [0, 2]
+    base_phase_image/= (np.max(base_phase_image) / 2)
+    # [-1, 1]
+    base_phase_image-= -1
+    #scale between -2pi and 2pi
+    base_phase_image *= (np.pi)
+
+
     coeffs = rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3])) + 1j*rng.uniform(-1, 1, size=(data.shape[0], data.shape[2], data.shape[3]))
     smoothed_data = gaussian_filter(temp, 10, axes=(-1, -2))
     k_space = ifft_2d_img(root_sum_of_squares(smoothed_data, coil_dim=1))    
@@ -56,7 +70,7 @@ def build_phase_from_same_dist(data, seed):
     #scale between -2pi and 2pi
     phase_images *= (np.pi)
 
-    return phase_images
+    return base_phase_image * 0.9 + phase_images * 0.1
 
 
 
