@@ -25,10 +25,12 @@ def main(args):
     unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
     file_name = unique_id
     if args.run_name: 
-        file_name = f'{args.run_name}_{args.R}_{args.supervised}_{args.contrasts}_unique_id'
+        contrasts = ','.join(args.contrasts)
+        file_name = f'{args.run_name}_{args.R}_{args.supervised}_{contrasts}_{unique_id}'
 
+    checkpoin_dir = '/home/kadotab/scratch/checkpoints'
     best_checkpoint_callback = ModelCheckpoint(
-        dirpath='/home/kadotab/scratch/checkpoints',
+        dirpath=checkpoin_dir,
         filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
         save_top_k=1,  # Only keep the best model
         monitor='val/mean_nmse_full',
@@ -38,7 +40,7 @@ def main(args):
 
     # Checkpoint for the last model (including optimizer state)
     last_checkpoint_callback = ModelCheckpoint(
-        dirpath='/home/kadotab/scratch/checkpoints',
+        dirpath=checkpoin_dir,
         filename=file_name + '-last',
         save_top_k=1,  # Only keep the latest model
         save_last=True,  # Ensures saving the last model
