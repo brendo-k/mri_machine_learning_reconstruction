@@ -56,77 +56,76 @@ def main(args):
     data_dir = args.data_dir
     nx = args.nx
     ny = args.ny
-    
-    data_module = UndersampledDataModule(
-            args.dataset, 
-            data_dir, 
-            args.test_dir,
-            batch_size=args.batch_size, 
-            resolution=(ny, nx),
-            num_workers=args.num_workers,
-            contrasts=args.contrasts,
-            sampling_method=args.sampling_method,
-            R=args.R,
-            self_supervsied=(not args.supervised), 
-            ssdu_partioning=args.ssdu_partitioning,
-            acs_lines=args.acs_lines,
-            norm_method=args.norm_method,
-            limit_volumes=args.limit_volumes
-            ) 
-
-    data_module.setup('train')
-
-    
-    varnet_config = VarnetConfig(
-        contrast_order=data_module.contrast_order,
-        cascades=args.cascades, 
-        channels=args.chans,
-        depth=args.depth,
-        split_contrast_by_phase=args.split_contrast_by_phase,
-        sensetivity_estimation=args.sense_method,
-        dropout=args.dropout
-    )
-    
-    partitioning_config = LearnPartitionConfig(
-        image_size=(len(args.contrasts), args.ny, args.nx),
-        inital_R_value=args.R_hat,
-        k_center_region = 10,
-        sigmoid_slope_probability = args.sigmoid_slope1,
-        sigmoid_slope_sampling = args.sigmoid_slope2,
-        is_learn_R = args.learn_R,
-        is_warm_start = args.warm_start,
-    )
-
-    tripple_pathway_config = DualDomainConifg(
-        is_pass_inverse=args.pass_inverse_data,
-        is_pass_original=args.pass_all_data,
-        inverse_no_grad=args.inverse_data_no_grad,
-        original_no_grad=args.all_data_no_grad
-    )
-
-    model = LearnedSSLLightning(
-        varnet_config = varnet_config, 
-        learn_partitioning_config = partitioning_config, 
-        dual_domain_config = tripple_pathway_config,
-        lr = args.lr,
-        ssim_scaling_full=args.ssim_scaling_full,
-        ssim_scaling_set=args.ssim_scaling_set,
-        ssim_scaling_inverse=args.ssim_scaling_inverse,
-        lambda_scaling=args.lambda_scaling, 
-        image_loss_function=args.image_loss,
-        k_space_loss_function=args.k_loss,
-        enable_learn_partitioning=args.learn_sampling, 
-        use_supervised_image_loss=args.supervised_image,
-        weight_decay=args.weight_decay,
-        pass_through_size=args.pass_through_size,
-        )
-    torch.set_float32_matmul_precision('medium')
 
     if args.checkpoint: 
         print("Loading Checkpoint!")
         model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
         data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir)
         data_module.setup('train')
+    else:
+        data_module = UndersampledDataModule(
+                args.dataset, 
+                data_dir, 
+                args.test_dir,
+                batch_size=args.batch_size, 
+                resolution=(ny, nx),
+                num_workers=args.num_workers,
+                contrasts=args.contrasts,
+                sampling_method=args.sampling_method,
+                R=args.R,
+                self_supervsied=(not args.supervised), 
+                ssdu_partioning=args.ssdu_partitioning,
+                acs_lines=args.acs_lines,
+                norm_method=args.norm_method,
+                limit_volumes=args.limit_volumes
+                ) 
+        data_module.setup('train')
+        
+        varnet_config = VarnetConfig(
+            contrast_order=data_module.contrast_order,
+            cascades=args.cascades, 
+            channels=args.chans,
+            depth=args.depth,
+            split_contrast_by_phase=args.split_contrast_by_phase,
+            sensetivity_estimation=args.sense_method,
+            dropout=args.dropout
+        )
+        
+        partitioning_config = LearnPartitionConfig(
+            image_size=(len(args.contrasts), args.ny, args.nx),
+            inital_R_value=args.R_hat,
+            k_center_region = 10,
+            sigmoid_slope_probability = args.sigmoid_slope1,
+            sigmoid_slope_sampling = args.sigmoid_slope2,
+            is_learn_R = args.learn_R,
+            is_warm_start = args.warm_start,
+        )
+
+        tripple_pathway_config = DualDomainConifg(
+            is_pass_inverse=args.pass_inverse_data,
+            is_pass_original=args.pass_all_data,
+            inverse_no_grad=args.inverse_data_no_grad,
+            original_no_grad=args.all_data_no_grad
+        )
+
+        model = LearnedSSLLightning(
+            varnet_config = varnet_config, 
+            learn_partitioning_config = partitioning_config, 
+            dual_domain_config = tripple_pathway_config,
+            lr = args.lr,
+            ssim_scaling_full=args.ssim_scaling_full,
+            ssim_scaling_set=args.ssim_scaling_set,
+            ssim_scaling_inverse=args.ssim_scaling_inverse,
+            lambda_scaling=args.lambda_scaling, 
+            image_loss_function=args.image_loss,
+            k_space_loss_function=args.k_loss,
+            enable_learn_partitioning=args.learn_sampling, 
+            use_supervised_image_loss=args.supervised_image,
+            weight_decay=args.weight_decay,
+            pass_through_size=args.pass_through_size,
+            )
+    torch.set_float32_matmul_precision('medium')
+
 
     ## AUTOMATIC HYPERPARAMETER TUNING
     #tuner = Tuner(trainer)
@@ -135,12 +134,10 @@ def main(args):
 
     hparams = model.hparams
     hparams.update(data_module.hparams)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch')
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=checkpoint_callback,
-                         #precision="16", 
-                         #profiler=pytorch_profiler
                          )
 
     print(hparams)
