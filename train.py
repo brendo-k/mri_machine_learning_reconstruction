@@ -25,14 +25,24 @@ def main(args):
     unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
     file_name = unique_id
     if args.run_name: 
-        file_name = args.run_name + unique_id
-    checkpoint_callback = ModelCheckpoint(
-        dirpath='/home/kadotab/scratch/checkpoints',  # Directory to save the checkpoints
-        filename = file_name + '-{epoch:02d}-{val_loss:.03g}',  # Filename pattern
-        save_top_k=1,  # Save the top 3 models
-        monitor='val/mean_nmse_full',  # Metric to monitor for saving the best models
-        mode='min',  # Save the model with the minimum val_loss
-        save_last=True
+        file_name = f'{args.run_name}_{args.R}_{args.supervised}_{args.contrasts}_unique_id'
+
+    best_checkpoint_callback = ModelCheckpoint(
+        dirpath='/home/kadotab/scratch/checkpoints',
+        filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
+        save_top_k=1,  # Only keep the best model
+        monitor='val/mean_nmse_full',
+        mode='min',
+        save_weights_only=True  # Only save model weights
+    )
+
+    # Checkpoint for the last model (including optimizer state)
+    last_checkpoint_callback = ModelCheckpoint(
+        dirpath='/home/kadotab/scratch/checkpoints',
+        filename=file_name + '-last',
+        save_top_k=1,  # Only keep the latest model
+        save_last=True,  # Ensures saving the last model
+        save_weights_only=False  # Save full model state including optimizer
     )
     activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
     prof_scheduler = schedule(
@@ -134,10 +144,12 @@ def main(args):
 
     hparams = model.hparams
     hparams.update(data_module.hparams)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, save_dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         callbacks=checkpoint_callback,
+                         callbacks=[last_checkpoint_callback, best_checkpoint_callback],
+                         #precision="16", 
+                         #profiler=pytorch_profiler
                          )
 
     print(hparams)
