@@ -218,7 +218,18 @@ class LearnedSSLLightning(plReconModel):
         estimate_lambda_img = k_to_img(estimate_lambda)/ scaling_factor
         fully_sampling_img = k_to_img(fs_k_space)/ scaling_factor
 
-        threshold_percentages = torch.tensor([0.14, 0.15, 0.15], device=self.device)
+        threshold_percentages = []
+        for contrast in self.contrast_order:
+            if contrast == 'flair':
+                threshold_percentages.append(0.14)
+            elif contrast == 't1':
+                threshold_percentages.append(0.15)
+            elif contrast == 't2':
+                threshold_percentages.append(0.15)
+            else:
+                threshold_percentages.append(0.1)
+                
+        threshold_percentages = torch.tensor(threshold_percentages, device=self.device)
         gt_max = gt_img.amax((-1, -2), keepdim=True)
         # Mask background
         mask = gt_img.gt(gt_max * threshold_percentages.unsqueeze(-1).unsqueeze(-1))
