@@ -77,14 +77,12 @@ class UndersampledDataModule(pl.LightningDataModule):
         super().setup(stage)
         data_dir = os.listdir(self.data_dir)
 
-        train_file = next((name for name in data_dir if 'train' in name))
-        val_file = next((name for name in data_dir if 'val' in name))
-        test_file = next((name for name in data_dir if 'test' in name))
 
-        train_dir = os.path.join(self.data_dir, train_file)
-        val_dir = os.path.join(self.data_dir, val_file)
-        test_dir = os.path.join(self.data_dir, test_file)
-        test_gt_dir = os.path.join(self.test_dir, test_file)
+        train_dir = os.path.join(self.data_dir, 'train')
+        val_dir = os.path.join(self.data_dir, 'val')
+        val_gt_dir = os.path.join(self.test_dir, 'val')
+        test_dir = os.path.join(self.data_dir, 'test')
+        test_gt_dir = os.path.join(self.test_dir, 'test')
 
         dataset_keyword_args = {
             'nx': self.resolution[0], 
@@ -102,53 +100,61 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'poly_order': 10
         }
 
-        self.train_dataset = self.dataset_class(
+
+
+        train_dataset = self.dataset_class(
                 train_dir, 
                 **dataset_keyword_args
                 )
+        self.train_dataset = UndersampleDecorator(
+                train_dataset,
+                original_ssdu_partioning=self.ssdu_partioning,
+                transforms=self.transforms,
+                **undersample_keyword_args
+                )
 
-        self.val_dataset = self.dataset_class(
+
+        noisy_val_dataset = self.dataset_class(
                 val_dir, 
                 **dataset_keyword_args
                 )
+        noisy_val_dataset_undersampled = UndersampleDecorator(
+                noisy_val_dataset,
+                original_ssdu_partioning=self.ssdu_partioning,
+                transforms=self.transforms,
+                **undersample_keyword_args
+                )
+        gt_val_dataset = self.dataset_class(
+            val_gt_dir, 
+            data_key=self.test_dataset_key, 
+            **dataset_keyword_args
+        )
+        self.val_dataset = TestDataset(
+            noisy_val_dataset_undersampled,
+            gt_val_dataset, 
+            transforms=None
+        )
+
 
         noisy_test_dataset = self.dataset_class(
                 test_dir, 
                 **dataset_keyword_args
                 )
-        
         gt_test_dataset = self.dataset_class(
             test_gt_dir, 
             data_key=self.test_dataset_key, 
             **dataset_keyword_args
         )
-
-        # NO TRANSFORM HERE. TRANSFORM LATER DURING TEST DATASET
-        noisy_test_dataset = UndersampleDecorator(
+        noisy_test_dataset_undersampled = UndersampleDecorator(
                 noisy_test_dataset,
                 original_ssdu_partioning=self.ssdu_partioning,
-                **undersample_keyword_args
+                **undersample_keyword_args,
+                transforms=self.transforms
                 )
-        
-
-        self.train_dataset = UndersampleDecorator(
-                self.train_dataset,
-                original_ssdu_partioning=self.ssdu_partioning,
-                transforms=self.transforms,
-                **undersample_keyword_args
-                )
-
-        self.val_dataset = UndersampleDecorator(
-                self.val_dataset,
-                original_ssdu_partioning=self.ssdu_partioning,
-                transforms=self.transforms,
-                **undersample_keyword_args
-                )
-
         self.test_dataset = TestDataset(
-            noisy_test_dataset,
+            noisy_test_dataset_undersampled,
             gt_test_dataset, 
-            transforms=test_transform()
+            transforms=None
         )
         
 
@@ -188,6 +194,7 @@ class normalize_image_max(object):
 
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
+        data['scaling_factor'] = scaling_factor
         return data
 
 class normalize_k_max(object):
@@ -197,6 +204,7 @@ class normalize_k_max(object):
         
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
+        data['scaling_factor'] = scaling_factor
         return data
 
 class normalize_image_mean(object):
@@ -207,6 +215,7 @@ class normalize_image_mean(object):
 
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
+        data['scaling_factor'] = scaling_factor
         return data
 
 class normalize_image_mean2(object):
@@ -217,6 +226,7 @@ class normalize_image_mean2(object):
         
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
+        data['scaling_factor'] = scaling_factor
         return data
 
 class test_transform(object):

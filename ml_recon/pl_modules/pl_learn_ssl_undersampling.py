@@ -154,21 +154,23 @@ class LearnedSSLLightning(plReconModel):
         initial_mask = (undersampled_k != 0)[0, :, 0, :, :]
         lambda_set_plot = input_mask[0, :, 0, : ,:]
         loss_mask = loss_mask[0, :, 0, : ,:]
-        wandb_logger.log_image('train/lambda_set', self.split_along_contrasts(lambda_set_plot))
-        wandb_logger.log_image('train/loss_set', self.split_along_contrasts(loss_mask))
-        wandb_logger.log_image('train/initial_mask', self.split_along_contrasts(initial_mask))
+        wandb_logger.log_image('train_masks/lambda_set', self.split_along_contrasts(lambda_set_plot))
+        wandb_logger.log_image('train_masks/loss_set', self.split_along_contrasts(loss_mask))
+        wandb_logger.log_image('train_masks/initial_mask', self.split_along_contrasts(initial_mask))
 
         # plot probability if learn partitioning
         if self.enable_learn_partitioning:
             probability = self.partition_model.get_norm_probability()
-            wandb_logger.log_image('train/probability', self.split_along_contrasts(probability))
+            wandb_logger.log_image('probability', self.split_along_contrasts(probability))
 
 
     def validation_step(self, batch, batch_idx):
-        undersampled_k = batch['undersampled']
-        fully_sampled = batch['fs_k_space']
+        noisy_data = batch[0]
+        gt_data = batch[1]
+        undersampled_k = noisy_data['undersampled']
+        fully_sampled = noisy_data['fs_k_space']
 
-        input_mask, loss_mask = self.partition_k_space(batch)
+        input_mask, loss_mask = self.partition_k_space(noisy_data)
         estimates = self.recon_model.forward(
             undersampled_k,
             fully_sampled, 
@@ -192,27 +194,38 @@ class LearnedSSLLightning(plReconModel):
         else:
             plot_images = True
 
-        under = batch['undersampled']
-        fs_k_space = batch['fs_k_space']
+        noisy_data = batch[0]
+        gt_data = batch[1]
 
-        lambda_set, loss_set = self.partition_k_space(batch)
+        under = noisy_data['undersampled']
+        fs_k_space = noisy_data['fs_k_space']
+        normalization_factor = noisy_data['scaling_factor'] # transformation norm factor
+
+        lambda_set, loss_set = self.partition_k_space(noisy_data)
         mask = lambda_set + loss_set
         
         # get recon estimates 
         estimate_full = self.recon_model.pass_through_model(under, mask, fs_k_space) 
         estimate_lambda = self.recon_model.pass_through_model(under, lambda_set, fs_k_space) 
+        estimate_full *= normalization_factor 
+        estimate_lambda *= normalization_factor 
+        fs_k_space *= normalization_factor
 
         # ifft and root sum of squares. All iamges scaled by the max of fully sampled images.
-        image_scaling = k_to_img(fs_k_space).amax((-1, -2), keepdim=True)
-        fully_sampling_img = self.k_to_img_scaled(fs_k_space, image_scaling)
-        estimate_full_img = self.k_to_img_scaled(estimate_full, image_scaling)
-        estimate_lambda_img = self.k_to_img_scaled(estimate_lambda, image_scaling)
+        scaling_factor = gt_data.amax((-1, -2), keepdim=True)
+        gt_img = gt_data / scaling_factor
+        estimate_full_img = k_to_img(estimate_full) / scaling_factor
+        estimate_lambda_img = k_to_img(estimate_lambda)/ scaling_factor
+        fully_sampling_img = k_to_img(fs_k_space)/ scaling_factor
 
+        threshold_percentages = torch.tensor([0.14, 0.15, 0.15], device=self.device)
+        gt_max = gt_img.amax((-1, -2), keepdim=True)
         # Mask background
-        mask = fully_sampling_img > 0.15
+        mask = gt_img.gt(gt_max * threshold_percentages.unsqueeze(-1).unsqueeze(-1))
         estimate_lambda_img *= mask
         estimate_full_img *= mask
         fully_sampling_img *= mask
+        gt_img *= mask
         
         diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10
         diff_est_lambda_plot = (estimate_lambda_img - fully_sampling_img).abs()*10
@@ -222,7 +235,8 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger = self.logger
             wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/estimate_lambda_{batch_idx}', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(gt_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/estimate_full_diff_{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
             wandb_logger.log_image(f'val_images/estimate_lambda_diff_{batch_idx}', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
 
@@ -231,7 +245,7 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image('val_masks/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
             wandb_logger.log_image('val_masks/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
 
-        
+         
         # log image space metrics 
         ssim_full = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_full_img)
         nmse_full = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_full_img)
@@ -244,6 +258,20 @@ class LearnedSSLLightning(plReconModel):
             self.log(f"val_nmse/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
         self.log(f"val/mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
         self.log(f"val/mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
+
+        # log gt metrics 
+        ssim_full = evaluate_over_contrasts(self.ssim_func, gt_img, estimate_full_img)
+        nmse_full = evaluate_over_contrasts(nmse, gt_img, estimate_full_img)
+        ssim_lambda = evaluate_over_contrasts(self.ssim_func, gt_img, estimate_lambda_img)
+        nmse_lambda = evaluate_over_contrasts(nmse, gt_img, estimate_lambda_img)
+        for i, contrast in enumerate(self.contrast_order):
+            self.log(f"GT_val_ssim/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"GT_val_nmse/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
+            self.log(f"GT_val_ssim/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
+            self.log(f"GT_val_nmse/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
+        self.log(f"val/GT_mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
+        self.log(f"val/GT_mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
+
 
     def test_step(self, batch, batch_index):
         k_space = batch[0]
@@ -351,11 +379,11 @@ class LearnedSSLLightning(plReconModel):
         """
         R_value = self.partition_model.get_R()
         for i, contrast in enumerate(self.contrast_order):
-            self.log(f'train/R_{contrast}', R_value[i])
+            self.log(f'sampling_metrics/R_{contrast}', R_value[i])
 
     def log_k_space_set_ratios(self, input_mask, initial_mask):
         for i, contrast in enumerate(self.contrast_order):
-            self.log(f'train/lambda-over-inverse_{contrast}', 
+            self.log(f'sampling_metrics/lambda-over-inverse_{contrast}', 
                      input_mask[:, i, 0, :, :].sum()/initial_mask[:, i, 0, :, :].sum(), 
                      on_epoch=True, on_step=False)
 
