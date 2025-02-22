@@ -33,8 +33,7 @@ class TestDataset(Dataset):
     def __getitem__(self, index):
         k_space = self.undersampled_dataset[index]
         image = torch.from_numpy(self.ground_truth_dataset[index])
-        scaling_factor = 1
         if self.transforms: 
-            k_space, image, scaling_factor = self.transforms((k_space, image))
-        return k_space, image, scaling_factor
+            k_space, image = self.transforms((k_space, image))
+        return k_space, image
 
