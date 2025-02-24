@@ -56,6 +56,9 @@ class plReconModel(pl.LightningModule):
                     data_range=(0, contrast_ground_truth.max().item()),
                     return_full_image=True
                     )
+                
+                ssim_val = ssim_image[image_background_mask[i, contrast_index].unsqueeze(0).unsqueeze(0)]
+                ssim_val = ssim_val.mean()
                 assert isinstance(ssim_val, torch.Tensor)          
                 psnr_val = psnr(contrast_ground_truth, contrast_estimated)
                 
@@ -94,16 +97,15 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0.09
+        image_background_mask = ground_truth_image > scaling_factor * 0.10
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
 
-        difference_image = (ground_truth_image - estimated_image).abs()
-
         estimated_image *= image_background_mask
         ground_truth_image *= image_background_mask
 
+        difference_image = (ground_truth_image - estimated_image).abs()
         
         estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]

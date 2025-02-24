@@ -41,29 +41,13 @@ def main(args):
     # Checkpoint for the last model (including optimizer state)
     last_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoin_dir,
-        filename=file_name + '-last',
+        filename=file_name + '-last-{epoch:02d}',
         save_top_k=1,  # Only keep the latest model
-        save_last=True,  # Ensures saving the last model
+        monitor='epoch',
+        mode='max',
         save_weights_only=False  # Save full model state including optimizer
     )
-    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA] 
-    prof_scheduler = schedule(
-        warmup=2,
-        active=5, 
-        skip_first=5,
-        wait=0,
-    )
-    pytorch_profiler = PyTorchProfiler(
-        activities=activities,
-        schedule=prof_scheduler,
-        export_to_chrome=True,
-        dirpath='.',
-        filename='prof'
-    )
-    advanced_prof = AdvancedProfiler(
-        dirpath='.', filename='prof'
-    )
-
+    
 
     data_dir = args.data_dir
     nx = args.nx
@@ -146,12 +130,10 @@ def main(args):
 
     hparams = model.hparams
     hparams.update(data_module.hparams)
-    wandb_logger = WandbLogger(project=args.project, log_model=False, name=args.run_name)
+    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, dir='/home/kadotab/scratch')
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=[last_checkpoint_callback, best_checkpoint_callback],
-                         #precision="16", 
-                         #profiler=pytorch_profiler
                          )
 
     print(hparams)

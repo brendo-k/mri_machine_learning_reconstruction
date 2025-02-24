@@ -221,11 +221,11 @@ class LearnedSSLLightning(plReconModel):
         threshold_percentages = []
         for contrast in self.contrast_order:
             if contrast == 'flair':
-                threshold_percentages.append(0.14)
+                threshold_percentages.append(0.1)
             elif contrast == 't1':
-                threshold_percentages.append(0.15)
+                threshold_percentages.append(0.1)
             elif contrast == 't2':
-                threshold_percentages.append(0.15)
+                threshold_percentages.append(0.1)
             else:
                 threshold_percentages.append(0.1)
                 
