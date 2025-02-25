@@ -6,7 +6,7 @@ from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.test_dataset import TestDataset
 
 from torch.utils.data import DataLoader
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 
 import pytorch_lightning as pl
 
@@ -16,7 +16,7 @@ import os
 class UndersampledDataModule(pl.LightningDataModule):
     def __init__(
             self, 
-            dataset_name: str,
+            dataset_name: Literal['fastmri', 'm4raw', 'brats'],
             data_dir: str, 
             test_dir: str,
             batch_size: int, 
@@ -25,7 +25,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),
             num_workers: int = 0,
-            norm_method: str = 'k',
+            norm_method: Union[Literal['k', 'img', 'image_mean', 'image_mean2', 'std'], None] = 'k',
             self_supervsied: bool = False,
             sampling_method: str = '2d',
             ssdu_partioning: bool = False,
@@ -35,18 +35,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
         super().__init__()
         self.save_hyperparameters()
-        
-        dataset_name = str.lower(dataset_name)
-        if dataset_name == 'brats': 
-            self.dataset_class = BratsDataset
-            self.test_dataset_key = 'ground_truth'
-        elif dataset_name == 'fastmri':
-            self.dataset_class = FastMRIDataset
-            self.test_dataset_key = 'kspace'
-        elif dataset_name == 'm4raw':
-            self.dataset_class = M4Raw
-            self.test_dataset_key = 'reconstruction_rss'
-
+    
         self.data_dir = data_dir
         self.test_dir = test_dir
         self.contrasts = contrasts
@@ -62,16 +51,39 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.norm_method = norm_method
         self.limit_volumes = limit_volumes
         
+        self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
+        self.transforms = self.setup_data_normalization(norm_method)
+
+    def setup_dataset_type(self, dataset_name):
+        dataset_name = str.lower(dataset_name)
+        if dataset_name == 'brats': 
+            dataset_class = BratsDataset
+            test_data_key = 'ground_truth'
+        elif dataset_name == 'fastmri':
+            dataset_class = FastMRIDataset
+            test_data_key = 'kspace'
+        elif dataset_name == 'm4raw':
+            dataset_class = M4Raw
+            test_data_key = 'reconstruction_rss'
+        else: 
+            raise ValueError(f'{dataset_name} is not a valid dataset name')
+        return dataset_class, test_data_key
+
+    def setup_data_normalization(self, norm_method):
         if norm_method == 'img':
-            self.transforms = normalize_image_max()
+            transforms = normalize_image_max()
         elif norm_method == 'k': 
-            self.transforms = normalize_k_max() 
+            transforms = normalize_k_max() 
         elif norm_method == 'image_mean':
-            self.transforms = normalize_image_mean() 
+            transforms = normalize_image_mean() 
         elif norm_method == 'image_mean2':
-            self.transforms = normalize_image_mean2() 
+            transforms = normalize_image_mean2() 
+        elif norm_method == 'std':
+            transforms = normalize_image_std()
         else:
-            self.transforms = None
+            transforms = None
+        return transforms
+    
 
     def setup(self, stage):
         super().setup(stage)
@@ -126,7 +138,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 )
         gt_val_dataset = self.dataset_class(
             val_gt_dir, 
-            data_key=self.test_dataset_key, 
+            data_key=self.test_data_key, 
             **dataset_keyword_args
         )
         self.val_dataset = TestDataset(
@@ -142,7 +154,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 )
         gt_test_dataset = self.dataset_class(
             test_gt_dir, 
-            data_key=self.test_dataset_key, 
+            data_key=self.test_data_key, 
             **dataset_keyword_args
         )
         noisy_test_dataset_undersampled = UndersampleDecorator(

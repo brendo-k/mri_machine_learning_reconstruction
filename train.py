@@ -197,8 +197,8 @@ if __name__ == '__main__':
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
-    model_group.add_argument('--k_loss', type=str, default='l1l2')
-    model_group.add_argument('--image_loss', type=str, default='ssim')
+    model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
+    model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad'])
     model_group.add_argument('--lambda_scaling', type=float, default=1)
 
     model_group.add_argument('--warmup_training', action='store_true')
