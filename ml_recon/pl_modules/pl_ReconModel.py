@@ -2,11 +2,12 @@ import torch
 import numpy as np
 from typing import Union 
 
-import cv2
-
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.loggers.wandb import WandbLogger
+
+import torch.nn.functional as F 
+import torch
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
@@ -36,7 +37,7 @@ class plReconModel(pl.LightningModule):
         estimated_image /= scaling_factor
         ground_truth_image = ground_truth_image / scaling_factor
 
-        background_mask = self.get_mask(ground_truth_image)
+        background_mask = self.get_image_background_mask(ground_truth_image)
         estimated_image = estimated_image * background_mask
         ground_truth_image = ground_truth_image * background_mask
 
@@ -104,7 +105,7 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = self.get_mask(ground_truth_image)
+        image_background_mask = self.get_image_background_mask(ground_truth_image)
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
@@ -119,23 +120,26 @@ class plReconModel(pl.LightningModule):
         difference_image = (difference_image*10).clamp(0, 1)
         difference_image = difference_image[0]
         image_background_mask = image_background_mask[0]
+        if isinstance(self.logger, WandbLogger):
+            self.plot_test_images(ground_truth_image, estimated_image, image_background_mask, difference_image)
+
+    def plot_test_images(self, ground_truth_image, estimated_image, image_background_mask, difference_image):
         wandb_logger = self.logger
-        if isinstance(wandb_logger, WandbLogger):
-            wandb_logger.log_image(f'test/recon', self.convert_image_for_plotting(estimated_image))
-            wandb_logger.log_image(f'test/target', self.convert_image_for_plotting(ground_truth_image))
-            wandb_logger.log_image(f'test/diff', self.convert_image_for_plotting((difference_image)))
-            wandb_logger.log_image(f'test/test_mask', self.convert_image_for_plotting(image_background_mask))
+        assert isinstance(wandb_logger, WandbLogger)
+        
+        wandb_logger.log_image(f'test/recon', self.convert_image_for_plotting(estimated_image))
+        wandb_logger.log_image(f'test/target', self.convert_image_for_plotting(ground_truth_image))
+        wandb_logger.log_image(f'test/diff', self.convert_image_for_plotting((difference_image)))
+        wandb_logger.log_image(f'test/test_mask', self.convert_image_for_plotting(image_background_mask))
 
 
-    def get_mask(self, ground_truth_image):
+    def get_image_background_mask(self, ground_truth_image):
         if not self.is_mask_testing:
             return torch.ones_like(ground_truth_image)
         img_max = ground_truth_image.amax((-1, -2), keepdim=True)
         mask_threshold = []
         for contrast in self.contrast_order:
-            if self.mask_threshold is None:
-                mask_threshold.append(0.1)
-            elif contrast.lower() in self.mask_threshold:
+            if self.mask_threshold and contrast.lower() in self.mask_threshold:
                 mask_threshold.append(self.mask_threshold[contrast.lower()])
             else:
                 mask_threshold.append(0.1)
@@ -145,18 +149,40 @@ class plReconModel(pl.LightningModule):
             
         image_background_mask = ground_truth_image > img_max * mask_threshold 
         mask =  self.dialate_mask(image_background_mask)
-        mask = torch.from_numpy(mask).to(ground_truth_image.device)
         
         return mask
 
 
     
     def dialate_mask(self, mask, kernel_size=7):
-        kernel = np.ones((kernel_size, kernel_size))
-        dialed_mask = np.zeros_like(mask.cpu().numpy())
-        for i in range(mask.shape[0]):
-            dialed_mask[i] = cv2.dilate(mask[i].cpu().numpy().astype(np.float32), kernel, iterations=1)
-        return dialed_mask
+        b, contrast, h, w = mask.shape
+        mask = mask.view(b*contrast, h, w)
+        dialed_mask = self.dilate(mask.to(torch.float32), kernel_size)
+        return dialed_mask.to(torch.bool).view(b, contrast, h, w)
+    
+    
+    def dilate(self, image: torch.Tensor, kernel_size: int = 3) -> torch.Tensor:
+        """
+        Applies morphological dilation to a 2D image tensor.
+        
+        Args:
+            image (torch.Tensor): Input tensor of shape (B, H, W).
+            kernel_size (int): Size of the square dilation kernel. Should be an odd number.
+        
+        Returns:
+            torch.Tensor: Dilated tensor of shape (B, H, W).
+        """
+        if image.dim() != 3:
+            raise ValueError("Input tensor must have shape (B, H, W)")
+        
+        # Convert (B, H, W) -> (B, 1, H, W) for compatibility with max_pool2d
+        image = image.unsqueeze(1)
+        
+        # Apply max pooling to simulate dilation
+        dilated = F.max_pool2d(image, kernel_size=kernel_size, stride=1, padding=kernel_size // 2)
+        
+        # Remove extra channel dimension
+        return dilated.squeeze(1)
 
     
     def convert_image_for_plotting(self, image: torch.Tensor):
