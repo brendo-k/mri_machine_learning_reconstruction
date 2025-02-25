@@ -36,7 +36,7 @@ def main(args):
         thresholds = None
         
     if args.checkpoint: 
-        model, data_module = load_checkpoint(args, args.data_dir)
+        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
     else:
         data_module = UndersampledDataModule(
                 args.dataset, 
@@ -116,10 +116,10 @@ def main(args):
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
-def load_checkpoint(args, data_dir):
+def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
-    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir)
+    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, test_dir=test_dir)
     data_module.setup('train')
     return model, data_module
 
