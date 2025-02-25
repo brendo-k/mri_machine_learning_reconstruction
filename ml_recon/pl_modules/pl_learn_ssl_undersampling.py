@@ -211,10 +211,11 @@ class LearnedSSLLightning(plReconModel):
         self_supervised = noisy_data['is_self_supervised']
 
         lambda_set, loss_set = self.partition_k_space(noisy_data)
-        if self_supervised:
+        if self_supervised.all():
             mask = lambda_set + loss_set
         else: 
-            mask = lambda_set + loss_set
+            # supervised (only take the lambda set)
+            mask = lambda_set
         
         # get recon estimates 
         estimate_full = self.recon_model.pass_through_model(under, mask, fs_k_space) 
