@@ -41,7 +41,7 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
     width = int(np.ceil(np.sqrt(slices)))
     height = int(np.ceil(slices/width))
 
-    fig, axes = plt.subplots(width, height, figsize=(10, 10))
+    fig, axes = plt.subplots(width, height, figsize=(10, 10), squeeze=False)
 
     for i in range(data.shape[0]):
         (x, y) = np.unravel_index(i, (width, height))
