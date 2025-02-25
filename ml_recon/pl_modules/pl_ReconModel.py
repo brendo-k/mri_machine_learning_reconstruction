@@ -9,9 +9,12 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 import torch.nn.functional as F 
 import torch
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
+from torchvision.transforms.functional import gaussian_blur
+
 
 from ml_recon.utils import root_sum_of_squares, ifft_2d_img
 from ml_recon.utils.evaluation_functions import nmse, psnr
+
 
 
 class plReconModel(pl.LightningModule):
@@ -146,8 +149,10 @@ class plReconModel(pl.LightningModule):
         
         mask_threshold = torch.tensor(mask_threshold, device=ground_truth_image.device)
         mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
-            
-        image_background_mask = ground_truth_image > img_max * mask_threshold 
+        
+        ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=15, sigma=25.0) # type: ignore
+        
+        image_background_mask = ground_truth_blurred > img_max * mask_threshold 
         mask =  self.dialate_mask(image_background_mask)
         
         return mask
