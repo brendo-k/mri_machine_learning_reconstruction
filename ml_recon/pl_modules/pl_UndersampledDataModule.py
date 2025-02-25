@@ -229,6 +229,17 @@ class normalize_image_mean2(object):
         data['scaling_factor'] = scaling_factor
         return data
 
+class normalize_image_std(object):
+    def __call__(self, data):
+        input = data['fs_k_space']
+        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        scaling_factor = img.std((1, 2), keepdim=True).unsqueeze(1)
+        
+        data['undersampled'] /= scaling_factor
+        data['fs_k_space'] /= scaling_factor
+        data['scaling_factor'] = scaling_factor
+        return data
+
 class test_transform(object):
     def __call__(self, data):
         data, img = data
