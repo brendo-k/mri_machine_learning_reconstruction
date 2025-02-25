@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
-from typing import Literal
+from typing import Literal, Union
 
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
@@ -31,9 +31,15 @@ class LearnedSSLLightning(plReconModel):
             enable_warmup_training: bool = False,
             pass_through_size: int = 10,
             use_supervised_image_loss: bool = False, 
-            weight_decay: float = 0
+            weight_decay: float = 0, 
+            is_mask_testing: bool = True,
+            mask_theshold: Union[dict, None] = None
             ):
-        super().__init__(contrast_order=varnet_config.contrast_order)
+        super().__init__(
+            contrast_order=varnet_config.contrast_order,
+            is_mask_testing=is_mask_testing,
+            mask_threshold=mask_theshold
+        )
         self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
 
         if enable_learn_partitioning:
@@ -52,6 +58,8 @@ class LearnedSSLLightning(plReconModel):
         self.pass_through_size = pass_through_size
         self.use_superviesd_image_loss = use_supervised_image_loss
         self.weight_decay = weight_decay
+        self.mask_threshold = mask_theshold
+        self.test_metrics = is_mask_testing
         
 
         # loss function init
@@ -183,9 +191,9 @@ class LearnedSSLLightning(plReconModel):
         loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
         loss = sum(loss for loss in loss_dict.values())
 
-        self.log_scalar(f"val/loss", loss, prog_bar=True, sync_dist=True)
+        self.log_scalar(f"val_losses/loss", loss, prog_bar=True, sync_dist=True)
         for key, value in loss_dict.items():
-            self.log_scalar(f"val/{key}", value)
+            self.log_scalar(f"val_losses/{key}", value)
     
 
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
@@ -200,9 +208,13 @@ class LearnedSSLLightning(plReconModel):
         under = noisy_data['undersampled']
         fs_k_space = noisy_data['fs_k_space']
         normalization_factor = noisy_data['scaling_factor'] # transformation norm factor
+        self_supervised = noisy_data['is_self_supervised']
 
         lambda_set, loss_set = self.partition_k_space(noisy_data)
-        mask = lambda_set + loss_set
+        if self_supervised:
+            mask = lambda_set + loss_set
+        else: 
+            mask = lambda_set + loss_set
         
         # get recon estimates 
         estimate_full = self.recon_model.pass_through_model(under, mask, fs_k_space) 
@@ -218,38 +230,24 @@ class LearnedSSLLightning(plReconModel):
         estimate_lambda_img = k_to_img(estimate_lambda)/ scaling_factor
         fully_sampling_img = k_to_img(fs_k_space)/ scaling_factor
 
-        threshold_percentages = []
-        for contrast in self.contrast_order:
-            if contrast == 'flair':
-                threshold_percentages.append(0.1)
-            elif contrast == 't1':
-                threshold_percentages.append(0.1)
-            elif contrast == 't2':
-                threshold_percentages.append(0.1)
-            else:
-                threshold_percentages.append(0.1)
-                
-        threshold_percentages = torch.tensor(threshold_percentages, device=self.device)
-        gt_max = gt_img.amax((-1, -2), keepdim=True)
-        # Mask background
-        mask = gt_img.gt(gt_max * threshold_percentages.unsqueeze(-1).unsqueeze(-1))
+        mask = self.get_mask(gt_img)
+
         estimate_lambda_img *= mask
         estimate_full_img *= mask
         fully_sampling_img *= mask
         gt_img *= mask
         
         diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10
-        diff_est_lambda_plot = (estimate_lambda_img - fully_sampling_img).abs()*10
+        gt_diff = (estimate_full_img - gt_img).abs()*10
 
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
             wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/estimate_lambda_{batch_idx}', self.split_along_contrasts(estimate_lambda_img[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(gt_img[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/estimate_full_diff_{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image(f'val_images/estimate_lambda_diff_{batch_idx}', self.split_along_contrasts(diff_est_lambda_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images/diff_gt{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
 
             lambda_set_plot = lambda_set[0, :, 0, : ,:]
             loss_mask = loss_set[0, :, 0, : ,:]

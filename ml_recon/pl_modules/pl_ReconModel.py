@@ -1,5 +1,8 @@
 import torch
 import numpy as np
+from typing import Union 
+
+import cv2
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -16,9 +19,11 @@ class plReconModel(pl.LightningModule):
     Most recon networks here inhereit from this class. 
     """
 
-    def __init__(self, contrast_order):
+    def __init__(self, contrast_order, is_mask_testing=True, mask_threshold: Union[dict, None] = None):
         super().__init__()
         self.contrast_order = contrast_order
+        self.is_mask_testing = is_mask_testing
+        self.mask_threshold = mask_threshold
 
 
     def test_step(self, batch, batch_index):
@@ -27,24 +32,26 @@ class plReconModel(pl.LightningModule):
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0.10
 
         estimated_image /= scaling_factor
-        ground_truth_image_scaled = ground_truth_image / scaling_factor
+        ground_truth_image = ground_truth_image / scaling_factor
 
-        estimated_image_mask = estimated_image * image_background_mask
-        ground_truth_image_mask = ground_truth_image_scaled * image_background_mask
+        background_mask = self.get_mask(ground_truth_image)
+        estimated_image = estimated_image * background_mask
+        ground_truth_image = ground_truth_image * background_mask
 
         average_ssim = 0
         average_psnr = 0
         average_nmse = 0
-        for contrast_index in range(len(self.contrast_order)):
-            contrast_ssim = 0
+        for contrast_index in range(len(self.contrast_order)):            
             contrast_psnr = 0
             contrast_nmse = 0
+            contrast_ssim = 0
             for i in range(ground_truth_image.shape[0]):
-                contrast_ground_truth = ground_truth_image_mask[i, contrast_index, :, :]
-                contrast_estimated = estimated_image_mask[i, contrast_index, :, :]
+                contrast_ground_truth = ground_truth_image[i, contrast_index, :, :]
+                contrast_estimated = estimated_image[i, contrast_index, :, :]
+                contrast_mask = background_mask[i, contrast_index, :, :]
+                contrast_mask = contrast_mask[None, None, :, :]
                 contrast_ground_truth = contrast_ground_truth[None, None, :, :]
                 contrast_estimated = contrast_estimated[None, None, :, :]
 
@@ -57,7 +64,7 @@ class plReconModel(pl.LightningModule):
                     return_full_image=True
                     )
                 
-                ssim_val = ssim_image[image_background_mask[i, contrast_index].unsqueeze(0).unsqueeze(0)]
+                ssim_val = ssim_image[contrast_mask]
                 ssim_val = ssim_val.mean()
                 assert isinstance(ssim_val, torch.Tensor)          
                 psnr_val = psnr(contrast_ground_truth, contrast_estimated)
@@ -77,7 +84,6 @@ class plReconModel(pl.LightningModule):
             average_psnr += contrast_psnr
             average_nmse += contrast_nmse
 
-
         average_nmse /= ground_truth_image.shape[1]
         average_psnr /= ground_truth_image.shape[1]
         average_ssim /= ground_truth_image.shape[1]
@@ -89,15 +95,16 @@ class plReconModel(pl.LightningModule):
             'loss': 0,
             'estimate_image': estimated_image,
             'ground_truth_image': ground_truth_image,
-            'mask': image_background_mask
+            'mask': background_mask
         }
+
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
         estimate_k, ground_truth_image = batch
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
-        image_background_mask = ground_truth_image > scaling_factor * 0.10
+        image_background_mask = self.get_mask(ground_truth_image)
 
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
@@ -120,31 +127,38 @@ class plReconModel(pl.LightningModule):
             wandb_logger.log_image(f'test/test_mask', self.convert_image_for_plotting(image_background_mask))
 
 
+    def get_mask(self, ground_truth_image):
+        if not self.is_mask_testing:
+            return torch.ones_like(ground_truth_image)
+        img_max = ground_truth_image.amax((-1, -2), keepdim=True)
+        mask_threshold = []
+        for contrast in self.contrast_order:
+            if self.mask_threshold is None:
+                mask_threshold.append(0.1)
+            elif contrast.lower() in self.mask_threshold:
+                mask_threshold.append(self.mask_threshold[contrast.lower()])
+            else:
+                mask_threshold.append(0.1)
+        
+        mask_threshold = torch.tensor(mask_threshold, device=ground_truth_image.device)
+        mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
+            
+        image_background_mask = ground_truth_image > img_max * mask_threshold 
+        mask =  self.dialate_mask(image_background_mask)
+        mask = torch.from_numpy(mask).to(ground_truth_image.device)
+        
+        return mask
+
+
+    
+    def dialate_mask(self, mask, kernel_size=7):
+        kernel = np.ones((kernel_size, kernel_size))
+        dialed_mask = np.zeros_like(mask.cpu().numpy())
+        for i in range(mask.shape[0]):
+            dialed_mask[i] = cv2.dilate(mask[i].cpu().numpy().astype(np.float32), kernel, iterations=1)
+        return dialed_mask
+
+    
     def convert_image_for_plotting(self, image: torch.Tensor):
         contrasts = image.shape[0]
         return np.split(image.unsqueeze(1).cpu().numpy(), contrasts, 0)
-
-
-    @torch.no_grad()
-    def plot_images(self, estimate_k, k_space, mask, mode='train'):
-        estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
-        fully_sampled_image = root_sum_of_squares(ifft_2d_img(k_space), coil_dim=2)
-        
-        # in ssdu target is other set
-        estimated_image = estimated_image[0]/fully_sampled_image[0].amax((-1, -2), keepdim=True)
-        fully_sampled_image = fully_sampled_image[0]/fully_sampled_image[0].amax((-1, -2), keepdim=True)
-        diff = (estimated_image - fully_sampled_image).abs()*10
-        k_space_scaled = k_space.abs()/(k_space.abs().max() / 50) 
-
-        estimated_image = estimated_image.clamp(0, 1)
-        fully_sampled_image = fully_sampled_image.clamp(0, 1)
-        diff = diff.clamp(0, 1)
-        k_space_scaled = k_space_scaled.clamp(0, 1)
-        if self.logger and isinstance(self.logger, WandbLogger):
-            wandb_logger = self.logger
-
-            contrasts = estimated_image.shape[0]
-            wandb_logger.log_image(mode + '/recon', np.split(estimated_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/fully_sampled', np.split(fully_sampled_image.unsqueeze(1).cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/mask', np.split(mask[0, :, [0], :, :].cpu().numpy(), contrasts, 0))
-            wandb_logger.log_image(mode + '/diff', np.split(diff.unsqueeze(1).cpu().numpy(), contrasts, 0))

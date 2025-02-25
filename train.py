@@ -22,49 +22,28 @@ from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
-    unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-    file_name = unique_id
-    if args.run_name: 
-        contrasts = ','.join(args.contrasts)
-        file_name = f'{args.run_name}_{args.R}_{args.supervised}_{contrasts}_{unique_id}'
+    file_name = get_unique_file_name(args)
 
-    checkpoin_dir = '/home/kadotab/scratch/checkpoints'
-    best_checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoin_dir,
-        filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
-        save_top_k=1,  # Only keep the best model
-        monitor='val/mean_nmse_full',
-        mode='min',
-        save_weights_only=True  # Only save model weights
-    )
-
-    # Checkpoint for the last model (including optimizer state)
-    last_checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoin_dir,
-        filename=file_name + '-last-{epoch:02d}',
-        save_top_k=1,  # Only keep the latest model
-        monitor='epoch',
-        mode='max',
-        save_weights_only=False  # Save full model state including optimizer
-    )
+    best_checkpoint_callback, last_checkpoint_callback = build_checkpoint_callbacks(file_name)
     
-
-    data_dir = args.data_dir
-    nx = args.nx
-    ny = args.ny
-
+    possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
+    thresholds = {}
+    for contrast in possible_contrasts:
+        threshold = getattr(args, f'mask_threshold_{contrast}')
+        if threshold is not None:
+            thresholds[contrast] = threshold
+    if len(thresholds) == 0: 
+        thresholds = None
+        
     if args.checkpoint: 
-        print("Loading Checkpoint!")
-        model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
-        data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir)
-        data_module.setup('train')
+        model, data_module = load_checkpoint(args, args.data_dir)
     else:
         data_module = UndersampledDataModule(
                 args.dataset, 
-                data_dir, 
+                args.data_dir, 
                 args.test_dir,
                 batch_size=args.batch_size, 
-                resolution=(ny, nx),
+                resolution=(args.ny, args.nx),
                 num_workers=args.num_workers,
                 contrasts=args.contrasts,
                 sampling_method=args.sampling_method,
@@ -119,27 +98,60 @@ def main(args):
             use_supervised_image_loss=args.supervised_image,
             weight_decay=args.weight_decay,
             pass_through_size=args.pass_through_size,
+            mask_theshold=thresholds,
             )
     torch.set_float32_matmul_precision('medium')
 
-
-    ## AUTOMATIC HYPERPARAMETER TUNING
-    #tuner = Tuner(trainer)
-    #tuner.scale_batch_size(model, mode='binsearch', datamodule=data_module)
-    #tuner.lr_find(model, datamodule=data_module, min_lr=1e-4, max_lr=1e-1)
-
-    hparams = model.hparams
-    hparams.update(data_module.hparams)
-    wandb_logger = WandbLogger(project=args.project, log_model=True, name=args.run_name, dir='/home/kadotab/scratch')
+    wandb_logger = WandbLogger(
+        project=args.project, 
+        log_model=True, 
+        name=args.run_name, 
+        save_dir='/home/kadotab/scratch'
+        )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=[last_checkpoint_callback, best_checkpoint_callback],
                          )
 
-    print(hparams)
-    wandb_logger.experiment.config.update(model.hparams)
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
+
+def load_checkpoint(args, data_dir):
+    print("Loading Checkpoint!")
+    model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
+    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir)
+    data_module.setup('train')
+    return model, data_module
+
+def build_checkpoint_callbacks(file_name):
+    checkpoin_dir = '/home/kadotab/scratch/checkpoints'
+    best_checkpoint_callback = ModelCheckpoint(
+        dirpath=checkpoin_dir,
+        filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
+        save_top_k=1,  # Only keep the best model
+        monitor='val/mean_nmse_full',
+        mode='min',
+        save_weights_only=True  # Only save model weights
+    )
+    # Checkpoint for the last model (including optimizer state)
+    last_checkpoint_callback = ModelCheckpoint(
+        dirpath=checkpoin_dir,
+        filename=file_name + '-last-{epoch:02d}',
+        save_top_k=1,  # Only keep the latest model
+        monitor='epoch',
+        mode='max',
+        save_weights_only=False  # Save full model state including optimizer
+    )
+    
+    return best_checkpoint_callback,last_checkpoint_callback
+
+def get_unique_file_name(args):
+    unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    file_name = unique_id
+    if args.run_name: 
+        contrasts = ','.join(args.contrasts)
+        file_name = f'{args.run_name}_{args.R}_{args.supervised}_{contrasts}_{unique_id}'
+    return file_name
 
 
 if __name__ == '__main__': 
@@ -199,6 +211,10 @@ if __name__ == '__main__':
     model_group.add_argument('--inverse_data_no_grad', action='store_true')
     model_group.add_argument('--all_data_no_grad', action='store_true')
     model_group.add_argument('--learn_sampling', action='store_true')
+    model_group.add_argument('--mask_threshold_t2', type=float)
+    model_group.add_argument('--mask_threshold_t1', type=float)
+    model_group.add_argument('--mask_threshold_flair', type=float)
+    model_group.add_argument('--mask_threshold_t1ce', type=float)
 
     model_group.add_argument('--supervised', action='store_true')
     model_group.add_argument('--supervised_image', action='store_true')
