@@ -71,7 +71,6 @@ def main(args):
             k_center_region = 10,
             sigmoid_slope_probability = args.sigmoid_slope1,
             sigmoid_slope_sampling = args.sigmoid_slope2,
-            is_learn_R = args.learn_R,
             is_warm_start = args.warm_start,
         )
 
@@ -123,7 +122,7 @@ def load_checkpoint(args, data_dir, test_dir):
     return model, data_module
 
 def build_checkpoint_callbacks(file_name):
-    checkpoin_dir = './checkpoints'
+    checkpoin_dir = '/home/scratch/checkpoints'
     best_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoin_dir,
         filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
@@ -183,7 +182,6 @@ if __name__ == '__main__':
 
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)
-    model_group.add_argument('--learn_R', action='store_true')
     model_group.add_argument('--warm_start', action='store_true')
     model_group.add_argument('--chans', type=int, default=32)
     model_group.add_argument('--depth', type=int, default=4)

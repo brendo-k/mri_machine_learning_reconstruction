@@ -85,7 +85,7 @@ def test_norm_probability(ssl_model: LearnPartitioning):
     model = ssl_model
 
     # Forward pass
-    probability = model.get_norm_probability()
+    probability = model.get_probability()
     center_h_box, center_w_box = get_center_slice(probability, ACS_LINES)
 
     assert probability.shape == model.config.image_size

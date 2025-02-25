@@ -79,8 +79,8 @@ class VarnetBlock(nn.Module):
         super().__init__()
         self.model = model
 
-        self.complex_forward = complex_conversion.complex_to_polar
-        self.complex_backward = complex_conversion.polar_to_complex
+        self.complex_forward = complex_conversion.complex_to_real
+        self.complex_backward = complex_conversion.real_to_complex
 
 
     # sensetivities data [B, contrast, C, H, W]

@@ -17,7 +17,6 @@ class LearnPartitionConfig:
     k_center_region: int = 10
     sigmoid_slope_probability: float = 5.0
     sigmoid_slope_sampling: float = 200
-    is_learn_R: bool = False
     is_warm_start: bool = True
 
 class LearnPartitioning(nn.Module):
@@ -33,7 +32,6 @@ class LearnPartitioning(nn.Module):
         self.config = learn_part_config
         
         # Initialize R values
-        self._setup_R_values(learn_part_config)
         self._setup_sampling_weights(learn_part_config)
 
 
@@ -50,7 +48,7 @@ class LearnPartitioning(nn.Module):
 
     def get_mask(self, batch_size):
         # Calculate probability and normalize
-        norm_probability = self.get_norm_probability()
+        norm_probability = self.get_probability_distribution()
         
         # make sure nothing is nan 
         assert not torch.isnan(norm_probability).any()
@@ -71,91 +69,18 @@ class LearnPartitioning(nn.Module):
         return sampling_mask.unsqueeze(2)
     
     
-    def get_norm_probability(self):
+    def get_probability_distribution(self):
         sampling_weights = self.sampling_weights
+        probability = torch.sigmoid(sampling_weights * self.config.sigmoid_slope_probability)
+        # If this was LOUPE there would be a pdf normalization step here. We decide to omit this
 
-        # get probability from sampling weights. Pass through sigmoid. 
-        # NOTE this list comprehension is needed because of errors in autograd otherwise. It is due to 
-        # multiplying each probability map per contrast by a different scalar.
-        probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
+        # set 10x10 box to always be sampled. Need to clone because of inplace opeartion
+        c, h, w = sampling_weights.shape
+        acs_prob = probability.clone()
+        acs_prob[:, h//2-5:h//2+5,w//2-5:w//2+5] = 1
 
-
-        # normalize the prob distribution to this R (this step is why we need the list of tensors for probability distribution)
-        norm_probability = self.norm_prob(probability)
-
-        # we can now concat the list together now. We are safe
-        norm_probability = torch.stack(norm_probability, dim=0)
-
-        return norm_probability
-    
-    
-    def norm_prob(self, probability:List[torch.Tensor], center_region=10):
-        image_shape = probability[0].shape
-        cur_R = self.get_R()
-
-        # if not learn probability, no need to norm
-        if not self.config.is_learn_R:
-            probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
-        else:
-            modified_probability = [prob.clone() for prob in probability]
-            center = [image_shape[0]//2, image_shape[1]//2]
-
-            center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
-            center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
-            # acs box is now ones and everything else is zeros
-            for i in range(len(probability)):
-                modified_probability[i][center_bb_y, center_bb_x] = 1
-
-            probability = modified_probability
-
-        return probability
-    
-    
-    def norm_2d_probability(self, probability, cur_R, center_region, image_shape):
-        center = [image_shape[0]//2, image_shape[1]//2]
-
-        center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
-        center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
-            
-        probability_sum = torch.zeros((len(probability), 1), device=probability[0].device)
-
-        # create acs mask of zeros for acs box and zeros elsewhere
-        center_mask = torch.ones(image_shape, device=probability[0].device)
-        center_mask[center_bb_y, center_bb_x] = 0
-
-        for i in range(len(probability)):
-            probability[i] = probability[i] * center_mask
-            probability_sum[i] = probability[i].sum(dim=[-1, -2])
-            
-        for i in range(len(probability)):
-            probability_total = image_shape[-1] * image_shape[-2]/ cur_R[i]
-            probability_total -= center_region ** 2
-
-            # we need to find cur_R * scaling_factor = R
-            # scaling down the values of 1
-            if probability_sum[i] > probability_total:
-                scaling_factor = probability_total / probability_sum[i]
-                assert scaling_factor <= 1 and scaling_factor >= 0
-
-                probability[i] = (probability[i] * scaling_factor)
-
-            # scaling down the complement probability (scaling down 0)
-            else:
-                inverse_total = image_shape[1]*image_shape[0]*(1 - 1/cur_R[i])
-                inverse_sum = (image_shape[1]*image_shape[0]) - probability_sum[i] 
-                inverse_sum -= center_region**2
-                inverse_total = torch.maximum(inverse_total, torch.zeros_like(inverse_sum))
-                scaling_factor = inverse_total / inverse_sum
-                assert scaling_factor <= 1 and scaling_factor >= 0
-
-                inv_prob = (1 - probability[i])*scaling_factor
-                probability[i] = 1 - inv_prob
-                    
-        # acs box is now ones and everything else is zeros
-        for i in range(len(probability)):
-            probability[i][center_bb_y, center_bb_x] = 1
-           
-        return probability
+       
+        return acs_prob
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
         if config.is_warm_start: 
@@ -168,22 +93,12 @@ class LearnPartitioning(nn.Module):
             init_prob[:, h//2 - config.k_center_region//2:h//2 + config.k_center_region//2, w//2 - config.k_center_region//2:w//2 + config.k_center_region//2] = 0.99
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability)
 
-    def _setup_R_values(self, config: LearnPartitionConfig):
-        if config.is_learn_R: 
-            self.learned_R_value = nn.Parameter(torch.full((config.image_size[0],), float(config.inital_R_value - 1)))
-        else: 
-            self.learned_R_value = torch.full((config.image_size[0],), float(config.inital_R_value))
-            
     def get_R(self) -> torch.Tensor:
-        if self.config.is_learn_R:
-            sampling_weights = self.sampling_weights
-            probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
-            cur_R = torch.ones_like(self.learned_R_value)
-            for i in range(len(self.learned_R_value)):
-                cur_R[i] = 1/probability[i].mean()
-                
-        else: 
-            cur_R = self.learned_R_value
+        sampling_weights = self.sampling_weights
+        probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
+        cur_R = torch.ones_like(self.learned_R_value)
+        for i in range(self.config.image_size[0]):
+            cur_R[i] = 1/probability[i].mean()
                 
         return cur_R
 

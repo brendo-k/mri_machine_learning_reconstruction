@@ -168,7 +168,7 @@ class LearnedSSLLightning(plReconModel):
 
         # plot probability if learn partitioning
         if self.enable_learn_partitioning:
-            probability = self.partition_model.get_norm_probability()
+            probability = self.partition_model.get_probability_distribution()
             wandb_logger.log_image('probability', self.split_along_contrasts(probability))
 
 
@@ -197,7 +197,7 @@ class LearnedSSLLightning(plReconModel):
     
 
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
-        if batch_idx > 4 and self.current_epoch % 10 != 0:
+        if batch_idx > 4 or self.current_epoch % 10 != 0:
             plot_images = False
         else:
             plot_images = True

@@ -82,18 +82,28 @@ class SensetivityModel_mc(nn.Module):
         # bugs in self-suprvised trainign as the center box size could change depending
         # on the sets. I have just hard coded this for now, but could be interesting to 
         # test different coil estimation methods 
-        acs_box_size = 10
-        height = mask.shape[-2]
-        width = mask.shape[-1]
-        center_x = width // 2
-        center_y = height // 2
+        # height doesn't matter (since column wise sampling) 
+        b, con, c, h, w = coil_k_spaces.shape
         
-        mask = torch.zeros((height, width), dtype=torch.bool, device=coil_k_spaces.device) 
+        # Take center row to estimate column with for acs
+        squeezed_mask = mask[:, :, 0, h//2, :].to(torch.int8)
+        center = squeezed_mask.shape[-1] // 2
+        # Get the first zero index starting from the center. This gives us "left"
+        # and "right" sides of ACS
+        left = torch.argmin(squeezed_mask[..., :center].flip(-1), dim=-1)
+        right = torch.argmin(squeezed_mask[..., center:], dim=-1)
 
-        acs_slice_x = slice(center_x-acs_box_size//2, center_x+acs_box_size//2)
-        mask[:, acs_slice_x] = 1
+        # force symmetric left and right acs boundries
+        num_low_frequencies_tensor = torch.min(left, right)
 
-        return coil_k_spaces * mask
+        center_mask = torch.zeros_like(coil_k_spaces, dtype=torch.bool)
+        # loop through num_low freq tensor and set acs lines to true
+        for i in range(num_low_frequencies_tensor.shape[0]):
+            for j in range(num_low_frequencies_tensor.shape[1]):
+                center_mask[i, j, ..., center-num_low_frequencies_tensor[i, j]:center + num_low_frequencies_tensor[i, j]] = True
+
+        assert not center_mask.isnan().any()
+        return coil_k_spaces * center_mask
         
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
