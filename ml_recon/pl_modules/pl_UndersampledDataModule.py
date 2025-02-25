@@ -39,6 +39,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.data_dir = data_dir
         self.test_dir = test_dir
         self.contrasts = contrasts
+        self.num_contrasts = len(contrasts)
         self.acs_lines = acs_lines
         self.num_workers = num_workers
         self.batch_size = batch_size
