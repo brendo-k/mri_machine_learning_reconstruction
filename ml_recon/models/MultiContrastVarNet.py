@@ -5,7 +5,6 @@ from functools import partial
 
 from ml_recon.models import Unet
 from ml_recon.models.XNet import XNet
-from ml_recon.models.PhaseAbsNetwork import PhaseMagnitudeNetwork
 from functools import partial
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
@@ -19,7 +18,6 @@ class VarnetConfig:
     sense_chans: int = 8
     channels: int = 18
     sensetivity_estimation: str = 'first' # can be first, joint, individual
-    split_contrast_by_phase: bool = False
     dropout: float = 0
     depth: int = 4
 
@@ -41,12 +39,9 @@ class MultiContrastVarNet(nn.Module):
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
         
-        if config.split_contrast_by_phase:
-            model_backbone = partial(PhaseMagnitudeNetwork, in_chan=contrasts, out_chan=contrasts, chans=config.channels)
-
         # module cascades
         self.cascades = nn.ModuleList(
-            [VarnetBlock(model_backbone(), config.split_contrast_by_phase) for _ in range(config.cascades)]
+            [VarnetBlock(model_backbone()) for _ in range(config.cascades)]
         )
 
         # model to estimate sensetivities
@@ -80,16 +75,12 @@ class MultiContrastVarNet(nn.Module):
 
 
 class VarnetBlock(nn.Module):
-    def __init__(self, model: nn.Module, is_split_phase=False) -> None:
+    def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self.model = model
 
-        if is_split_phase:
-            self.complex_forward = complex_conversion.complex_to_polar
-            self.complex_backward = complex_conversion.polar_to_complex
-        else:
-            self.complex_forward = complex_conversion.complex_to_real
-            self.complex_backward = complex_conversion.real_to_complex
+        self.complex_forward = complex_conversion.complex_to_polar
+        self.complex_backward = complex_conversion.polar_to_complex
 
 
     # sensetivities data [B, contrast, C, H, W]

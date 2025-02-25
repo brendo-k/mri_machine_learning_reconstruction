@@ -154,7 +154,7 @@ class pl_VarNet(plReconModel):
         
         # pass original data through model
         estimate_k = self.forward(undersampled, mask, fs_k_space)
-        super().plot_images(estimate_k, fs_k_space, mask, mode) 
+        super().plot_test_images(estimate_k, fs_k_space, mask, mode) 
 
         sense_maps = self.model.sens_model(undersampled, mask)
         sense_maps = sense_maps[0, 0, :, :, :].unsqueeze(1).abs()

@@ -61,7 +61,6 @@ def main(args):
             cascades=args.cascades, 
             channels=args.chans,
             depth=args.depth,
-            split_contrast_by_phase=args.split_contrast_by_phase,
             sensetivity_estimation=args.sense_method,
             dropout=args.dropout
         )
@@ -124,7 +123,7 @@ def load_checkpoint(args, data_dir, test_dir):
     return model, data_module
 
 def build_checkpoint_callbacks(file_name):
-    checkpoin_dir = '/home/kadotab/scratch/checkpoints'
+    checkpoin_dir = './checkpoints'
     best_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoin_dir,
         filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
@@ -203,7 +202,6 @@ if __name__ == '__main__':
     model_group.add_argument('--lambda_scaling', type=float, default=1)
 
     model_group.add_argument('--warmup_training', action='store_true')
-    model_group.add_argument('--split_contrast_by_phase', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
     model_group.add_argument('--norm_loss_by_masks', action='store_true')
     model_group.add_argument('--pass_inverse_data', action='store_true')

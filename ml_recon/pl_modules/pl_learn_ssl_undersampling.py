@@ -230,7 +230,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_lambda_img = k_to_img(estimate_lambda)/ scaling_factor
         fully_sampling_img = k_to_img(fs_k_space)/ scaling_factor
 
-        mask = self.get_mask(gt_img)
+        mask = self.get_image_background_mask(gt_img)
 
         estimate_lambda_img *= mask
         estimate_full_img *= mask
