@@ -24,7 +24,7 @@ def main(args):
     pl.seed_everything(8)
     file_name = get_unique_file_name(args)
 
-    best_checkpoint_callback, last_checkpoint_callback = build_checkpoint_callbacks(file_name)
+    best_checkpoint_callback, last_checkpoint_callback = build_checkpoint_callbacks(file_name, args.checkpoint_dir)
     
     possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
     thresholds = {}
@@ -104,7 +104,7 @@ def main(args):
         project=args.project, 
         log_model=True, 
         name=args.run_name, 
-        save_dir='.'
+        save_dir='/home/kadotab/scratch'
         )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
@@ -121,8 +121,8 @@ def load_checkpoint(args, data_dir, test_dir):
     data_module.setup('train')
     return model, data_module
 
-def build_checkpoint_callbacks(file_name):
-    checkpoin_dir = '/home/kadotab/scratch/checkpoints/'
+def build_checkpoint_callbacks(file_name, checkpoint_dir):
+    checkpoin_dir = checkpoint_dir
     best_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoin_dir,
         filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
@@ -163,6 +163,7 @@ if __name__ == '__main__':
     training_group.add_argument('--lr', type=float, default=1e-3)
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
+    training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')

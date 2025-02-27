@@ -66,6 +66,7 @@ def process_file(file, out_path, seed, noise, coil_file):
             dset = fr.create_dataset("reconstruction_rss", data=k_to_img(torch.from_numpy(k_space), coil_dim=2))
             dset = fr.create_dataset("ground_truth", data=gt_img)
         print(f'saved to file: {save_file}')
+        del fr
 
     except Exception as e:
         print(e)
@@ -85,9 +86,9 @@ if __name__ == '__main__':
     coil_file = str(sys.argv[3])
 
     # Create a pool of worker processes
-    num_processes = 5
+    #num_processes = 5
     #print(num_processes)
-    pool = multiprocessing.Pool(processes=num_processes)
+    #pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)

@@ -201,23 +201,23 @@ class LearnedSSLLightning(plReconModel):
         else:
             plot_images = True
 
-        estimate_k = self.infer_k_space(batch)
+        estimate_k, fully_sampled_k = self.infer_k_space(batch)
         ground_truth_image = batch[1]
 
         background_mask = self.get_image_background_mask(ground_truth_image)
 
         estimate_image = k_to_img(estimate_k, coil_dim=2)
-        fully_sampled_image = k_to_img(batch[0]['fs_k_space'], coil_dim=2)
+        fully_sampled_image = k_to_img(fully_sampled_k, coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
 
         estimate_image /= scaling_factor
-        ground_truth_image = ground_truth_image / scaling_factor
-        fully_sampled_image = fully_sampled_image /scaling_factor
+        ground_truth_image /= scaling_factor
+        fully_sampled_image /= scaling_factor
 
-        estimate_image = estimate_image * background_mask
-        ground_truth_image = ground_truth_image * background_mask
-        fully_sampled_image = fully_sampled_image * background_mask
+        estimate_image *= background_mask
+        ground_truth_image *= background_mask
+        fully_sampled_image *= background_mask
         
         diff_est_full_plot = (estimate_image - fully_sampled_image).abs()*10
         gt_diff = (estimate_image - ground_truth_image).abs()*10
@@ -226,10 +226,13 @@ class LearnedSSLLightning(plReconModel):
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
             wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
             wandb_logger.log_image(f'val_images/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]))
+
+            # plot ground truths at the first epoch
+            if self.current_epoch == 0:
+                wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
+                wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
 
          
         # log image space metrics 
@@ -253,7 +256,7 @@ class LearnedSSLLightning(plReconModel):
 
     def test_step(self, batch, batch_index):
         ground_truth_image = batch[1]
-        estimate_k = self.infer_k_space(batch)
+        estimate_k, _ = self.infer_k_space(batch)
 
         return super().test_step((estimate_k, ground_truth_image), batch_index)
 
@@ -261,7 +264,7 @@ class LearnedSSLLightning(plReconModel):
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         ground_truth_image = batch[1]
-        estimate_k = self.infer_k_space(batch)
+        estimate_k, _ = self.infer_k_space(batch)
 
         return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
     
@@ -277,7 +280,8 @@ class LearnedSSLLightning(plReconModel):
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
         estimate_k *= scaling_factor
-        return estimate_k
+        fully_sampled_k *= scaling_factor
+        return estimate_k, fully_sampled_k
 
 
     def configure_optimizers(self):
