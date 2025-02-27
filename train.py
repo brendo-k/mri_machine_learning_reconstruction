@@ -104,7 +104,7 @@ def main(args):
         project=args.project, 
         log_model=True, 
         name=args.run_name, 
-        save_dir='/home/kadotab/scratch'
+        save_dir='.'
         )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 

@@ -50,7 +50,6 @@ class UndersampleDecorator(Dataset):
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
         self.transforms = transforms
-        self.random_index = random.randint(0, 1_000_000_000)
         self.acs_lines = acs_lines
 
         #self supervised
@@ -137,7 +136,8 @@ class UndersampleDecorator(Dataset):
     def compute_initial_mask(self, index, k_space):
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             line_constrained = self.sampling_type == '1d'
-            under, mask_omega  = apply_undersampling_from_dist(self.random_index + index, 
+            under, mask_omega  = apply_undersampling_from_dist(
+                                        index,
                                         self.omega_prob,
                                         k_space, 
                                         deterministic=True, 

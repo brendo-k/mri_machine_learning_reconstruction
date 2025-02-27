@@ -1,6 +1,6 @@
 training_parameters:
   num_workers: 3
-  max_epochs: 200
+  max_epochs: 50
   batch_size: 1
   lr: 0.001
 
@@ -17,8 +17,8 @@ dataset_parameters:
 
 model_parameters:
   learn_R: true
-  data_dir: /home/brenden/Documents/data/M4Raw_first_repetition
-  test_dir: /home/brenden/Documents/data/M4Raw_Averaged
+  data_dir: /home/brenden/Documents/Coding/data/M4Raw_first_repetition 
+  test_dir: /home/brenden/Documents/Coding/data/M4Raw_Averaged
   chans: 22
   cascades: 4
   ssim_scaling_full: 1.0e-7
@@ -35,7 +35,11 @@ model_parameters:
   all_data_no_grad: true 
   pass_through_size: 10
   sampling_method: 1d
+  mask_threshold_t2: 11
+  mask_threshold_t1: 11
+  mask_threshold_flair: 11
+
 
 logging_parameters:
   project: "MRI Reconstruction"
-  run_name: null
+  run_name: Learned Partitioning

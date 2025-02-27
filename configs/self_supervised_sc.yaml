@@ -1,0 +1,31 @@
+# Supervised config file for train.py
+training_parameters: 
+  supervised: false
+  max_epochs: 20
+  batch_size: 2
+  lr: 0.001
+  num_workers: 2
+  project: 'MRI Reconstruction'
+
+dataset_parameters:
+  dataset: 'm4raw'
+  contrasts:
+    - 't1'
+  data_dir: /home/brenden/Documents/Coding/data/M4Raw_first_repetition 
+  test_dir: /home/brenden/Documents/Coding/data/M4Raw_Averaged
+  norm_method: 'image_mean2'
+  sampling_method: '1d'
+  limit_volumes: 0.1
+  nx: 256
+  ny: 256
+  R: 6.0
+  R_hat: 2.0
+
+model_parameters:
+  k_loss: 'l1'
+  chans: 18
+  depth: 4
+  cascades: 6
+  image_loss_scaling: 1
+  lambda_scaling: 1
+  ssdu_partitioning: true

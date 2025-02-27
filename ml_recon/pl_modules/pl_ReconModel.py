@@ -32,6 +32,7 @@ class plReconModel(pl.LightningModule):
 
     def test_step(self, batch, batch_index):
         estimate_k, ground_truth_image = batch
+        background_mask = self.get_image_background_mask(ground_truth_image)
 
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
@@ -40,7 +41,6 @@ class plReconModel(pl.LightningModule):
         estimated_image /= scaling_factor
         ground_truth_image = ground_truth_image / scaling_factor
 
-        background_mask = self.get_image_background_mask(ground_truth_image)
         estimated_image = estimated_image * background_mask
         ground_truth_image = ground_truth_image * background_mask
 
@@ -150,9 +150,10 @@ class plReconModel(pl.LightningModule):
         mask_threshold = torch.tensor(mask_threshold, device=ground_truth_image.device)
         mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
         
-        ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=15, sigma=25.0) # type: ignore
+        # gaussian blur only blurs last 2 dims
+        ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=31, sigma=25.0) # type: ignore
         
-        image_background_mask = ground_truth_blurred > img_max * mask_threshold 
+        image_background_mask = ground_truth_blurred > mask_threshold 
         mask =  self.dialate_mask(image_background_mask)
         
         return mask

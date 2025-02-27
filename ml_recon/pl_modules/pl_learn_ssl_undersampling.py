@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
 from typing import Literal, Union
+from functools import partial
 
-from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.losses import L1L2Loss
@@ -63,7 +63,6 @@ class LearnedSSLLightning(plReconModel):
         
 
         # loss function init
-        self.ssim_func = StructuralSimilarityIndexMeasure(data_range=(0, 1)).to(self.device)
         self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
     
@@ -202,106 +201,73 @@ class LearnedSSLLightning(plReconModel):
         else:
             plot_images = True
 
-        noisy_data = batch[0]
-        gt_data = batch[1]
+        estimate_k = self.infer_k_space(batch)
+        ground_truth_image = batch[1]
 
-        under = noisy_data['undersampled']
-        fs_k_space = noisy_data['fs_k_space']
-        normalization_factor = noisy_data['scaling_factor'] # transformation norm factor
-        self_supervised = noisy_data['is_self_supervised']
+        background_mask = self.get_image_background_mask(ground_truth_image)
 
-        lambda_set, loss_set = self.partition_k_space(noisy_data)
-        if self_supervised.all():
-            mask = lambda_set + loss_set
-        else: 
-            # supervised (only take the lambda set)
-            mask = lambda_set
+        estimate_image = k_to_img(estimate_k, coil_dim=2)
+        fully_sampled_image = k_to_img(batch[0]['fs_k_space'], coil_dim=2)
+
+        scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
+
+        estimate_image /= scaling_factor
+        ground_truth_image = ground_truth_image / scaling_factor
+        fully_sampled_image = fully_sampled_image /scaling_factor
+
+        estimate_image = estimate_image * background_mask
+        ground_truth_image = ground_truth_image * background_mask
+        fully_sampled_image = fully_sampled_image * background_mask
         
-        # get recon estimates 
-        estimate_full = self.recon_model.pass_through_model(under, mask, fs_k_space) 
-        estimate_lambda = self.recon_model.pass_through_model(under, lambda_set, fs_k_space) 
-        estimate_full *= normalization_factor 
-        estimate_lambda *= normalization_factor 
-        fs_k_space *= normalization_factor
-
-        # ifft and root sum of squares. All iamges scaled by the max of fully sampled images.
-        scaling_factor = gt_data.amax((-1, -2), keepdim=True)
-        gt_img = gt_data / scaling_factor
-        estimate_full_img = k_to_img(estimate_full) / scaling_factor
-        estimate_lambda_img = k_to_img(estimate_lambda)/ scaling_factor
-        fully_sampling_img = k_to_img(fs_k_space)/ scaling_factor
-
-        mask = self.get_image_background_mask(gt_img)
-
-        estimate_lambda_img *= mask
-        estimate_full_img *= mask
-        fully_sampling_img *= mask
-        gt_img *= mask
-        
-        diff_est_full_plot = (estimate_full_img - fully_sampling_img).abs()*10
-        gt_diff = (estimate_full_img - gt_img).abs()*10
+        diff_est_full_plot = (estimate_image - fully_sampled_image).abs()*10
+        gt_diff = (estimate_image - ground_truth_image).abs()*10
 
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
-            wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_full_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(gt_img[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampling_img[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
             wandb_logger.log_image(f'val_images/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image(f'val_images/diff_gt{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-
-            lambda_set_plot = lambda_set[0, :, 0, : ,:]
-            loss_mask = loss_set[0, :, 0, : ,:]
-            wandb_logger.log_image('val_masks/lambda_set', self.split_along_contrasts(lambda_set_plot.clip(0, 1)))
-            wandb_logger.log_image('val_masks/loss_set', self.split_along_contrasts(loss_mask.clip(0, 1)))
+            wandb_logger.log_image(f'val_images/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]))
 
          
         # log image space metrics 
-        ssim_full = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_full_img)
-        nmse_full = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_full_img)
-        ssim_lambda = evaluate_over_contrasts(self.ssim_func, fully_sampling_img, estimate_lambda_img)
-        nmse_lambda = evaluate_over_contrasts(nmse, fully_sampling_img, estimate_lambda_img)
+        ssim_full = evaluate_over_contrasts(ssim, fully_sampled_image, estimate_image)
+        nmse_full = evaluate_over_contrasts(nmse, fully_sampled_image, estimate_image)
         for i, contrast in enumerate(self.contrast_order):
             self.log(f"val_ssim/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
             self.log(f"val_nmse/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
-            self.log(f"val_ssim/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
-            self.log(f"val_nmse/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
         self.log(f"val/mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
         self.log(f"val/mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
 
         # log gt metrics 
-        ssim_full = evaluate_over_contrasts(self.ssim_func, gt_img, estimate_full_img)
-        nmse_full = evaluate_over_contrasts(nmse, gt_img, estimate_full_img)
-        ssim_lambda = evaluate_over_contrasts(self.ssim_func, gt_img, estimate_lambda_img)
-        nmse_lambda = evaluate_over_contrasts(nmse, gt_img, estimate_lambda_img)
+        ssim_full = evaluate_over_contrasts(ssim, ground_truth_image, estimate_image)
+        nmse_full = evaluate_over_contrasts(nmse, ground_truth_image, estimate_image)
         for i, contrast in enumerate(self.contrast_order):
             self.log(f"GT_val_ssim/ssim_full_{contrast}", ssim_full[i], on_epoch=True, sync_dist=True)
             self.log(f"GT_val_nmse/nmse_full_{contrast}", nmse_full[i], on_epoch=True, sync_dist=True)
-            self.log(f"GT_val_ssim/ssim_lambda_{contrast}", ssim_lambda[i], on_epoch=True, sync_dist=True)
-            self.log(f"GT_val_nmse/nmse_lambda_{contrast}", nmse_lambda[i], on_epoch=True, sync_dist=True)
         self.log(f"val/GT_mean_nmse_full", sum(nmse_full)/len(nmse_full), on_epoch=True, sync_dist=True)
         self.log(f"val/GT_mean_ssim_full", sum(ssim_full)/len(nmse_full), on_epoch=True, sync_dist=True)
 
 
     def test_step(self, batch, batch_index):
-        k_space = batch[0]
         ground_truth_image = batch[1]
-        scaling_factor = batch[0]['scaling_factor']
-        fully_sampled_k = k_space['fs_k_space']
-        undersampled = k_space['undersampled']
-        mask = k_space['mask']
-        if (k_space['loss_mask'] * mask == 0).all(): # if disjoint masks, combine
-            mask += k_space['loss_mask'] # combine to get original sampliing mask
-        # pass inital data through model
-        estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
-        estimate_k *= scaling_factor
+        estimate_k = self.infer_k_space(batch)
 
         return super().test_step((estimate_k, ground_truth_image), batch_index)
 
 
+
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        k_space = batch[0]
         ground_truth_image = batch[1]
+        estimate_k = self.infer_k_space(batch)
+
+        return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
+    
+    
+    def infer_k_space(self, batch):
+        k_space = batch[0]
         scaling_factor = batch[0]['scaling_factor']
         fully_sampled_k = k_space['fs_k_space']
         undersampled = k_space['undersampled']
@@ -311,9 +277,8 @@ class LearnedSSLLightning(plReconModel):
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(undersampled, mask, fully_sampled_k)
         estimate_k *= scaling_factor
+        return estimate_k
 
-        return super().on_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx)
-        
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -321,10 +286,11 @@ class LearnedSSLLightning(plReconModel):
         #step_lr = StepLR(optimizer, step_size=50)
         return optimizer
 
+    
 
     def _setup_image_space_loss(self, image_loss_function):
         if image_loss_function == 'ssim':
-            image_loss = lambda targ, pred: 1 - self.ssim_func(targ, pred)
+            image_loss = lambda targ, pred: 1 - ssim(targ, pred) # type: ignore
         elif image_loss_function == 'l1':
             l1_loss = torch.nn.L1Loss()
             image_loss = lambda targ, pred: l1_loss(targ, pred)
