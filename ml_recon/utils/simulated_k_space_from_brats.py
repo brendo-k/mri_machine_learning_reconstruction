@@ -5,18 +5,20 @@ from scipy.ndimage import gaussian_filter
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
-def simulate_k_space(image, seed, center_region=8, noise_std=0.001, coil_file='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy'):
+def simulate_k_space(image, seed, noise_std=0.001, coil_file='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy'):
     #simulate some random motion
     rng = np.random.default_rng(seed)
     x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
-    image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
     #image [Contrast height width]
-    image_w_sense = apply_sensetivities(image, coil_file)
+    image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
     #image_w_sense [Contrast coil height width]
-    image_w_phase = generate_and_apply_phase(image_w_sense, seed, center_region=center_region)
+    image_w_sense = apply_sensetivities(image, coil_file)
+    image_w_phase = generate_and_apply_phase(image_w_sense, seed)
+
+    gt_img = root_sum_of_squares(image_w_phase, coil_dim=1)
     k_space = fft_2d_img(image_w_phase)
     k_space = apply_noise(k_space, seed, noise_std)
-    return k_space, image
+    return k_space, gt_img
 
 def apply_sensetivities(image, coil_file):
 
@@ -31,7 +33,7 @@ def apply_sensetivities(image, coil_file):
     return image_sense      
 
 
-def generate_and_apply_phase(data, seed, center_region=20):
+def generate_and_apply_phase(data, seed):
     nc = data.shape[0]
     phase = build_phase_from_same_dist(data, seed)
     #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, seed)

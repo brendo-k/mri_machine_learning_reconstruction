@@ -12,7 +12,7 @@ import sys
 IMAGE_SIZE = (240, 240)
 
 # Define a function to process a single file
-def process_file(file, out_path, seed, noise, center_size, coil_file):
+def process_file(file, out_path, seed, noise, coil_file):
     print(f'Starting file {file}, with seed: {seed}')
     patient_name = file.split('/')[-1]
 
@@ -42,7 +42,6 @@ def process_file(file, out_path, seed, noise, center_size, coil_file):
             sim_k_space, gt = simulate_k_space(
                                         cur_images, 
                                         seed+i,
-                                        center_region=center_size, 
                                         noise_std=noise, 
                                         coil_file=coil_file
                                         )
@@ -77,14 +76,13 @@ def process_file(file, out_path, seed, noise, center_size, coil_file):
 
 
 if __name__ == '__main__':
-    dir = '/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/training_data/subset/'
+    dir = '/home/brenden/Documents/Coding/data/subset'
     save_dir = '/home/kadotab/scratch/sim_subset'
     dataset_splits = ['train', 'test', 'val']
 
     noise = float(sys.argv[1])
-    center_size = int(sys.argv[2])
-    save_dir = str(sys.argv[3])
-    coil_file = str(sys.argv[4])
+    save_dir = str(sys.argv[2])
+    coil_file = str(sys.argv[3])
 
     # Create a pool of worker processes
     num_processes = 5
@@ -98,22 +96,20 @@ if __name__ == '__main__':
         files = [os.path.join(dir, split, file) for file in files]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
 
-        #for file, seed in zip(files, seeds):
-        #    process_file(
-        #        file, 
-        #        os.path.join(save_dir, split),
-        #        seed, 
-        #        noise, 
-        #        center_size,
-        #        coil_file
-        #    )
-        pool.starmap(process_file, 
-                    zip(
-                        files.__iter__(), 
-                        repeat(os.path.join(save_dir, split)),
-                        seeds,
-                        repeat(noise),
-                        repeat(center_size),
-                        repeat(coil_file)
-                        )
-                    )
+        for file, seed in zip(files, seeds):
+             process_file(
+                 file, 
+                 os.path.join(save_dir, split),
+                 seed, 
+                 noise, 
+                 coil_file
+             )
+        #pool.starmap(process_file, 
+        #            zip(
+        #                files.__iter__(), 
+        #                repeat(os.path.join(save_dir, split)),
+        #                seeds,
+        #                repeat(noise),
+        #                repeat(coil_file)
+        #                )
+        #            )
