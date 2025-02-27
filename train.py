@@ -122,7 +122,7 @@ def load_checkpoint(args, data_dir, test_dir):
     return model, data_module
 
 def build_checkpoint_callbacks(file_name):
-    checkpoin_dir = '/home/scratch/checkpoints'
+    checkpoin_dir = '/home/kadotab/scratch/checkpoints/'
     best_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoin_dir,
         filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',

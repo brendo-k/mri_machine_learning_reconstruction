@@ -110,7 +110,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'sampling_method': self.sampling_method,
                 'self_supervised': self.self_supervised,
                 'acs_lines' : self.acs_lines, 
-                'poly_order': 10
+                'poly_order': 12
         }
 
 

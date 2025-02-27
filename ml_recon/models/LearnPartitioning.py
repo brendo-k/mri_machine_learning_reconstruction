@@ -94,9 +94,8 @@ class LearnPartitioning(nn.Module):
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability)
 
     def get_R(self) -> torch.Tensor:
-        sampling_weights = self.sampling_weights
-        probability = [torch.sigmoid(sampling_weight * self.config.sigmoid_slope_probability) for sampling_weight in sampling_weights]
-        cur_R = torch.ones_like(self.learned_R_value)
+        probability = self.get_probability_distribution()
+        cur_R = torch.ones(self.config.image_size[0], device=self.sampling_weights.device)
         for i in range(self.config.image_size[0]):
             cur_R[i] = 1/probability[i].mean()
                 
