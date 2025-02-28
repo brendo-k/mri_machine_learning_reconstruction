@@ -93,6 +93,6 @@ class TriplePathway(nn.Module):
         lower_bound = pass_through_size // 2
         upper_bound = pass_through_size - lower_bound
         center_slice = slice(h//2-lower_bound, h//2+upper_bound)
-        mask_inverse_w_acs[:, :, :, center_slice, :] = lambda_set[:, :, :, center_slice, :]
-        mask_lambda_wo_acs[:, :, :, center_slice, :] = inverse_set[:, :, :, center_slice, :]
+        mask_inverse_w_acs[:, :, :, center_slice, center_slice] = lambda_set[:, :, :, center_slice, center_slice]
+        mask_lambda_wo_acs[:, :, :, center_slice, center_slice] = inverse_set[:, :, :, center_slice, center_slice]
         return mask_inverse_w_acs, mask_lambda_wo_acs
