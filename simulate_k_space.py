@@ -8,6 +8,7 @@ import multiprocessing
 from itertools import repeat
 from ml_recon.utils import fft_2d_img, ifft_2d_img, k_to_img
 import sys
+import gc
 
 IMAGE_SIZE = (240, 240)
 
@@ -66,14 +67,14 @@ def process_file(file, out_path, seed, noise, coil_file):
             dset = fr.create_dataset("reconstruction_rss", data=k_to_img(torch.from_numpy(k_space), coil_dim=2))
             dset = fr.create_dataset("ground_truth", data=gt_img)
         print(f'saved to file: {save_file}')
-        del fr
+        del fr, dset, gt_img, modality_name
+        gc.collect()
 
     except Exception as e:
         print(e)
 
 
     print(f'Done file {os.path.join(out_path, patient_name, patient_name + ".h5")}')
-    return k_space
 
 
 if __name__ == '__main__':
@@ -86,31 +87,35 @@ if __name__ == '__main__':
     coil_file = str(sys.argv[3])
 
     # Create a pool of worker processes
-    #num_processes = 5
-    #print(num_processes)
-    #pool = multiprocessing.Pool(processes=num_processes)
+    num_processes = 4
+    print(num_processes)
+    pool = multiprocessing.Pool(processes=num_processes)
 
     for split in dataset_splits:
         print(split)
         # Process each file in parallel
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
+        #files = [files[i] for i in range(20)]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
+        #for file, seed in zip(files, seeds):
+        #     process_file(
+        #         file, 
+        #         os.path.join(save_dir, split),
+        #         seed, 
+        #         noise, 
+        #         coil_file
+        #     )
+        #     counter += 1
+        #     if counter > 10: 
+        #         break
 
-        for file, seed in zip(files, seeds):
-             process_file(
-                 file, 
-                 os.path.join(save_dir, split),
-                 seed, 
-                 noise, 
-                 coil_file
-             )
-        #pool.starmap(process_file, 
-        #            zip(
-        #                files.__iter__(), 
-        #                repeat(os.path.join(save_dir, split)),
-        #                seeds,
-        #                repeat(noise),
-        #                repeat(coil_file)
-        #                )
-        #            )
+        pool.starmap(process_file, 
+                    zip(
+                        files.__iter__(), 
+                        repeat(os.path.join(save_dir, split)),
+                        seeds,
+                        repeat(noise),
+                        repeat(coil_file)
+                        )
+                    )
