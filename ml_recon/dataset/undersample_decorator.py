@@ -6,7 +6,15 @@ import math
 from torch.utils.data import Dataset
 
 from typing import Union, Callable
-from ml_recon.utils.undersample_tools import apply_undersampling_from_dist, gen_pdf, scale_pdf, calc_k, ssdu_gaussian_selection
+from ml_recon.utils.undersample_tools import (
+    apply_undersampling_from_dist, 
+    gen_pdf_columns, 
+    gen_pdf_columns_charlie,
+    gen_pdf_bern, 
+    scale_pdf, 
+    ssdu_gaussian_selection
+    )
+
 
 class UndersampleDecorator(Dataset):
     """Decorator class that can be used on all datasets present in the dataset folder.
@@ -37,17 +45,21 @@ class UndersampleDecorator(Dataset):
         self.R_hat = R_hat
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
+        self.lambda_rng = np.random.default_rng() # generator for lambda mask seeds.
+        print('hello!')
         
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
         if self.sampling_type == '2d' or self.sampling_type == 'pi':
-            line_constrained = False
-            self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
+            self.omega_prob = gen_pdf_bern(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+            self.lambda_prob = gen_pdf_bern(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) # type: ignore
+            self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
         elif self.sampling_type == '1d':
-            line_constrained = True
-            self.omega_prob = gen_pdf(line_constrained, dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
+            self.omega_prob = gen_pdf_columns_charlie(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+            self.lambda_prob = gen_pdf_columns_charlie(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) # type: ignore
+            self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
         self.transforms = transforms
         self.acs_lines = acs_lines
@@ -55,10 +67,13 @@ class UndersampleDecorator(Dataset):
         #self supervised
         self.self_supervised = self_supervised
 
-
-
     def __len__(self):
         return self.dataset.__len__() # type: ignore
+    
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+        seed = (self.lambda_rng.integers(0, 2**23) + self.epoch) % 2**23 
+        self.lambda_rng = np.random.default_rng(seed)
 
 
     def __getitem__(self, index):
@@ -116,14 +131,13 @@ class UndersampleDecorator(Dataset):
             loss_mask = np.stack(loss_mask, axis=0)
 
         else:
-                # scale pdf
-            scaled_new_prob = scale_pdf(self.omega_prob, self.R_hat, self.acs_lines)
+            seed = self.lambda_rng.integers(0, 2**23)
+
             line_constrained = self.sampling_type == '1d'
             _, mask_lambda = apply_undersampling_from_dist(
-                        index,
-                        scaled_new_prob,
+                        seed,
+                        self.lambda_prob,
                         under,
-                        deterministic=False,
                         line_constrained=line_constrained,
                         )
                 
@@ -134,13 +148,13 @@ class UndersampleDecorator(Dataset):
         return input_mask, loss_mask
 
     def compute_initial_mask(self, index, k_space):
+        # same mask every time since the random seed is the index value
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             line_constrained = self.sampling_type == '1d'
             under, mask_omega  = apply_undersampling_from_dist(
                                         index,
                                         self.omega_prob,
                                         k_space, 
-                                        deterministic=True, 
                                         line_constrained=line_constrained, 
                                         )
         elif self.sampling_type == 'pi':

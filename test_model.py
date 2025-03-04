@@ -20,7 +20,7 @@ def main(args):
         artifact_dir = artifact.download()
         checkpoint_path = os.path.join(artifact_dir, 'model.ckpt')
     
-    return test(data_dir, test_dir, checkpoint_path, logger)
+    return test(checkpoint_path=checkpoint_path, data_dir=data_dir, test_dir=test_dir)
 
 def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_testing=True, mask_threshold=None):
     # Load model and data module

@@ -139,7 +139,6 @@ class plReconModel(pl.LightningModule):
     def get_image_background_mask(self, ground_truth_image):
         if not self.is_mask_testing:
             return torch.ones_like(ground_truth_image)
-        img_max = ground_truth_image.amax((-1, -2), keepdim=True)
         mask_threshold = []
         for contrast in self.contrast_order:
             if self.mask_threshold and contrast.lower() in self.mask_threshold:

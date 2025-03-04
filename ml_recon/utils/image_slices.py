@@ -43,17 +43,21 @@ def image_slices(data: np.ndarray, coil_num=0, vmin=None, vmax=None, cmap=None):
 
     fig, axes = plt.subplots(width, height, figsize=(10, 10), squeeze=False)
 
-    for i in range(data.shape[0]):
-        (x, y) = np.unravel_index(i, (width, height))
-        current_slice = np.squeeze(data[i, coil_num, :, :])
-        axes[x, y].imshow(current_slice, vmin=vmin, vmax=vmax, cmap=cmap, aspect='equal')
-        axes[x, y].tick_params(
+    for ax in axes.flatten():
+        ax.tick_params(
                                 which='both',      # both major and minor ticks are affected
                                 bottom=False,      # ticks along the bottom edge are off
                                 top=False,         # ticks along the top edge are off
                                 left=False,
                                 labelleft=False,
                                 labelbottom=False) 
+    fig.subplots_adjust(wspace=0, hspace=0)
+
+    for i in range(data.shape[0]):
+        (x, y) = np.unravel_index(i, (width, height))
+        current_slice = np.squeeze(data[i, coil_num, :, :])
+        axes[x, y].imshow(current_slice, vmin=vmin, vmax=vmax, cmap=cmap, aspect='equal')
+
     plt.tight_layout()
 
     return fig, axes

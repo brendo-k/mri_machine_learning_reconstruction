@@ -225,14 +225,14 @@ class LearnedSSLLightning(plReconModel):
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
-            wandb_logger.log_image(f'val_images/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image(f'val_images/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images_recons/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)))
+            wandb_logger.log_image(f'val_images_diff/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images_diff/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]))
 
             # plot ground truths at the first epoch
             if self.current_epoch == 0:
-                wandb_logger.log_image(f'val_images/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
-                wandb_logger.log_image(f'val_images/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
+                wandb_logger.log_image(f'val_images_target/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
+                wandb_logger.log_image(f'val_images_target/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
 
          
         # log image space metrics 

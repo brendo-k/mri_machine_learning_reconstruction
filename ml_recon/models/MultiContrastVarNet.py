@@ -7,7 +7,7 @@ from ml_recon.models import Unet
 from ml_recon.models.XNet import XNet
 from functools import partial
 from ml_recon.models import SensetivityModel_mc
-from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_conversion
+from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_to_real, real_to_complex
 from dataclasses import dataclass
 
 @dataclass
@@ -47,30 +47,30 @@ class MultiContrastVarNet(nn.Module):
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones(config.cascades, contrasts))
+        self.lambda_reg = nn.Parameter(torch.ones((config.cascades)))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, undersampled_k, mask):
+    def forward(self, reference_k, mask):
         # get sensetivity maps
-        assert not torch.isnan(undersampled_k).any()
+        assert not torch.isnan(reference_k).any()
         assert not torch.isnan(mask).any()
-        sense_maps = self.sens_model(undersampled_k, mask)
+        sense_maps = self.sens_model(reference_k, mask)
 
         assert not torch.isnan(sense_maps).any()
 
         # current k_space 
-        current_k = undersampled_k.clone()
+        current_k = reference_k.clone()
         for i, cascade in enumerate(self.cascades):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
-            assert not torch.isnan(undersampled_k).any()
+            assert not torch.isnan(reference_k).any()
             assert not torch.isnan(refined_k).any()
 
-            data_consistency = mask * (current_k - undersampled_k)
+            data_consistency = mask * (current_k - reference_k)
             # gradient descent step
-            current_regularization = self.lambda_reg[i]
-            current_regularization = current_regularization[None, :, None, None, None]
-            current_k = current_k - (current_regularization * data_consistency) - refined_k
+            #current_regularization = self.lambda_reg[i]
+            #current_regularization = current_regularization[None, :, None, None, None]
+            current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
         return current_k
 
 
@@ -79,10 +79,7 @@ class VarnetBlock(nn.Module):
         super().__init__()
         self.model = model
 
-        self.complex_forward = complex_conversion.complex_to_real
-        self.complex_backward = complex_conversion.real_to_complex
-
-
+        
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, k_space, sensetivities):
         # Reduce
@@ -92,11 +89,11 @@ class VarnetBlock(nn.Module):
         images = torch.sum(images * sensetivities.conj(), dim=2)
 
         # Images now [B, contrast * 2, h, w] (real)
-        images = self.complex_forward(images)
+        images = complex_to_real(images)
         images, mean, std = self.norm(images)
         images = self.model(images)
         images = self.unnorm(images, mean, std)
-        images = self.complex_backward(images)
+        images = real_to_complex(images)
 
         # Expand
         images = sensetivities * images.unsqueeze(2)
@@ -107,7 +104,7 @@ class VarnetBlock(nn.Module):
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
         mean = x.mean(dim=(2, 3), keepdim=True)
-        std = x.std(dim=(2, 3), keepdim=True) + 1e-9
+        std = x.std(dim=(2, 3), keepdim=True)
 
         x = (x - mean) / std
         return x, mean, std
