@@ -80,13 +80,13 @@ def process_file(file, out_path, seed, noise, coil_file):
 
 
 if __name__ == '__main__':
-    dir = '/home/brenden/Documents/Coding/data/subset'
     save_dir = '/home/kadotab/scratch/sim_subset'
     dataset_splits = ['train', 'test', 'val']
 
-    noise = float(sys.argv[1])
+    dir = str(sys.argv[1])
     save_dir = str(sys.argv[2])
     coil_file = str(sys.argv[3])
+    noise = float(sys.argv[4])
 
     # Create a pool of worker processes
     num_processes = 4
@@ -95,10 +95,10 @@ if __name__ == '__main__':
 
     for split in dataset_splits:
         print(split)
+
         # Process each file in parallel
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
-        #files = [files[i] for i in range(20)]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
         for file, seed in zip(files, seeds):
              process_file(
