@@ -98,81 +98,10 @@ def gen_pdf_columns_charlie(nx, ny, one_over_R, poylnomial_power, c_sq):
         ii += 1
         if ii == 100:
             break
-        
     prob_map = np.tile(prob_map, (ny, 1))
 
     return prob_map
 
-
-def get_mask_from_segregated_sampling(prob_map, rng, line_constrained):
-    prob_map[prob_map > 0.999] = 1
-    init_prob_map = prob_map[0]
-    omega = 0.5
-    masks = np.zeros_like(prob_map, dtype=bool)
-    new_probs = np.zeros_like(prob_map)
-    if line_constrained:
-        init_prob_map = init_prob_map[0, :]
-        (ny) = np.shape(init_prob_map)
-        for i in range(1, (prob_map.shape[0]) + 1):
-            if i == 1:
-                mask1d = rng.binomial(1, init_prob_map).astype(bool)
-                masks[i-1, :, :] = np.repeat(mask1d[np.newaxis, :], ny, axis=0)
-                new_probs[i - 1, :, :] = init_prob_map
-            else:
-                sampled = np.any(masks[:, 0, :] == True, axis=0)
-                new_prob_map = prob_map[0, 0, :].copy()
-
-                expected_value_sampled = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i)
-                expected_value_sampled_prev = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i-1)
-
-                not_changed_index = (expected_value_sampled > 1) & (expected_value_sampled_prev > 1)
-
-                index = expected_value_sampled < 1 
-                index = index & ~not_changed_index
-                new_prob_map[index & sampled] = init_prob_map[index & sampled] * omega
-                new_prob_map[index & ~sampled] = init_prob_map[index & ~sampled] * ((1 - omega * expected_value_sampled_prev[index & ~sampled]) / (1 - expected_value_sampled_prev[index & ~sampled]))
-
-                # expected value is over 1 in these locations! Have to change sampling equation
-                # for these voxels
-                index = expected_value_sampled > 1 
-                index = index & ~not_changed_index
-                new_prob_map[index & sampled] = (expected_value_sampled_prev[index & sampled] - 1 + init_prob_map[index & sampled]) / (expected_value_sampled_prev[index & sampled])
-                new_prob_map[index & ~sampled] = 1
-            
-                sampled_mask = rng.binomial(1, new_prob_map).astype(bool)
-
-                masks[i - 1, :, :] = np.repeat(sampled_mask[np.newaxis, :], ny, axis=0)
-                new_probs[i - 1, :, :] = np.repeat(new_prob_map[np.newaxis, :], ny, axis=0)
-
-    else:
-        for i in range(1, prob_map.shape[0] + 1):
-            if i == 1:
-                masks[i-1, :, :] = rng.binomial(1, init_prob_map).astype(bool)
-                new_probs[i - 1, :, :] = init_prob_map
-            else:
-                sampled = np.any(masks[:, :, :] == True, axis=0)
-                new_prob_map = prob_map[0].copy()
-
-                expected_value_sampled = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i)
-                expected_value_sampled_prev = 1/omega - (1/omega)*np.power(1 - omega * init_prob_map, i-1)
-                
-                # expected value is less than one. Can safely reduce sampled probability and 
-                # increase non-sampled
-                index = expected_value_sampled < 1 
-                new_prob_map[index & sampled] = init_prob_map[index & sampled] * omega
-                new_prob_map[index & ~sampled] = init_prob_map[index & ~sampled] * ((1 - omega * expected_value_sampled_prev[index & ~sampled]) / (1 - expected_value_sampled_prev[index & ~sampled]))
-
-                # expected value is over 1 in these locations! Have to change sampling equation
-                # for these voxels
-                index = expected_value_sampled > 1 
-                new_prob_map[index & sampled] = (expected_value_sampled_prev[index & sampled] - 1 + init_prob_map[index & sampled]) / (expected_value_sampled_prev[index & sampled])
-                new_prob_map[index & ~sampled] = 1
-            
-                sampled_mask = rng.binomial(1, new_prob_map).astype(bool)
-                masks[i - 1, :, :] = sampled_mask
-                new_probs[i - 1, :, :] = new_prob_map
-
-    return masks, new_probs
 
 
 def scale_pdf(input_prob, R, center_square, line_constrained=False):

@@ -1,31 +1,27 @@
-# Supervised config file for train.py
-training_parameters: 
-  supervised: false
-  max_epochs: 20
-  batch_size: 2
-  lr: 0.001
-  num_workers: 2
-  project: 'MRI Reconstruction'
+  # Self supervised config file for train.py
+max_epochs: 50
+batch_size: 4
+lr: 0.001
+R: 8.0
+nx: 240
+ny: 240
+norm_method: 'image_mean'
+supervised: false
+data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+num_workers: 2
+contrasts:
+  - 't1'
+chans: 18
+depth: 4
+cascades: 6
+dataset: 'brats'
+project: 'MRI Reconstruction'
+k_loss: 'l1l2'
+lambda_scaling: 1
+limit_volumes: 1
+sampling_method: '1d'
+mask_threshold_t2: 0.1
+mask_threshold_t1: 0.1
+mask_threshold_flair: 0.1
 
-dataset_parameters:
-  dataset: 'm4raw'
-  contrasts:
-    - 't1'
-  data_dir: /home/brenden/Documents/Coding/data/M4Raw_first_repetition 
-  test_dir: /home/brenden/Documents/Coding/data/M4Raw_Averaged
-  norm_method: 'image_mean2'
-  sampling_method: '1d'
-  limit_volumes: 0.1
-  nx: 256
-  ny: 256
-  R: 6.0
-  R_hat: 2.0
-
-model_parameters:
-  k_loss: 'l1'
-  chans: 18
-  depth: 4
-  cascades: 6
-  image_loss_scaling: 1
-  lambda_scaling: 1
-  ssdu_partitioning: true

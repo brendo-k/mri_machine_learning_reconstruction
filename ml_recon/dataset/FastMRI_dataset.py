@@ -44,6 +44,8 @@ class FastMRIDataset(Dataset):
             limit_volumes = len(sample_dir)
         elif isinstance(limit_volumes, float):
             limit_volumes = int(limit_volumes * len(sample_dir))
+        elif isinstance(limit_volumes, int):
+            limit_volumes = limit_volumes
             
         for sample in sample_dir[:limit_volumes]:
             full_path = os.path.join(data_dir, sample)
@@ -66,7 +68,8 @@ class FastMRIDataset(Dataset):
     def __getitem__(self, index):
         k_space = self.get_data_from_file(index)
         k_space = k_space.flip(1)
-        k_space = self.resample_or_pad(k_space)
+        if self.key == 'kspace':
+            k_space = self.resample_or_pad(k_space)
 
         # add contrast dimension
         k_space = k_space.unsqueeze(0).numpy()

@@ -1,29 +1,30 @@
   # Self supervised config file for train.py
 
   max_epochs: 50
-  batch_size: 1
+  batch_size: 2
   lr: 0.001
   R: 8.0
   nx: 240
   ny: 240
-  norm_method: 'k'
+  norm_method: 'image_mean'
   supervised: false
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_weighted_phase'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_weighted_phase'
+  data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
   num_workers: 2
   contrasts:
     - 't1'
     - 't2'
-  chans: 18
+    - 'flair'
+    - 't1ce'
+  chans: 32
   depth: 4
   cascades: 6
   dataset: 'brats'
   project: 'MRI Reconstruction'
-  k_loss: 'l1'
+  k_loss: 'l1l2'
   lambda_scaling: 1
-  limit_volumes: 0.05
-  sampling_method: '2d'
-  norm_method: 'k'
+  limit_volumes: 1
+  sampling_method: '1d'
   mask_threshold_t2: 0.1
   mask_threshold_t1: 0.1
   mask_threshold_flair: 0.1

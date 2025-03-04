@@ -8,12 +8,12 @@ nx: 256
 ny: 256
 norm_method: 'k'
 supervised: true
-data_dir: /home/brenden/Documents/Coding/data/M4Raw_first_repetition 
-test_dir: /home/brenden/Documents/Coding/data/M4Raw_Averaged
+data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
 num_workers: 2
 contrasts:
   - 't1'
-chans: 32
+chans: 18
 depth: 4
 cascades: 6
 dataset: 'm4raw'

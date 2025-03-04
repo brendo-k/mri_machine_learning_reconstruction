@@ -1,45 +1,42 @@
 training_parameters:
-  num_workers: 3
-  max_epochs: 50
-  batch_size: 1
+  num_workers: 2
+  max_epochs: 100 
+  batch_size: 3
   lr: 0.001
 
 dataset_parameters:
-  R: 6.0
-  dataset: m4raw 
+  R: 8.0
+  dataset: brats 
   contrasts:
     - t1
-    - t2
-    - flair
-  nx: 256
-  ny: 256
-  limit_volumes: 0.05
+  nx: 240
+  ny: 240
+  limit_volumes: 1 
 
 model_parameters:
-  learn_R: true
-  data_dir: /home/brenden/Documents/Coding/data/M4Raw_first_repetition 
-  test_dir: /home/brenden/Documents/Coding/data/M4Raw_Averaged
-  chans: 22
+  data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+  chans: 18
   cascades: 4
-  ssim_scaling_full: 1.0e-7
-  ssim_scaling_set: 1.0e-7
-  ssim_scaling_inverse: 7.0e-8
+  ssim_scaling_full: 0
+  ssim_scaling_set: 0
+  ssim_scaling_inverse: 0
   lambda_scaling: 0.65
   sigmoid_slope2: 200
   sigmoid_slope1: 5
   k_loss: 'l1'
   pass_inverse_data: true
   pass_all_data: true
-  learn_sampling: true
-  image_loss: ssim
+  learn_sampling: false
+  image_loss: l1_grad
   all_data_no_grad: true 
   pass_through_size: 10
   sampling_method: 1d
-  mask_threshold_t2: 11
-  mask_threshold_t1: 11
-  mask_threshold_flair: 11
+  mask_threshold_t2: 0.11
+  mask_threshold_t1: 0.11
+  mask_threshold_flair: 0.11
 
 
 logging_parameters:
   project: "MRI Reconstruction"
-  run_name: Learned Partitioning
+  run_name: Dual Domain

@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
 import torch
 import wandb
+import os
+
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
@@ -24,7 +26,7 @@ def main(args):
     pl.seed_everything(8)
     file_name = get_unique_file_name(args)
 
-    best_checkpoint_callback, last_checkpoint_callback = build_checkpoint_callbacks(file_name, args.checkpoint_dir)
+    callbacks = build_checkpoint_callbacks(file_name, args.checkpoint_dir)
     
     possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
     thresholds = {}
@@ -108,11 +110,22 @@ def main(args):
         )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         callbacks=[last_checkpoint_callback, best_checkpoint_callback],
+                         callbacks=callbacks, # type: ignore
                          )
 
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
+    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
+    
+    
+    remove_optimizer_state(checkpoint_path)
+
+def remove_optimizer_state(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path)
+    if 'optimizer_states' in checkpoint:
+        del checkpoint['optimizer_states']
+    torch.save(checkpoint, checkpoint_path)
+
 
 def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
@@ -122,18 +135,9 @@ def load_checkpoint(args, data_dir, test_dir):
     return model, data_module
 
 def build_checkpoint_callbacks(file_name, checkpoint_dir):
-    checkpoin_dir = checkpoint_dir
-    best_checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoin_dir,
-        filename=file_name + '-best-{epoch:02d}-{val_loss:.03g}',
-        save_top_k=1,  # Only keep the best model
-        monitor='val/mean_nmse_full',
-        mode='min',
-        save_weights_only=True  # Only save model weights
-    )
-    # Checkpoint for the last model (including optimizer state)
+    # Checkpoint for the last model (including optimizer state for resubmittions)
     last_checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoin_dir,
+        dirpath=checkpoint_dir,
         filename=file_name + '-last-{epoch:02d}',
         save_top_k=1,  # Only keep the latest model
         monitor='epoch',
@@ -141,7 +145,7 @@ def build_checkpoint_callbacks(file_name, checkpoint_dir):
         save_weights_only=False  # Save full model state including optimizer
     )
     
-    return best_checkpoint_callback,last_checkpoint_callback
+    return last_checkpoint_callback
 
 def get_unique_file_name(args):
     unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")

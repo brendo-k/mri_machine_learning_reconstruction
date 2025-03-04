@@ -1,4 +1,4 @@
-from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space
+from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space, resample
 import numpy as np
 import nibabel as nib
 import torch
@@ -10,7 +10,7 @@ from ml_recon.utils import fft_2d_img, ifft_2d_img, k_to_img
 import sys
 import gc
 
-IMAGE_SIZE = (240, 240)
+IMAGE_SIZE = (256, 256)
 
 # Define a function to process a single file
 def process_file(file, out_path, seed, noise, coil_file):
@@ -25,7 +25,9 @@ def process_file(file, out_path, seed, noise, coil_file):
     for modality in modality_files:
         if 'nii' in modality and 'seg' not in modality:
             modality_name.append(modality.split('_')[-1].split('.')[0])
-            images.append(nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata())
+            contrast_image = nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata()
+            contrast_image = resample(contrast_image, 256, 256, 'bilinear')
+            images.append(contrast_image)
         
     images = np.stack(images, axis=0)
     images = images/np.max(images, axis=(1, 2), keepdims=True)

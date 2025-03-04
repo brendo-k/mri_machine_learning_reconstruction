@@ -83,25 +83,11 @@ class SensetivityModel_mc(nn.Module):
         # on the sets. I have just hard coded this for now, but could be interesting to 
         # test different coil estimation methods 
         # height doesn't matter (since column wise sampling) 
-               # Take center row to estimate column with for acs
-        b, con, chan, h , w = coil_k_spaces.shape
-        squeezed_mask = mask[:, :, 0, h//2, :].to(torch.int8)
-        center = squeezed_mask.shape[-1] // 2
-        # Get the first zero index starting from the center. This gives us "left"
-        # and "right" sides of ACS
-        left = torch.argmin(squeezed_mask[..., :center].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask[..., center:], dim=-1)
+               # Take center row to estimate column with for acs   
+        h, w = coil_k_spaces.shape[-2:] 
+        center_mask = torch.zeros((h, w), device=coil_k_spaces.device)
+        center_mask[h//2-5:h//2+5, w//2-5:w//2+5] = 1
 
-        # force symmetric left and right acs boundries
-        num_low_frequencies_tensor = torch.min(left, right)
-
-        center_mask = torch.zeros_like(coil_k_spaces, dtype=torch.bool)
-        # loop through num_low freq tensor and set acs lines to true
-        for i in range(num_low_frequencies_tensor.shape[0]):
-            for j in range(num_low_frequencies_tensor.shape[1]):
-                center_mask[i, j, ..., center-num_low_frequencies_tensor[i, j]:center + num_low_frequencies_tensor[i, j]] = True
-
-        assert not center_mask.isnan().any()
         return coil_k_spaces * center_mask
         
 

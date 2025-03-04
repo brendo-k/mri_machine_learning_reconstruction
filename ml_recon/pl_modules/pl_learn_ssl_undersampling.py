@@ -71,6 +71,13 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model.pass_through_model(k_space * mask, mask, fs_k_space)
         return estimate_k
 
+    def on_train_epoch_start(self):
+        # set epoch in train dataloader for updating new lambda masks
+        if self.trainer.train_dataloader:
+            self.trainer.train_dataloader.dataset.set_epoch(self.current_epoch)
+        return
+    
+
     def training_step(self, batch, batch_idx):
         # init loss tensors (some may be unused)
 
@@ -124,7 +131,7 @@ class LearnedSSLLightning(plReconModel):
             return
 
         # log first batch of every 10th epoch
-        if batch_idx != 0 or self.current_epoch % 10 != 0:
+        if batch_idx != 0 or self.current_epoch % 1 != 0:
             return 
 
         wandb_logger = self.logger
@@ -196,7 +203,7 @@ class LearnedSSLLightning(plReconModel):
     
 
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
-        if batch_idx > 4 or self.current_epoch % 10 != 0:
+        if batch_idx > 4 or self.current_epoch % 1 != 0:
             plot_images = False
         else:
             plot_images = True
@@ -303,7 +310,7 @@ class LearnedSSLLightning(plReconModel):
             grad_x = lambda targ, pred: l1_loss(targ.diff(dim=-1), pred.diff(dim=-1))
             grad_y = lambda targ, pred: l1_loss(targ.diff(dim=-2), pred.diff(dim=-2))
             image_loss = lambda targ, pred: (
-                    2*l1_loss(targ, pred) + 
+                    l1_loss(targ, pred) + 
                     grad_x(targ, pred) + 
                     grad_y(targ, pred)
             )
@@ -418,6 +425,8 @@ class LearnedSSLLightning(plReconModel):
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
 
+        lam_full_scaling, lam_inv_scaling, inv_full_scaling = self.warmup_image_space_loss()
+
         loss_dict = {}
         if self.use_superviesd_image_loss:
             target_img = k_to_img(fully_sampled, coil_dim=2)
@@ -433,7 +442,7 @@ class LearnedSSLLightning(plReconModel):
             full_k, 
             lambda_k, 
             undersampled_k, 
-            self.image_scaling_lam_full
+            lam_full_scaling
             )
 
         # calculate inverse lambda image and k-space loss pathway 
@@ -445,7 +454,7 @@ class LearnedSSLLightning(plReconModel):
             lambda_k, 
             inverse_k,
             undersampled_k,
-            self.image_scaling_lam_inv
+            lam_inv_scaling
             )
         # calculate inverse full loss image pathway
         if (inverse_k is not None) and (full_k is not None):
@@ -453,8 +462,21 @@ class LearnedSSLLightning(plReconModel):
             full_k, 
             inverse_k,
             undersampled_k,
-            self.image_scaling_full_inv
+            inv_full_scaling
             )
             
             
         return loss_dict
+
+    def warmup_image_space_loss(self):
+        if self.current_epoch < 20:
+            scaling_factor = self.current_epoch / 20
+        else: 
+            scaling_factor = 1
+        
+        return (
+            scaling_factor * self.image_scaling_lam_full, 
+            scaling_factor * self.image_scaling_lam_inv, 
+            scaling_factor * self.image_scaling_full_inv
+            )
+        

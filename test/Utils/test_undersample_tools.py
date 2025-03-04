@@ -55,12 +55,13 @@ def test_bern_segregated():
     masks, probs = get_mask_from_segregated_sampling(pdf, rng, line_constrained = False)
     assert masks.shape == pdf.shape
     
-def test_scaling():
+@pytest.mark.parametrize('R_hat', [2, 3, 4, 5, 6, 7])
+def test_scaling(R_hat):
     
     pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
-    pdf_R4 = gen_pdf_bern(120, 320, 1/4, 8, 10)
+    pdf_R4 = gen_pdf_bern(120, 320, 1/R_hat, 8, 10)
     
-    scaled_pdf = scale_pdf(pdf_R8, 4, 10)
+    scaled_pdf = scale_pdf(pdf_R8, R_hat, 10)
 
     np.testing.assert_allclose(scaled_pdf, pdf_R4) 
     
