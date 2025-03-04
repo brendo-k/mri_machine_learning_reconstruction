@@ -31,7 +31,7 @@ model_parameters:
   image_loss: l1_grad
   all_data_no_grad: true 
   pass_through_size: 10
-  sampling_method: 1d
+  sampling_method: 2d
   mask_threshold_t2: 0.11
   mask_threshold_t1: 0.11
   mask_threshold_flair: 0.11

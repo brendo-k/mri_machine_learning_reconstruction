@@ -223,7 +223,7 @@ def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=
 
     return input_mask, loss_mask
 
-def gen_pdf_bern_charlie(nx, ny, delta, p, c_sq, inv_flag):
+def gen_pdf_bern_charlie(nx, ny, delta, p, c_sq):
     # generates 2D polynomial variable density with sampling factor delta, fully sampled central square c_sq
     xv, yv = np.meshgrid(np.linspace(-1, 1, ny), np.linspace(-1, 1, nx), sparse=False, indexing='xy')
     r = np.sqrt(xv ** 2 + yv ** 2)
@@ -242,9 +242,6 @@ def gen_pdf_bern_charlie(nx, ny, delta, p, c_sq, inv_flag):
         prob_map = (1 - r) ** p + c
         prob_map[prob_map > 1] = 1
         prob_map[prob_map < 0] = 0
-
-        if inv_flag:
-            prob_map = 1 - prob_map
 
         prob_map[nx // 2 - c_sq // 2:nx // 2 + c_sq // 2, ny // 2 - c_sq // 2:ny // 2 + c_sq // 2] = 1
 
