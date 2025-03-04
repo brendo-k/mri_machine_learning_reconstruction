@@ -18,9 +18,9 @@ model_parameters:
   test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
   chans: 18
   cascades: 4
-  ssim_scaling_full: 0
-  ssim_scaling_set: 0
-  ssim_scaling_inverse: 0
+  ssim_scaling_full: 1.0e-6
+  ssim_scaling_set: 1.0e-6
+  ssim_scaling_inverse: 6.0e-7
   lambda_scaling: 0.65
   sigmoid_slope2: 200
   sigmoid_slope1: 5

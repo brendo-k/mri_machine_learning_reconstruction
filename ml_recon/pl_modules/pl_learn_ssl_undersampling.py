@@ -469,8 +469,8 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def warmup_image_space_loss(self):
-        if self.current_epoch < 20:
-            scaling_factor = self.current_epoch / 20
+        if self.current_epoch < 10:
+            scaling_factor = self.current_epoch / 10
         else: 
             scaling_factor = 1
         
