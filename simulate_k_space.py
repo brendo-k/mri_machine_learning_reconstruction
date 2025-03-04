@@ -26,7 +26,6 @@ def process_file(file, out_path, seed, noise, coil_file):
         if 'nii' in modality and 'seg' not in modality:
             modality_name.append(modality.split('_')[-1].split('.')[0])
             contrast_image = nib.nifti1.load(os.path.join(dir, file, modality)).get_fdata()
-            contrast_image = resample(contrast_image, 256, 256, 'bilinear')
             images.append(contrast_image)
         
     images = np.stack(images, axis=0)
@@ -42,6 +41,7 @@ def process_file(file, out_path, seed, noise, coil_file):
             cur_images = images[..., i]
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
+            cur_images = resample(cur_images, 256, 256, 'linear')
             sim_k_space, gt = simulate_k_space(
                                         cur_images, 
                                         seed+i,
@@ -100,24 +100,21 @@ if __name__ == '__main__':
         files = [os.path.join(dir, split, file) for file in files]
         #files = [files[i] for i in range(20)]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
-        #for file, seed in zip(files, seeds):
-        #     process_file(
-        #         file, 
-        #         os.path.join(save_dir, split),
-        #         seed, 
-        #         noise, 
-        #         coil_file
-        #     )
-        #     counter += 1
-        #     if counter > 10: 
-        #         break
+        for file, seed in zip(files, seeds):
+             process_file(
+                 file, 
+                 os.path.join(save_dir, split),
+                 seed, 
+                 noise, 
+                 coil_file
+             )
 
-        pool.starmap(process_file, 
-                    zip(
-                        files.__iter__(), 
-                        repeat(os.path.join(save_dir, split)),
-                        seeds,
-                        repeat(noise),
-                        repeat(coil_file)
-                        )
-                    )
+        #pool.starmap(process_file, 
+        #            zip(
+        #                files.__iter__(), 
+        #                repeat(os.path.join(save_dir, split)),
+        #                seeds,
+        #                repeat(noise),
+        #                repeat(coil_file)
+        #                )
+        #            )
