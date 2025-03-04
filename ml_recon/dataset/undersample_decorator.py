@@ -8,10 +8,8 @@ from torch.utils.data import Dataset
 from typing import Union, Callable
 from ml_recon.utils.undersample_tools import (
     apply_undersampling_from_dist, 
-    gen_pdf_columns, 
     gen_pdf_columns_charlie,
-    gen_pdf_bern, 
-    scale_pdf, 
+    gen_pdf_bern_charlie, 
     ssdu_gaussian_selection
     )
 
@@ -51,9 +49,9 @@ class UndersampleDecorator(Dataset):
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
         if self.sampling_type == '2d' or self.sampling_type == 'pi':
-            self.omega_prob = gen_pdf_bern(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
+            self.omega_prob = gen_pdf_bern_charlie(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
             self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
-            self.lambda_prob = gen_pdf_bern(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) # type: ignore
+            self.lambda_prob = gen_pdf_bern_charlie(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) # type: ignore
             self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
         elif self.sampling_type == '1d':
             self.omega_prob = gen_pdf_columns_charlie(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore

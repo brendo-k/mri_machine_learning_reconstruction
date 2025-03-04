@@ -6,7 +6,6 @@ from ml_recon.utils.undersample_tools import (
     gen_pdf_columns, 
     gen_pdf_bern, 
     get_mask_from_distribution, 
-    get_mask_from_segregated_sampling, 
     apply_undersampling_from_dist,
     scale_pdf,
     ssdu_gaussian_selection
@@ -46,15 +45,6 @@ def test_columns(acceleration_factor):
     assert pdf.min() >= 0
 
 
-def test_bern_segregated():
-    
-    pdf = gen_pdf_bern(120, 320, 1/8, 8, 10)
-    pdf = np.repeat(pdf[np.newaxis, :, :], 4, axis=0)
-    rng = np.random.default_rng()
-
-    masks, probs = get_mask_from_segregated_sampling(pdf, rng, line_constrained = False)
-    assert masks.shape == pdf.shape
-    
 @pytest.mark.parametrize('R_hat', [2, 3, 4, 5, 6, 7])
 def test_scaling(R_hat):
     
@@ -98,7 +88,6 @@ def test_apply_undersampling_not_same():
         pdf_R4,
         k_space,
         line_constrained=False, 
-        deterministic=False
     )
 
     k_mask = undersampled_k != 0 
