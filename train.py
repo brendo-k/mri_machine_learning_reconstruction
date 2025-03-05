@@ -106,7 +106,7 @@ def main(args):
 
     wandb_logger = WandbLogger(
         project=args.project, 
-        log_model=True, 
+        log_model=False, 
         name=args.run_name, 
         save_dir='/home/kadotab/scratch'
         )
@@ -117,10 +117,18 @@ def main(args):
 
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
+
     checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
-    
-    
     remove_optimizer_state(checkpoint_path)
+
+    log_weights_to_wandb(wandb_logger, checkpoint_path)
+
+def log_weights_to_wandb(wandb_logger, checkpoint_path):
+    checkpoint_name = f"model-{wandb_logger.experiment.id}"
+    artifact = wandb.Artifact(name=checkpoint_name, type="model")
+    artifact.add_file(local_path=checkpoint_path, name='model.ckpt')
+    wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
+
 
 def remove_optimizer_state(checkpoint_path):
     checkpoint = torch.load(checkpoint_path)

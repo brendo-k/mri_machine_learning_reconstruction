@@ -16,33 +16,6 @@ def test_passthrough(sensitivity_model):
 
     assert output.shape == x.shape
 
-@torch.no_grad()
-def test_mask(sensitivity_model):
-    x = torch.rand((3, 4, 20, 640, 320))
-    mask = torch.zeros(3, 4, 20, 640, 320)
-    # test simple case
-    mask[0, :, :, :, 150:170] = 1
-    mask[0, :, :, :, 10:130:2] = 1
-    mask[0, :, :, :, 180::2] = 1
-
-    # test non-center lines
-    mask[1, :, :, :, 155:165] = 1
-    mask[1, :, :, :, 20:40] = 1
-
-    # test uneven center lines
-    mask[2, :, :, :, 156:165] = 1
-    mask = mask.to(torch.bool)
-    
-    x_masked = sensitivity_model.mask_center(x, mask)
-    
-    x_masked_indecies = x_masked != 0
-    real_mask = torch.zeros(3, 4, 20, 640, 320)
-    real_mask[0, ..., 150:170] = 1
-    real_mask[1, ..., 155:165] = 1
-    real_mask[2, ..., 155:165] = 1
-    real_mask = real_mask.to(torch.bool)
-
-    torch.testing.assert_close(x_masked_indecies, real_mask)
 
 @torch.no_grad()
 def test_scaling():

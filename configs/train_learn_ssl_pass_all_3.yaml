@@ -1,7 +1,7 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 100 
-  batch_size: 3
+  max_epochs: 1
+  batch_size: 2
   lr: 0.001
 
 dataset_parameters:
@@ -9,13 +9,13 @@ dataset_parameters:
   dataset: brats 
   contrasts:
     - t1
-  nx: 240
-  ny: 240
-  limit_volumes: 1 
+  nx: 256
+  ny: 256
+  limit_volumes: 0.1
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
   chans: 18
   cascades: 4
   ssim_scaling_full: 1.0e-6
@@ -27,7 +27,7 @@ model_parameters:
   k_loss: 'l1'
   pass_inverse_data: true
   pass_all_data: true
-  learn_sampling: false
+  learn_sampling: true
   image_loss: l1_grad
   all_data_no_grad: true 
   pass_through_size: 10
@@ -35,6 +35,9 @@ model_parameters:
   mask_threshold_t2: 0.11
   mask_threshold_t1: 0.11
   mask_threshold_flair: 0.11
+  warmup_training: False
+  norm_method: 'image_mean'
+  warm_start: true
 
 
 logging_parameters:

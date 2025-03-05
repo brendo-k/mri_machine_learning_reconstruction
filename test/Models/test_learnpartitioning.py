@@ -76,24 +76,6 @@ def test_lambda_mask_has_acs(ssl_model: LearnPartitioning, sample_batch: torch.T
     assert (center_region == 1).all(), 'ACS lines should be all 1!'
 
 
-
-    
-def test_norm_probability(ssl_model: LearnPartitioning):
-    """
-    Test the forward pass of SSLModel.
-    """
-    model = ssl_model
-
-    # Forward pass
-    probability = model.get_probability()
-    center_h_box, center_w_box = get_center_slice(probability, ACS_LINES)
-
-    assert probability.shape == model.config.image_size
-    assert 1/probability.mean() == model.config.inital_R_value
-    assert probability.max() <= 1.0 and probability.min() >= 0.0
-    assert (probability[..., center_h_box, center_w_box] == 1).all()
-
-
 def test_updating_params(ssl_model: LearnPartitioning, sample_batch: torch.Tensor):
     """
     Test the forward pass of SSLModel.

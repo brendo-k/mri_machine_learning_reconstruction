@@ -33,7 +33,7 @@ def temp_h5_directories(scope='session'):
                     ).astype(np.complex64)
                     complex_data[..., 64, 64] = 5 + 5j
                     h5_file.create_dataset("k_space", data=complex_data)
-                    h5_file.create_dataset("rss_images", data=np.abs(complex_data[:, :, 0, :, :]))
+                    h5_file.create_dataset("ground_truth", data=np.abs(complex_data[:, :, 0, :, :]))
                     h5_file.create_dataset("contrasts", data=contrasts)
 
         # Yield the path to the temporary directory
@@ -113,6 +113,8 @@ def test_supervisedMasks(define_datamodule):
     initial_mask = undersampled_train != 0
     fully_sampled = train_batch['fs_k_space']
 
+    val_batch = val_batch[0]
+    val_batch2 = val_batch2[0]
     undersampled_val = val_batch['undersampled']
     initial_mask_val = undersampled_val != 0
     mask_val = val_batch['mask']
@@ -126,16 +128,16 @@ def test_supervisedMasks(define_datamodule):
 
     assert initial_mask.sum() > 0
     torch.testing.assert_close(undersampled_train, mask_train*fully_sampled)
-    torch.testing.assert_close(mask_train.repeat(1, 1, 3, 1, 1).bool(), initial_mask*fully_sampled != 0)
+    torch.testing.assert_close(mask_train, initial_mask*fully_sampled != 0)
 
     assert initial_mask_val.sum() > 0
     torch.testing.assert_close(undersampled_val, mask_val*fully_sampled_val)
-    torch.testing.assert_close(mask_val.repeat(1, 1, 3, 1, 1).bool(), initial_mask_val * fully_sampled != 0)
+    torch.testing.assert_close(mask_val, initial_mask_val * fully_sampled != 0)
     torch.testing.assert_close(mask_val, mask_val2)
 
     assert initial_mask_test.sum() > 0
     torch.testing.assert_close(undersampled_test, mask_test*fully_sampled_test)
-    torch.testing.assert_close(mask_test.repeat(1, 1, 3, 1, 1).bool(), initial_mask_test * fully_sampled != 0)
+    torch.testing.assert_close(mask_test, initial_mask_test * fully_sampled != 0)
 
 @pytest.mark.parametrize("is_self_supervised", [True, False])
 def test_scaling(temp_h5_directories, is_self_supervised):
@@ -161,10 +163,10 @@ def test_scaling(temp_h5_directories, is_self_supervised):
     initial_mask = undersampled != 0
     fully_sampled = train_batch['fs_k_space']
 
-    undersampled_val = val_batch['undersampled']
+    undersampled_val = val_batch[0]['undersampled']
     initial_mask_val = undersampled_val != 0
-    mask_val = val_batch['mask']
-    fully_sampled_val = val_batch['fs_k_space']
+    mask_val = val_batch[0]['mask']
+    fully_sampled_val = val_batch[0]['fs_k_space']
 
     undersampled_test = test_batch[0]['undersampled']
     initial_mask_test = undersampled_test != 0
@@ -202,7 +204,7 @@ def test_ssduSets(temp_h5_directories, set_name):
     else:
         batch = next(iter(data_module.test_dataloader()))
 
-    if set_name == 'test':
+    if set_name == 'test' or set_name == 'val':
         batch = batch[0]
         
     undersampled = batch['undersampled']
@@ -211,7 +213,7 @@ def test_ssduSets(temp_h5_directories, set_name):
     initial_mask = (undersampled != 0).to(torch.float32)
     fully_sampled = batch['fs_k_space']
 
-    torch.testing.assert_close(loss_mask + mask, initial_mask.index_select(2, torch.tensor([1])))
+    torch.testing.assert_close(loss_mask + mask, initial_mask)
     torch.testing.assert_close(undersampled, (loss_mask + mask) * fully_sampled)
     assert (loss_mask * mask == 0).all()
 
@@ -237,7 +239,7 @@ def test_ssduDetermenistic(temp_h5_directories, set_name):
         batch = next(iter(data_module.test_dataloader()))
         batch2 = next(iter(data_module.test_dataloader()))
     
-    if set_name == 'test':
+    if set_name == 'test' or set_name == 'val':
         batch = batch[0]
         batch2 = batch2[0]
 
@@ -275,7 +277,7 @@ def test_ssduNonDetermenistic(temp_h5_directories, set_name):
 
     batch = dataset[0]
     batch2 = dataset[0]
-    if set_name == 'test':
+    if set_name == 'test' or set_name == 'val':
         batch = batch[0]# type: ignore
         batch2 = batch2[0]# type: ignore
         
@@ -315,7 +317,7 @@ def test_mask_type(temp_h5_directories, set_name, is_self_supervised):
         dataset = data_module.test_dataloader()
 
     batch = next(iter(dataset))
-    if set_name == 'test':
+    if set_name == 'test' or set_name == 'val':
         batch = batch[0]
     undersampled = batch['undersampled']
     mask = batch['mask']
