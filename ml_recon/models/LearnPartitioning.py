@@ -6,9 +6,10 @@ from typing import List, Tuple, Optional
 from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
 from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
 from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.utils.undersample_tools import gen_pdf_bern
+from ml_recon.utils.undersample_tools import gen_pdf_bern_charlie, gen_pdf_columns_charlie
 import numpy as np
 from dataclasses import dataclass
+from typing import Literal
 
 @dataclass
 class LearnPartitionConfig:
@@ -18,6 +19,7 @@ class LearnPartitionConfig:
     sigmoid_slope_probability: float = 5.0
     sigmoid_slope_sampling: float = 200
     is_warm_start: bool = True
+    sampling_method: Literal['2d', '1d', 'pi'] = '2d'
 
 class LearnPartitioning(nn.Module):
     """
@@ -84,7 +86,10 @@ class LearnPartitioning(nn.Module):
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
         if config.is_warm_start: 
-            init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
+            if self.config.sampling_method == '2d':
+                init_prob = gen_pdf_bern_charlie(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
+            else: 
+                init_prob = gen_pdf_columns_charlie(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
             init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (config.image_size[0], 1, 1)))
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:

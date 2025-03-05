@@ -74,6 +74,7 @@ def main(args):
             sigmoid_slope_probability = args.sigmoid_slope1,
             sigmoid_slope_sampling = args.sigmoid_slope2,
             is_warm_start = args.warm_start,
+            sampling_method = args.sampling_method
         )
 
         tripple_pathway_config = DualDomainConifg(
@@ -99,6 +100,7 @@ def main(args):
             weight_decay=args.weight_decay,
             pass_through_size=args.pass_through_size,
             mask_theshold=thresholds,
+            enable_warmup_training=args.warmup_training
             )
     torch.set_float32_matmul_precision('medium')
 

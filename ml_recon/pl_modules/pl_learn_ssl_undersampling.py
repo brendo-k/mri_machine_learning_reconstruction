@@ -425,7 +425,7 @@ class LearnedSSLLightning(plReconModel):
         full_k = estimates['full_path']
         inverse_k = estimates['inverse_path']
 
-        lam_full_scaling, lam_inv_scaling, inv_full_scaling = self.warmup_image_space_loss()
+        lam_full_scaling, lam_inv_scaling, inv_full_scaling = self.get_image_space_scaling_factors()
 
         loss_dict = {}
         if self.use_superviesd_image_loss:
@@ -468,8 +468,8 @@ class LearnedSSLLightning(plReconModel):
             
         return loss_dict
 
-    def warmup_image_space_loss(self):
-        if self.current_epoch < 10:
+    def get_image_space_scaling_factors(self):
+        if self.enable_warmup_training and self.current_epoch < 10:
             scaling_factor = self.current_epoch / 10
         else: 
             scaling_factor = 1
