@@ -44,7 +44,6 @@ class UndersampleDecorator(Dataset):
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
         self.lambda_rng = np.random.default_rng() # generator for lambda mask seeds.
-        print('hello!')
         
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
