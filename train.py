@@ -112,7 +112,7 @@ def main(args):
         save_dir='.',
         offline=args.offline
         )
-    wandb_logger.experiment.config = hparams
+    wandb_logger.experiment.config.update(hparams)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=callbacks, # type: ignore
