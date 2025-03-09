@@ -103,13 +103,16 @@ def main(args):
             enable_warmup_training=args.warmup_training
             )
     torch.set_float32_matmul_precision('medium')
-
+    hparams = model.hparams
+    hparams.update(data_module.hparams)
     wandb_logger = WandbLogger(
         project=args.project, 
         log_model=False, 
         name=args.run_name, 
-        save_dir='/home/kadotab/scratch'
+        save_dir='.',
+        offline=args.offline
         )
+    wandb_logger.experiment.config = hparams
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=callbacks, # type: ignore
@@ -178,6 +181,7 @@ if __name__ == '__main__':
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
+    training_group.add_argument("--offline", action='store_true')
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
