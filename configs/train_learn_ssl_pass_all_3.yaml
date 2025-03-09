@@ -14,10 +14,10 @@ dataset_parameters:
   limit_volumes: 0.1
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  chans: 18
-  cascades: 4
+  data_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
+  test_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
+  chans: 32
+  cascades: 6
   ssim_scaling_full: 1.0e-6
   ssim_scaling_set: 1.0e-6
   ssim_scaling_inverse: 6.0e-7
@@ -28,10 +28,10 @@ model_parameters:
   pass_inverse_data: true
   pass_all_data: true
   learn_sampling: true
-  image_loss: l1_grad
+  image_loss: ssim
   all_data_no_grad: true 
   pass_through_size: 10
-  sampling_method: 2d
+  sampling_method: 1d
   mask_threshold_t2: 0.11
   mask_threshold_t1: 0.11
   mask_threshold_flair: 0.11
