@@ -1,7 +1,7 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 1
-  batch_size: 2
+  max_epochs: 20
+  batch_size: 1
   lr: 0.001
 
 dataset_parameters:
@@ -11,17 +11,17 @@ dataset_parameters:
     - t1
   nx: 256
   ny: 256
-  limit_volumes: 0.1
+  limit_volumes: 1
 
 model_parameters:
-  data_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
-  test_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
+  data_dir: $DATADIR
+  test_dir: $DATADIR
   chans: 32
   cascades: 6
-  ssim_scaling_full: 1.0e-6
+  ssim_scaling_full: 6.0e-6
   ssim_scaling_set: 1.0e-6
-  ssim_scaling_inverse: 6.0e-7
-  lambda_scaling: 0.65
+  ssim_scaling_inverse: 6.0e-6
+  lambda_scaling: 0.50
   sigmoid_slope2: 200
   sigmoid_slope1: 5
   k_loss: 'l1'
@@ -37,7 +37,7 @@ model_parameters:
   mask_threshold_flair: 0.11
   warmup_training: False
   norm_method: 'image_mean'
-  warm_start: true
+  warm_start: False
 
 
 logging_parameters:

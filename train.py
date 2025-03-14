@@ -103,16 +103,12 @@ def main(args):
             enable_warmup_training=args.warmup_training
             )
     torch.set_float32_matmul_precision('medium')
-    hparams = model.hparams
+    hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
+    wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
     wandb_logger = WandbLogger(
-        project=args.project, 
-        log_model=False, 
-        name=args.run_name, 
-        save_dir='.',
-        offline=args.offline
+            experiment=wandb_experiment
         )
-    wandb_logger.experiment.config.update(hparams)
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
                          callbacks=callbacks, # type: ignore
@@ -134,7 +130,7 @@ def log_weights_to_wandb(wandb_logger, checkpoint_path):
 
 
 def remove_optimizer_state(checkpoint_path):
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     if 'optimizer_states' in checkpoint:
         del checkpoint['optimizer_states']
     torch.save(checkpoint, checkpoint_path)
@@ -237,6 +233,7 @@ if __name__ == '__main__':
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
     logger_group.add_argument('--run_name', type=str)
+    logger_group.add_argument('--logger_dir', type=str, default='/home/kadotab/scratch')
     
     args = parser.parse_args()
 
