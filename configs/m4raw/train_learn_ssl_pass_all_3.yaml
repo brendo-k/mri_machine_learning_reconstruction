@@ -1,0 +1,47 @@
+training_parameters:
+  num_workers: 2
+  max_epochs: 50
+  batch_size: 4
+  lr: 0.001
+
+dataset_parameters:
+  R: 8.0
+  dataset: brats 
+  contrasts:
+    - t1
+    - t2 
+    - flair
+  nx: 256
+  ny: 256
+  limit_volumes: 0.2
+
+model_parameters:
+  data_dir: '/home/brenden/Documents/Coding/data/M4Raw_first_repetition'
+  test_dir: '/home/brenden/Documents/Coding/data/M4Raw_Averaged'
+  chans: 18
+  cascades: 6
+  ssim_scaling_full: 1e-7
+  ssim_scaling_set: 0
+  ssim_scaling_inverse: 0
+  lambda_scaling: 0.6 
+  sigmoid_slope2: 200
+  sigmoid_slope1: 5
+  k_loss: 'l1'
+  pass_inverse_data: true
+  pass_all_data: true
+  learn_sampling: true
+  image_loss: ssim
+  all_data_no_grad: false 
+  pass_through_size: 10
+  sampling_method: 1d
+  mask_threshold_t2: 0.11
+  mask_threshold_t1: 0.11
+  mask_threshold_flair: 0.11
+  warmup_training: False
+  norm_method: 'image_mean'
+  warm_start: false
+
+
+logging_parameters:
+  project: "MRI Reconstruction"
+  run_name: Dual Domain
