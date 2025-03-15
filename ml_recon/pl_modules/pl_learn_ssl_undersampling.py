@@ -44,7 +44,6 @@ class LearnedSSLLightning(plReconModel):
 
         if enable_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
-            #self.partition_model_compiled = torch.compile(self.partition_model)
 
         self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
 
@@ -60,7 +59,6 @@ class LearnedSSLLightning(plReconModel):
         self.weight_decay = weight_decay
         self.mask_threshold = mask_theshold
         self.test_metrics = is_mask_testing
-        
 
         # loss function init
         self._setup_image_space_loss(image_loss_function)
@@ -153,29 +151,29 @@ class LearnedSSLLightning(plReconModel):
         fully_sampled_images = self.k_to_img_scaled(fully_sampled, image_scaling).clip(0, 1)
         lambda_images = self.k_to_img_scaled(estimates['lambda_path'], image_scaling).clip(0, 1)
 
-        wandb_logger.log_image('train/estimate_lambda', self.split_along_contrasts(lambda_images[0]))
-        wandb_logger.log_image('train/fully_sampled', self.split_along_contrasts(fully_sampled_images[0]))
+        wandb_logger.log_image('train/estimate_lambda', self.split_along_contrasts(lambda_images[0]), self.global_step)
+        wandb_logger.log_image('train/fully_sampled', self.split_along_contrasts(fully_sampled_images[0]), self.global_step)
 
         if estimates['inverse_path'] is not None:
             inverse_images = self.k_to_img_scaled(estimates['inverse_path'], image_scaling).clip(0, 1)
-            wandb_logger.log_image('train/estimate_inverse', self.split_along_contrasts(inverse_images[0]))
+            wandb_logger.log_image('train/estimate_inverse', self.split_along_contrasts(inverse_images[0]), self.global_step)
 
         if estimates['full_path'] is not None:
             full_images = self.k_to_img_scaled(estimates['full_path'], image_scaling).clip(0, 1)
-            wandb_logger.log_image('train/estimate_full', self.split_along_contrasts(full_images[0]))
+            wandb_logger.log_image('train/estimate_full', self.split_along_contrasts(full_images[0]), self.global_step)
 
         # plot masks (first of the batch)
         initial_mask = (undersampled_k != 0)[0, :, 0, :, :]
         lambda_set_plot = input_mask[0, :, 0, : ,:]
         loss_mask = loss_mask[0, :, 0, : ,:]
-        wandb_logger.log_image('train_masks/lambda_set', self.split_along_contrasts(lambda_set_plot))
-        wandb_logger.log_image('train_masks/loss_set', self.split_along_contrasts(loss_mask))
-        wandb_logger.log_image('train_masks/initial_mask', self.split_along_contrasts(initial_mask))
+        wandb_logger.log_image('train_masks/lambda_set', self.split_along_contrasts(lambda_set_plot), self.global_step)
+        wandb_logger.log_image('train_masks/loss_set', self.split_along_contrasts(loss_mask), self.global_step)
+        wandb_logger.log_image('train_masks/initial_mask', self.split_along_contrasts(initial_mask), self.global_step)
 
         # plot probability if learn partitioning
         if self.enable_learn_partitioning:
             probability = self.partition_model.get_probability_distribution()
-            wandb_logger.log_image('probability', self.split_along_contrasts(probability))
+            wandb_logger.log_image('probability', self.split_along_contrasts(probability), self.global_step)
 
 
     def validation_step(self, batch, batch_idx):
@@ -232,14 +230,14 @@ class LearnedSSLLightning(plReconModel):
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
             wandb_logger = self.logger
-            wandb_logger.log_image(f'val_images_recons/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)))
-            wandb_logger.log_image(f'val_images_diff/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]))
-            wandb_logger.log_image(f'val_images_diff/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]))
+            wandb_logger.log_image(f'val_images_recons/estimate_full_{batch_idx}', self.split_along_contrasts(estimate_image[0].clip(0, 1)), self.global_step)
+            wandb_logger.log_image(f'val_images_diff/diff_fs{batch_idx}', self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]), self.global_step)
+            wandb_logger.log_image(f'val_images_diff/diff_gt{batch_idx}', self.split_along_contrasts(gt_diff.clip(0, 1)[0]), self.global_step)
 
             # plot ground truths at the first epoch
             if self.current_epoch == 0:
-                wandb_logger.log_image(f'val_images_target/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)))
-                wandb_logger.log_image(f'val_images_target/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)))
+                wandb_logger.log_image(f'val_images_target/ground_truth_{batch_idx}', self.split_along_contrasts(ground_truth_image[0].clip(0, 1)), self.global_step)
+                wandb_logger.log_image(f'val_images_target/fully_sampled_{batch_idx}', self.split_along_contrasts(fully_sampled_image[0].clip(0, 1)), self.global_step)
 
          
         # log image space metrics 
