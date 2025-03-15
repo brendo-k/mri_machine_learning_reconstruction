@@ -30,7 +30,7 @@ class plReconModel(pl.LightningModule):
         self.mask_threshold = mask_threshold
 
 
-    def test_step(self, batch, batch_index):
+    def my_test_step(self, batch, batch_index, label=''):
         estimate_k, ground_truth_image = batch
         background_mask = self.get_image_background_mask(ground_truth_image)
 
@@ -61,14 +61,14 @@ class plReconModel(pl.LightningModule):
 
 
                 nmse_val = nmse(contrast_ground_truth, contrast_estimated)
-                ssim_val, ssim_image = ssim(
+                ssim_val  = ssim(
                     contrast_ground_truth, 
                     contrast_estimated, 
                     data_range=(0, contrast_ground_truth.max().item()),
-                    return_full_image=True
+                    return_full_image=False,
+                    kernel_size=7
                     )
-                
-                ssim_val = ssim_image[contrast_mask]
+                assert isinstance(ssim_val, torch.Tensor)
                 ssim_val = ssim_val.mean()
                 assert isinstance(ssim_val, torch.Tensor)          
                 psnr_val = psnr(contrast_ground_truth, contrast_estimated)
@@ -80,9 +80,9 @@ class plReconModel(pl.LightningModule):
             contrast_ssim /= ground_truth_image.shape[0]
             contrast_nmse /= ground_truth_image.shape[0]
             contrast_psnr /= ground_truth_image.shape[0]
-            self.log(f"metrics/nmse_{self.contrast_order[contrast_index]}", contrast_nmse, sync_dist=True, on_step=True)
-            self.log(f"metrics/ssim_{self.contrast_order[contrast_index]}", contrast_ssim, sync_dist=True, on_step=True)
-            self.log(f"metrics/psnr_{self.contrast_order[contrast_index]}", contrast_psnr, sync_dist=True, on_step=True)
+            self.log(f"metrics/{label}nmse_{self.contrast_order[contrast_index]}", contrast_nmse, sync_dist=True, on_step=True)
+            self.log(f"metrics/{label}ssim_{self.contrast_order[contrast_index]}", contrast_ssim, sync_dist=True, on_step=True)
+            self.log(f"metrics/{label}psnr_{self.contrast_order[contrast_index]}", contrast_psnr, sync_dist=True, on_step=True)
 
             average_ssim += contrast_ssim
             average_psnr += contrast_psnr
@@ -91,15 +91,15 @@ class plReconModel(pl.LightningModule):
         average_nmse /= ground_truth_image.shape[1]
         average_psnr /= ground_truth_image.shape[1]
         average_ssim /= ground_truth_image.shape[1]
-        self.log(f'metrics/mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
-        self.log(f'metrics/mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
-        self.log(f'metrics/mean_nmse', average_nmse, on_epoch=True, sync_dist=True)
+        self.log(f'metrics/{label}mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
+        self.log(f'metrics/{label}mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
+        self.log(f'metrics/{label}mean_nmse', average_nmse, on_epoch=True, sync_dist=True)
         
         return {
-            'loss': 0,
-            'estimate_image': estimated_image,
-            'ground_truth_image': ground_truth_image,
-            'mask': background_mask
+            f'{label}loss': 0,
+            f'{label}estimate_image': estimated_image,
+            f'{label}ground_truth_image': ground_truth_image,
+            f'{label}mask': background_mask
         }
 
 

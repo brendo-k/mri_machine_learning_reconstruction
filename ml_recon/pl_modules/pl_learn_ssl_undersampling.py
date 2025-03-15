@@ -21,9 +21,9 @@ class LearnedSSLLightning(plReconModel):
             varnet_config: VarnetConfig,
             dual_domain_config: DualDomainConifg,
             lr: float = 1e-3,
-            ssim_scaling_set: float = 1e-4,
-            ssim_scaling_full: float = 1e-4,
-            ssim_scaling_inverse: float = 1e-4,
+            image_loss_scaling_lam_inv: float = 1e-4,
+            image_loss_scaling_lam_full: float = 1e-4,
+            image_loss_scaling_full_inv: float = 1e-4,
             lambda_scaling: float = 1, 
             image_loss_function: str = 'ssim',
             k_space_loss_function: Literal['l1l2', 'l1', 'l2'] = 'l1l2',
@@ -49,9 +49,9 @@ class LearnedSSLLightning(plReconModel):
         self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
 
         self.lr = lr
-        self.image_scaling_lam_inv = ssim_scaling_set
-        self.image_scaling_lam_full = ssim_scaling_full
-        self.image_scaling_full_inv = ssim_scaling_inverse
+        self.image_scaling_lam_inv = image_loss_scaling_lam_inv
+        self.image_scaling_lam_full = image_loss_scaling_lam_full
+        self.image_scaling_full_inv = image_loss_scaling_full_inv
         self.lambda_loss_scaling = lambda_scaling
         self.enable_warmup_training = enable_warmup_training
         self.enable_learn_partitioning = enable_learn_partitioning
@@ -262,11 +262,18 @@ class LearnedSSLLightning(plReconModel):
 
 
     def test_step(self, batch, batch_index):
-        ground_truth_image = batch[1]
-        estimate_k, _ = self.infer_k_space(batch)
+        estimate_k, fs_k = self.infer_k_space(batch)
+        ground_truth_image = batch[1] # averaged or denoised ground truth
+        fully_sampled_imgage = k_to_img(fs_k, coil_dim=2) # noisy, fully sampled ground truth
+        
 
-        return super().test_step((estimate_k, ground_truth_image), batch_index)
+        gt_metrics = super().my_test_step((estimate_k, ground_truth_image), batch_index, 'gt')
+        fs_metrics = super().my_test_step((estimate_k, fully_sampled_imgage), batch_index, 'fs')
 
+        return {
+            'gt_metrics': gt_metrics, 
+            'fs_metrics': fs_metrics
+        }
 
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
@@ -301,7 +308,7 @@ class LearnedSSLLightning(plReconModel):
 
     def _setup_image_space_loss(self, image_loss_function):
         if image_loss_function == 'ssim':
-            image_loss = lambda targ, pred: 1 - ssim(targ, pred) # type: ignore
+            image_loss = lambda targ, pred: 1 - ssim(targ, pred, kernel_size=7) # type: ignore
         elif image_loss_function == 'l1':
             l1_loss = torch.nn.L1Loss()
             image_loss = lambda targ, pred: l1_loss(targ, pred)

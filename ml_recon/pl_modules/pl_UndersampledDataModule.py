@@ -57,55 +57,28 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
         self.transforms = self.setup_data_normalization(norm_method)
 
-    def setup_dataset_type(self, dataset_name):
-        dataset_name = str.lower(dataset_name)
-        if dataset_name == 'brats': 
-            dataset_class = BratsDataset
-            test_data_key = 'ground_truth'
-        elif dataset_name == 'fastmri':
-            dataset_class = FastMRIDataset
-            test_data_key = 'reconstruction_rss'
-        elif dataset_name == 'm4raw':
-            dataset_class = M4Raw
-            test_data_key = 'reconstruction_rss'
-        else: 
-            raise ValueError(f'{dataset_name} is not a valid dataset name')
-        return dataset_class, test_data_key
 
-    def setup_data_normalization(self, norm_method):
-        if norm_method == 'img':
-            transforms = normalize_image_max()
-        elif norm_method == 'k': 
-            transforms = normalize_k_max() 
-        elif norm_method == 'image_mean':
-            transforms = normalize_image_mean() 
-        elif norm_method == 'image_mean2':
-            transforms = normalize_image_mean2() 
-        elif norm_method == 'std':
-            transforms = normalize_image_std()
-        else:
-            transforms = None
-        return transforms
     
 
     def setup(self, stage):
         super().setup(stage)
-        data_dir = os.listdir(self.data_dir)
 
-
+        # get directories for different split folders
         train_dir = os.path.join(self.data_dir, 'train')
         val_dir = os.path.join(self.data_dir, 'val')
         val_gt_dir = os.path.join(self.test_dir, 'val')
         test_dir = os.path.join(self.data_dir, 'test')
         test_gt_dir = os.path.join(self.test_dir, 'test')
 
+        # keywords to control dataset data
         dataset_keyword_args = {
             'nx': self.resolution[0], 
             'ny': self.resolution[1],
             'contrasts': self.contrasts, 
             'limit_volumes': self.limit_volumes
         }
-
+        
+        # keywords to control k-space undersamplig 
         undersample_keyword_args = {
                 'R': self.R,
                 'R_hat': self.R_hat,
@@ -114,7 +87,6 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'acs_lines' : self.acs_lines, 
                 'poly_order': self.poly_order
         }
-
 
 
         train_dataset = self.dataset_class(
@@ -187,7 +159,7 @@ class UndersampledDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
                 self.val_dataset, 
-                batch_size=self.batch_size, 
+                batch_size=self.batch_size*4, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
@@ -195,11 +167,39 @@ class UndersampledDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
                 self.test_dataset, 
-                batch_size=self.batch_size, 
+                batch_size=self.batch_size*4, 
                 num_workers=self.num_workers,
                 pin_memory=True
                 )
+    def setup_dataset_type(self, dataset_name):
+        dataset_name = str.lower(dataset_name)
+        if dataset_name == 'brats': 
+            dataset_class = BratsDataset
+            test_data_key = 'ground_truth'
+        elif dataset_name == 'fastmri':
+            dataset_class = FastMRIDataset
+            test_data_key = 'reconstruction_rss'
+        elif dataset_name == 'm4raw':
+            dataset_class = M4Raw
+            test_data_key = 'reconstruction_rss'
+        else: 
+            raise ValueError(f'{dataset_name} is not a valid dataset name')
+        return dataset_class, test_data_key
 
+    def setup_data_normalization(self, norm_method):
+        if norm_method == 'img':
+            transforms = normalize_image_max()
+        elif norm_method == 'k': 
+            transforms = normalize_k_max() 
+        elif norm_method == 'image_mean':
+            transforms = normalize_image_mean() 
+        elif norm_method == 'image_mean2':
+            transforms = normalize_image_mean2() 
+        elif norm_method == 'std':
+            transforms = normalize_image_std()
+        else:
+            transforms = None
+        return transforms
 
 class normalize_image_max(object):
     def __call__(self, data: dict):
