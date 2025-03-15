@@ -12,50 +12,27 @@ def apply_undersampling_from_dist(
         index: int,  # index is neeed here to have determenistic (seed for rng)
         prob_map, 
         k_space, 
-        line_constrained: bool, 
 ) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:
+    line_constrained = check_pdf_line_constrained(prob_map)
 
     rng = get_random_generator(index)
     mask = get_mask_from_distribution(prob_map, rng, line_constrained)
     undersampled = k_space * np.expand_dims(mask, 1)
     return undersampled, np.expand_dims(mask, 1)
+
+def check_pdf_line_constrained(prob_map):
+    middle_slice = prob_map[0, :, prob_map.shape[-1]//2]
+    if (middle_slice == middle_slice[0]).all():
+        line_constrained = True
+    else:
+        line_constrained = False
+    return line_constrained
     
    
 def get_random_generator(index):
     rng = np.random.default_rng(index)
     return rng
 
-
-def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, center_square):
-# generates 1D polynomial variable density with sampling factor delta, fully sampled central square c_sq
-    xv = np.linspace(-1, 1, nx)
-    r = np.abs(xv)
-    # normalize to 1
-    r = r / (np.max(r) + 1/nx)
-    prob_map = (1 - r) ** poylnomial_power
-    prob_map[prob_map > 1] = 1
-
-    prob_map = np.tile(prob_map, (ny, 1))
-    prob_map = scale_pdf(prob_map, 1/one_over_R, center_square, True) 
-    return prob_map
-
-
-def gen_pdf_bern(nx, ny, delta, p, c_sq):
-    # generates 2D polynomial variable density with sampling factor delta, fully sampled central square c_sq
-    xv, yv = np.meshgrid(np.linspace(-1, 1, nx), np.linspace(-1, 1, ny))
-    r = np.sqrt(xv ** 2 + yv ** 2)
-    r /= (np.max(r) + 2/ny)
-
-    prob_map = (1 - r) ** p
-    prob_map[prob_map > 1] = 1
-    prob_map[prob_map < 0] = 0
-
-    prob_map = scale_pdf(prob_map, 1/delta, c_sq, False)
-
-    assert np.isclose(prob_map.mean(), delta, 1e-2, 0)
-    assert prob_map.max() <= 1 and prob_map.min() >= 0
-
-    return prob_map
 
 
 def get_mask_from_distribution(prob_map: NDArray[np.float32], rng, line_constrained) -> NDArray[np.bool_]:
@@ -68,7 +45,7 @@ def get_mask_from_distribution(prob_map: NDArray[np.float32], rng, line_constrai
         mask = rng.binomial(1, prob_map).astype(bool)
     return mask
 
-def gen_pdf_columns_charlie(nx, ny, one_over_R, poylnomial_power, c_sq):
+def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
 # generates 1D polynomial variable density with sampling factor delta, fully sampled central square c_sq
     xv = np.linspace(-1, 1, nx)
     r = np.abs(xv)
@@ -105,8 +82,10 @@ def gen_pdf_columns_charlie(nx, ny, one_over_R, poylnomial_power, c_sq):
 
 
 def scale_pdf(input_prob, R, center_square, line_constrained=False):
+    # NOTE: THIS FUNCTION ISN't USED ANYMORE. Scaling by a multiplacative scalar seems to be different
+    # than adding by some scalar.... Seems to make a significant difference which is weird...
     """
-    This function takes an input pdf and an R value and scales the pdf to have 
+    This function takes an input pdf and an R value and scales the pdf by some scalar to have 
     a mean sampling probability to be R. It functions by lowering the number of
     sampled locations if the input probability is over R and lowering the inverse
     (number of zeros) if the input probability is less that R.
@@ -223,7 +202,7 @@ def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=
 
     return input_mask, loss_mask
 
-def gen_pdf_bern_charlie(nx, ny, delta, p, c_sq):
+def gen_pdf_bern(nx, ny, delta, p, c_sq):
     # generates 2D polynomial variable density with sampling factor delta, fully sampled central square c_sq
     xv, yv = np.meshgrid(np.linspace(-1, 1, ny), np.linspace(-1, 1, nx), sparse=False, indexing='xy')
     r = np.sqrt(xv ** 2 + yv ** 2)
