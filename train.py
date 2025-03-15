@@ -64,7 +64,9 @@ def main(args):
             channels=args.chans,
             depth=args.depth,
             sensetivity_estimation=args.sense_method,
-            dropout=args.dropout
+            dropout=args.dropout, 
+            upsample_method=args.upsample_method, 
+            conv_after_upsample=args.conv_after_upsample
         )
         
         partitioning_config = LearnPartitionConfig(
@@ -89,9 +91,9 @@ def main(args):
             learn_partitioning_config = partitioning_config, 
             dual_domain_config = tripple_pathway_config,
             lr = args.lr,
-            ssim_scaling_full=args.ssim_scaling_full,
-            ssim_scaling_set=args.ssim_scaling_set,
-            ssim_scaling_inverse=args.ssim_scaling_inverse,
+            image_loss_scaling_lam_full=args.ssim_scaling_full,
+            image_loss_scaling_lam_inv=args.ssim_scaling_set,
+            image_loss_scaling_full_inv=args.ssim_scaling_inverse,
             lambda_scaling=args.lambda_scaling, 
             image_loss_function=args.image_loss,
             k_space_loss_function=args.k_loss,
@@ -107,7 +109,7 @@ def main(args):
     hparams.update(data_module.hparams)
     wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
     wandb_logger = WandbLogger(
-            experiment=wandb_experiment
+        experiment=wandb_experiment
         )
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
@@ -206,6 +208,8 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_through_size', type=int, default=10)
     model_group.add_argument('--dropout', type=float, default=0.0) 
     model_group.add_argument('--weight_decay', type=float, default=0.0) 
+    model_group.add_argument('--conv_after_upsample', action='store_true') 
+    model_group.add_argument('--upsample_method', type=str, default='conv') 
 
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
@@ -237,6 +241,6 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
 
-    args = replace_args_from_config(args.config, args)
+    args = replace_args_from_config(args.config, args, parser)
 
     main(args)

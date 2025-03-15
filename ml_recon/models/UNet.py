@@ -16,20 +16,37 @@ class Unet(nn.Module):
             depth:int=4,
             chans:int=18, 
             drop_prob:float=0.0, 
-            relu_slope:float=0.2
+            relu_slope:float=0.2,
+            upsample_method: str='conv',
+            conv_after_upsample: bool = False
             ):
 
         super().__init__()
         self.down_sample_layers = nn.ModuleList([double_conv(in_chan, chans, drop_prob, relu_slope)])
         cur_chan = chans
-        for _ in range(depth):
+        for _ in range(depth-1):
             self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob, relu_slope))
             cur_chan *= 2
 
+        # reduce chans if using max or bilinear upsampling method. This is because
+        # these methods do not reduce the number of channels on upsampling.
+        reduce_chans = not conv_after_upsample and 'conv' not in upsample_method
+        if reduce_chans:
+            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan, drop_prob, relu_slope))
+        else:
+            self.down_sample_layers.append(Unet_down(cur_chan, cur_chan*2, drop_prob, relu_slope))
+        cur_chan *= 2
+            
+
         self.up_sample_layers = nn.ModuleList()
-        for _ in range(depth):
-            self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope))
+        for _ in range(depth-1):
+            if reduce_chans:
+                self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//4, drop_prob, relu_slope, upsample_method, conv_after_upsample))
+            else:
+                self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope, upsample_method, conv_after_upsample))
             cur_chan //= 2
+        self.up_sample_layers.append(Unet_up(cur_chan, cur_chan//2, drop_prob, relu_slope, upsample_method, conv_after_upsample))
+
         self.conv1d = nn.Conv2d(chans, out_chan, 1, bias=False)
         self.depth = depth
 
@@ -92,9 +109,9 @@ class Unet_down(nn.Module):
         return x
 
 class Unet_up(nn.Module):
-    def __init__(self, in_chan, out_chan, drop_prob, relu_slope):
+    def __init__(self, in_chan, out_chan, drop_prob, relu_slope, upsample_method, conv_after_upsample):
         super().__init__()
-        self.up = up(in_chan, out_chan)
+        self.up = up(in_chan, out_chan, upsample_method, conv_after_upsample)
         self.concat = concat()
         self.conv = double_conv(in_chan, out_chan, drop_prob, relu_slope)
 
@@ -136,13 +153,34 @@ class down(nn.Module):
 
 class up(nn.Module):
 
-    def __init__(self, in_chan, out_chan):
+    def __init__(self, in_chan, out_chan, upsample_method, conv_after_upsample):
         super().__init__()
-        self.layers = nn.Sequential(
-          nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-          nn.InstanceNorm2d(out_chan, affine=True),
-          nn.LeakyReLU(negative_slope=0.2, inplace=True),
-        )
+        if upsample_method == 'conv':
+            self.layers = nn.Sequential(
+            nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
+            nn.InstanceNorm2d(out_chan, affine=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            )
+        elif upsample_method == 'bilinear':
+            self.layers = nn.Sequential(
+                nn.Upsample(scale_factor=2, align_corners=True, mode='bilinear'),
+            )
+        elif upsample_method == 'max':
+            self.layers = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode='nearest'),
+            )
+        elif upsample_method == 'conv_init':
+            self.layers = nn.Sequential(
+            nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
+            nn.InstanceNorm2d(out_chan, affine=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            )
+            torch.nn.init.constant_(self.layers[0].weight, 1)
+        else: 
+            raise ValueError(f'{upsample_method} is not valid argument')
+
+        if conv_after_upsample:
+            self.layers.append(nn.Conv2d(in_chan, out_chan, kernel_size=3, padding=1, bias=False))
 
     def forward(self, x):
         return self.layers(x)

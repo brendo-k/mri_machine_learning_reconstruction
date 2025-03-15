@@ -7,7 +7,7 @@ from ml_recon.utils import ifft_2d_img
 from ml_recon.models import Unet
 from ml_recon.utils import real_to_complex, complex_to_real, root_sum_of_squares
 
-from typing import Tuple
+from typing import Tuple, Literal
 
 class SensetivityModel_mc(nn.Module):
     def __init__(
@@ -16,7 +16,9 @@ class SensetivityModel_mc(nn.Module):
             out_chans: int, 
             chans: int, 
             batch_contrasts: bool = False,
-            sensetivity_estimation: str = 'first'
+            sensetivity_estimation: Literal['first', 'joint'] = 'first',
+            conv_after_upsample: bool = False,
+            upsample_method: str = 'conv'
             ):
 
         """Module used to estimate sensetivity maps based on masked center k-space
@@ -31,7 +33,7 @@ class SensetivityModel_mc(nn.Module):
         super().__init__()
         self.batch_contrasts = batch_contrasts
         self.sensetivity_estimation = sensetivity_estimation
-        self.model = Unet(in_chans, out_chans, chans=chans)
+        self.model = Unet(in_chans, out_chans, chans=chans, conv_after_upsample=conv_after_upsample, upsample_method=upsample_method)
 
     # recieve coil maps as [B, contrast, channels, H, W]
     def forward(self, images, mask):

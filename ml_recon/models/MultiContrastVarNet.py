@@ -20,6 +20,8 @@ class VarnetConfig:
     sensetivity_estimation: str = 'first' # can be first, joint, individual
     dropout: float = 0
     depth: int = 4
+    upsample_method: str = 'conv'
+    conv_after_upsample: bool = False
 
 
 class MultiContrastVarNet(nn.Module):
@@ -33,7 +35,9 @@ class MultiContrastVarNet(nn.Module):
                 out_chan=contrasts*2, 
                 chans=config.channels, 
                 drop_prob=config.dropout, 
-                depth=config.depth
+                depth=config.depth, 
+                upsample_method=config.upsample_method,
+                conv_after_upsample=config.conv_after_upsample
                 )
             #model_backbone = torch.compile(model_backbone)
         else:
@@ -45,7 +49,7 @@ class MultiContrastVarNet(nn.Module):
         )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans)
+        self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans, upsample_method=config.upsample_method, conv_after_upsample=config.conv_after_upsample)
         # regularizer weight
         self.lambda_reg = nn.Parameter(torch.ones((config.cascades)))
 
