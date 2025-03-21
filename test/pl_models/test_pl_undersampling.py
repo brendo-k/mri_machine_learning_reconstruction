@@ -264,7 +264,8 @@ def test_ssduNonDetermenistic(temp_h5_directories, set_name):
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
             self_supervsied=True,
-            R=4
+            R=4,
+            ssdu_partioning=True
             ) 
     data_module.setup(set_name)
 
@@ -330,3 +331,78 @@ def test_mask_type(temp_h5_directories, set_name, is_self_supervised):
     assert loss_mask.dtype == torch.float32
 
 
+@pytest.mark.parametrize("set_name", ["train", "val", "test"])
+def test_ssl_non_determenistic(temp_h5_directories, set_name):
+    data_module = UndersampledDataModule(
+            'brats', 
+            temp_h5_directories, 
+            temp_h5_directories, 
+            batch_size=BATCH_SIZE, 
+            resolution=DATA_SIZE[3:],
+            num_workers=0,
+            contrasts=['t1', 't2', 't1ce', 'flair'],
+            self_supervsied=True,
+            R=4
+            ) 
+    data_module.setup(set_name)
+
+    if set_name == "train":
+        dataset = data_module.train_dataset
+    elif set_name == "val":
+        dataset = data_module.val_dataset
+    else:
+        dataset = data_module.test_dataset
+
+    batch = dataset[0]
+    batch2 = dataset[0]
+    if set_name == 'test' or set_name == 'val':
+        batch = batch[0]# type: ignore
+        batch2 = batch2[0]# type: ignore
+        
+    undersampled = batch['undersampled'] # type: ignore
+    undersampled2 = batch2['undersampled']# type: ignore
+    mask = batch['mask']# type: ignore
+    mask2 = batch2['mask']# type: ignore
+    loss_mask = batch['loss_mask']# type: ignore
+    loss_mask2 = batch2['loss_mask']# type: ignore
+
+    torch.testing.assert_close(undersampled, undersampled2)
+    assert (mask2 != mask).any()
+    assert (loss_mask != loss_mask2).any()
+    torch.testing.assert_close(mask2 + loss_mask2, mask + loss_mask)
+
+@pytest.mark.parametrize("set_name", ["val", "test"]) # idk how to get the same slice from the train dataloader other than turning off shuffle
+def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
+    data_module = UndersampledDataModule(
+            'brats', 
+            temp_h5_directories, 
+            temp_h5_directories, 
+            batch_size=BATCH_SIZE, 
+            resolution=DATA_SIZE[3:],
+            num_workers=2,
+            contrasts=['t1', 't2', 't1ce', 'flair'],
+            self_supervsied=True,
+            R=4
+            ) 
+    data_module.setup(set_name)
+
+    if set_name == "val":
+        dataset = data_module.val_dataloader()
+    else:
+        dataset = data_module.test_dataloader()
+
+    if set_name == 'test' or set_name == 'val':
+        batch = next(iter(dataset))[0]
+        batch2 = next(iter(dataset))[0]
+        
+    undersampled = batch['undersampled'] # type: ignore
+    undersampled2 = batch2['undersampled']# type: ignore
+    mask = batch['mask']# type: ignore
+    mask2 = batch2['mask']# type: ignore
+    loss_mask = batch['loss_mask']# type: ignore
+    loss_mask2 = batch2['loss_mask']# type: ignore
+
+    torch.testing.assert_close(undersampled, undersampled2)
+    assert (mask2 != mask).any()
+    assert (loss_mask != loss_mask2).any()
+    torch.testing.assert_close(mask2 + loss_mask2, mask + loss_mask)

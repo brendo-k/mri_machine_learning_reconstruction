@@ -1,0 +1,25 @@
+# Supervised config file for train.py
+
+max_epochs: 50
+batch_size: 1
+lr: 0.001
+R: 8.0
+nx: 256
+ny: 256
+norm_method: 'k'
+supervised: true
+data_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+test_dir: '/home/brenden/Documents/Coding/data/sim_testing'
+num_workers: 2
+contrasts:
+  - 't1'
+chans: 18
+depth: 4
+cascades: 6
+dataset: 'm4raw'
+project: 'MRI Reconstruction'
+k_loss: 'l1'
+lambda_scaling: 1
+limit_volumes: 0.1
+sampling_method: '2d'
+norm_method: 'image_mean2'

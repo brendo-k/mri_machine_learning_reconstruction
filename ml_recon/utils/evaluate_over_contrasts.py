@@ -13,7 +13,7 @@ def evaluate_over_contrasts(function: Callable, ground_truth:torch.Tensor, estim
             estimated_contrast = estimated[j, i, ...].unsqueeze(0).unsqueeze(0)
             # Call without `data_range` argument
             if 'data_range' in inspect.signature(function).parameters:
-                contrast_metric_value += function(gt_contrast, estimated_contrast, data_range=(0, gt_contrast.max().item()))
+                contrast_metric_value += function(gt_contrast, estimated_contrast, data_range=(0, gt_contrast.max().item()), kernel_size=7)
             else:  
                 contrast_metric_value += function(gt_contrast, estimated_contrast)
         metric_value.append(contrast_metric_value/ground_truth.shape[0])

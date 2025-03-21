@@ -6,18 +6,16 @@ training_parameters:
 
 dataset_parameters:
   R: 8.0
-  dataset: m4raw 
+  dataset: fastmri
   contrasts:
     - t1
-    - t2 
-    - flair
-  nx: 256
-  ny: 256
+  nx: 320
+  ny: 320
   limit_volumes: 0.5
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/M4Raw_first_repetition'
-  test_dir: '/home/brenden/Documents/Coding/data/M4Raw_Averaged'
+  data_dir: '/home/brenden/Documents/Coding/data/fastmri'
+  test_dir: '/home/brenden/Documents/Coding/data/fastmri'
   chans: 18
   cascades: 6
   ssim_scaling_full: 1.0e-7

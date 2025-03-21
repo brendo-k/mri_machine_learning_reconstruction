@@ -103,7 +103,7 @@ class plReconModel(pl.LightningModule):
         }
 
 
-    def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
+    def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0, label=''):
         estimate_k, ground_truth_image = batch
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
@@ -124,16 +124,29 @@ class plReconModel(pl.LightningModule):
         difference_image = difference_image[0]
         image_background_mask = image_background_mask[0]
         if isinstance(self.logger, WandbLogger):
-            self.plot_test_images(ground_truth_image, estimated_image, image_background_mask, difference_image)
+            self.plot_test_images(
+                ground_truth_image, 
+                estimated_image, 
+                image_background_mask, 
+                difference_image,
+                label=label,
+                )
 
-    def plot_test_images(self, ground_truth_image, estimated_image, image_background_mask, difference_image):
+    def plot_test_images(
+        self, 
+        ground_truth_image, 
+        estimated_image, 
+        image_background_mask, 
+        difference_image,
+        label='',
+        ):
         wandb_logger = self.logger
         assert isinstance(wandb_logger, WandbLogger)
         
-        wandb_logger.log_image(f'test/recon', self.convert_image_for_plotting(estimated_image))
-        wandb_logger.log_image(f'test/target', self.convert_image_for_plotting(ground_truth_image))
-        wandb_logger.log_image(f'test/diff', self.convert_image_for_plotting((difference_image)))
-        wandb_logger.log_image(f'test/test_mask', self.convert_image_for_plotting(image_background_mask))
+        wandb_logger.log_image(f'test/{label}_recon', self.convert_image_for_plotting(estimated_image))
+        wandb_logger.log_image(f'test/{label}_target', self.convert_image_for_plotting(ground_truth_image))
+        wandb_logger.log_image(f'test/{label}_diff', self.convert_image_for_plotting((difference_image)))
+        wandb_logger.log_image(f'test/{label}_test_mask', self.convert_image_for_plotting(image_background_mask))
 
 
     def get_image_background_mask(self, ground_truth_image):

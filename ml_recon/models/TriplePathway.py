@@ -42,7 +42,7 @@ class TriplePathway(nn.Module):
                 estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
 
 
-        # these pathways only make sense in the self-supervised case, pass through original udnersampled data
+        # these pathways only make sense in the self-supervised case, pass through original undersampled data
         estimate_full = None
         if self.config.is_pass_original or return_all:
             if self.config.original_no_grad:

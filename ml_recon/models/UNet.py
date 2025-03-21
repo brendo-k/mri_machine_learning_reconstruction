@@ -30,7 +30,7 @@ class Unet(nn.Module):
 
         # reduce chans if using max or bilinear upsampling method. This is because
         # these methods do not reduce the number of channels on upsampling.
-        reduce_chans = not conv_after_upsample and 'conv' not in upsample_method
+        reduce_chans = (not conv_after_upsample) and ('conv' not in upsample_method)
         if reduce_chans:
             self.down_sample_layers.append(Unet_down(cur_chan, cur_chan, drop_prob, relu_slope))
         else:
@@ -129,11 +129,11 @@ class double_conv(nn.Module):
 
         self.layers = nn.Sequential(
             nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans, affine=True),
+            nn.InstanceNorm2d(out_chans, affine=False),
             nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
             nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans, affine=True),
+            nn.InstanceNorm2d(out_chans, affine=False),
             nn.LeakyReLU(negative_slope=relu_slope, inplace=True),
             nn.Dropout2d(drop_prob),
         )
@@ -158,29 +158,33 @@ class up(nn.Module):
         if upsample_method == 'conv':
             self.layers = nn.Sequential(
             nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-            nn.InstanceNorm2d(out_chan, affine=True),
+            nn.InstanceNorm2d(out_chan, affine=False),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             )
+            final_chans = out_chan
         elif upsample_method == 'bilinear':
             self.layers = nn.Sequential(
                 nn.Upsample(scale_factor=2, align_corners=True, mode='bilinear'),
             )
+            final_chans = in_chan
         elif upsample_method == 'max':
             self.layers = nn.Sequential(
                 nn.Upsample(scale_factor=2, mode='nearest'),
             )
+            final_chans = in_chan
         elif upsample_method == 'conv_init':
             self.layers = nn.Sequential(
             nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-            nn.InstanceNorm2d(out_chan, affine=True),
+            nn.InstanceNorm2d(out_chan, affine=False),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             )
             torch.nn.init.constant_(self.layers[0].weight, 1)
+            final_chans = out_chan
         else: 
             raise ValueError(f'{upsample_method} is not valid argument')
 
         if conv_after_upsample:
-            self.layers.append(nn.Conv2d(in_chan, out_chan, kernel_size=3, padding=1, bias=False))
+            self.layers.append(nn.Conv2d(final_chans, out_chan, kernel_size=3, padding=1, bias=False))
 
     def forward(self, x):
         return self.layers(x)

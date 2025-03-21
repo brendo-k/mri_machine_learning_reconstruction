@@ -1,34 +1,33 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 100
-  batch_size: 4
+  max_epochs: 50
+  batch_size: 1
   lr: 0.001
 
 dataset_parameters:
-  R: 6.0
+  R: 8.0
   dataset: brats 
   contrasts:
     - t1
-  nx: 128
-  ny: 128
-  limit_volumes: 0.2
+  nx: 256
+  ny: 256
+  limit_volumes: 1
 
 model_parameters:
   data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
   test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  chans: 18
+  chans: 32
   cascades: 6
-  ssim_scaling_full: 0.0001967930624924262 
-  ssim_scaling_set: 0.00007423655424702281
-  ssim_scaling_inverse: 0.0008890956809658261
-  ssim_scaling_delta: 0
-  lambda_scaling: 0.6920937050278195
+  ssim_scaling_full: 1.0e-6
+  ssim_scaling_set: 1.0e-6
+  ssim_scaling_inverse: 6.0e-7
+  lambda_scaling: 0.65
   sigmoid_slope2: 200
   sigmoid_slope1: 5
   k_loss: 'l1'
   pass_inverse_data: true
   pass_all_data: true
-  learn_sampling: true 
+  learn_sampling: false 
   image_loss: ssim
   all_data_no_grad: true 
   pass_through_size: 10
@@ -38,9 +37,9 @@ model_parameters:
   mask_threshold_flair: 0.11
   warmup_training: False
   norm_method: 'image_mean'
-  warm_start: false
-  upsample_method: 'bilinear'
+  warm_start: true
 
 
 logging_parameters:
   project: "MRI Reconstruction"
+  run_name: Dual Domain

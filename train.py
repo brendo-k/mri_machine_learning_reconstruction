@@ -3,19 +3,16 @@ import torch
 import wandb
 import os
 
-
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
     VarnetConfig, 
     LearnPartitionConfig, 
     DualDomainConifg
     )
+
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
-from pytorch_lightning.profilers import PyTorchProfiler, AdvancedProfiler
-from pytorch_lightning.tuner.tuning import Tuner
-from torch.profiler import ProfilerActivity, schedule
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -28,6 +25,33 @@ def main(args):
 
     callbacks = build_checkpoint_callbacks(file_name, args.checkpoint_dir)
     
+    thresholds = setup_masking_thresholds(args)
+        
+    if args.checkpoint: 
+        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+    else:
+        model, data_module = setup_model_parameters(args, thresholds)
+    torch.set_float32_matmul_precision('medium')
+    hparams = dict(model.hparams)
+    hparams.update(data_module.hparams)
+    config = vars(args)
+    wandb_experiment = wandb.init(config=config, project=args.project, name=args.run_name, dir=args.logger_dir)
+    wandb_logger = WandbLogger(experiment=wandb_experiment)
+
+    trainer = pl.Trainer(max_epochs=args.max_epochs, 
+                         logger=wandb_logger, 
+                         callbacks=callbacks, # type: ignore
+                         )
+
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
+    trainer.test(model, datamodule=data_module)
+
+    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
+    remove_optimizer_state(checkpoint_path)
+    log_weights_to_wandb(wandb_logger, checkpoint_path)
+
+
+def setup_masking_thresholds(args):
     possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
     thresholds = {}
     for contrast in possible_contrasts:
@@ -36,11 +60,10 @@ def main(args):
             thresholds[contrast] = threshold
     if len(thresholds) == 0: 
         thresholds = None
-        
-    if args.checkpoint: 
-        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
-    else:
-        data_module = UndersampledDataModule(
+    return thresholds
+
+def setup_model_parameters(args, thresholds):
+    data_module = UndersampledDataModule(
                 args.dataset, 
                 args.data_dir, 
                 args.test_dir,
@@ -56,9 +79,9 @@ def main(args):
                 norm_method=args.norm_method,
                 limit_volumes=args.limit_volumes
                 ) 
-        data_module.setup('train')
+    data_module.setup('train')
         
-        varnet_config = VarnetConfig(
+    varnet_config = VarnetConfig(
             contrast_order=data_module.contrast_order,
             cascades=args.cascades, 
             channels=args.chans,
@@ -69,7 +92,7 @@ def main(args):
             conv_after_upsample=args.conv_after_upsample
         )
         
-        partitioning_config = LearnPartitionConfig(
+    partitioning_config = LearnPartitionConfig(
             image_size=(len(args.contrasts), args.ny, args.nx),
             inital_R_value=args.R_hat,
             k_center_region = 10,
@@ -79,23 +102,24 @@ def main(args):
             sampling_method = args.sampling_method
         )
 
-        tripple_pathway_config = DualDomainConifg(
+    tripple_pathway_config = DualDomainConifg(
             is_pass_inverse=args.pass_inverse_data,
             is_pass_original=args.pass_all_data,
             inverse_no_grad=args.inverse_data_no_grad,
             original_no_grad=args.all_data_no_grad
         )
 
-        model = LearnedSSLLightning(
+    model = LearnedSSLLightning(
             varnet_config = varnet_config, 
             learn_partitioning_config = partitioning_config, 
             dual_domain_config = tripple_pathway_config,
             lr = args.lr,
-            image_loss_scaling_lam_full=args.ssim_scaling_full,
-            image_loss_scaling_lam_inv=args.ssim_scaling_set,
-            image_loss_scaling_full_inv=args.ssim_scaling_inverse,
+            image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
+            image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
+            image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
             lambda_scaling=args.lambda_scaling, 
             image_loss_function=args.image_loss,
+            image_loss_l1_grad_scaling=args.l1_grad_scaling,
             k_space_loss_function=args.k_loss,
             enable_learn_partitioning=args.learn_sampling, 
             use_supervised_image_loss=args.supervised_image,
@@ -104,25 +128,8 @@ def main(args):
             mask_theshold=thresholds,
             enable_warmup_training=args.warmup_training
             )
-    torch.set_float32_matmul_precision('medium')
-    hparams = dict(model.hparams)
-    hparams.update(data_module.hparams)
-    wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
-    wandb_logger = WandbLogger(
-        experiment=wandb_experiment
-        )
-    trainer = pl.Trainer(max_epochs=args.max_epochs, 
-                         logger=wandb_logger, 
-                         callbacks=callbacks, # type: ignore
-                         )
-
-    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
-    trainer.test(model, datamodule=data_module)
-
-    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
-    remove_optimizer_state(checkpoint_path)
-
-    log_weights_to_wandb(wandb_logger, checkpoint_path)
+        
+    return model,data_module
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     checkpoint_name = f"model-{wandb_logger.experiment.id}"
@@ -168,7 +175,7 @@ def get_unique_file_name(args):
 
 
 if __name__ == '__main__': 
-    parser = ArgumentParser(description="Deep learning multi-contrast reconstruction")
+    parser = ArgumentParser(description="Deep learning multi-contrast self-supervised reconstruction")
 
     # Training parameters
     training_group = parser.add_argument_group('Training Parameters')
@@ -179,7 +186,6 @@ if __name__ == '__main__':
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
-    training_group.add_argument("--offline", action='store_true')
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
@@ -214,8 +220,10 @@ if __name__ == '__main__':
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
+    model_group.add_argument('--ssim_scaling_delta', type=float, default=0.0)
     model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
-    model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad'])
+    model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
+    model_group.add_argument('--l1_grad_scaling', type=float, default=1)
     model_group.add_argument('--lambda_scaling', type=float, default=1)
 
     model_group.add_argument('--warmup_training', action='store_true')

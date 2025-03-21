@@ -1,6 +1,7 @@
 import yaml
 import os
 import re
+from argparse import Namespace
 
 def read_yaml_config(config_file):
     if not config_file:
@@ -23,16 +24,17 @@ def update_nested_args(config_data, args, passed_args):
     for key, value in config_data.items():
         if isinstance(value, dict):  # Recursively handle nested dictionaries
             update_nested_args(value, args, passed_args)
-        elif hasattr(args, key) and key not in passed_args:
+        elif hasattr(args, key):
+            if key in passed_args:
+                continue 
             # Resolve environment variables before updating
             if isinstance(value, str) and value.startswith('$'):
-                resolved_value = resolve_env_vars(value)
-            else:
-                resolved_value = value
+                value = resolve_env_vars(value)
+            
             old_value = getattr(args, key)
-            if old_value != resolved_value:
-                setattr(args, key, resolved_value)
-                print(f"Updated '{key}': {old_value} -> {resolved_value}")
+            if old_value != value:
+                setattr(args, key, value)
+                print(f"Updated '{key}': {old_value} -> {value}")
         else:
             print(f"Warning: Key '{key}' in the config file is not a recognized argument.")
 
@@ -48,18 +50,16 @@ def get_passed_arguments(args, parser):
         set: set of argument names that were explicitly passed
     """
     # Get all default values from the parser
-    defaults = {}
-    for action in parser._actions:
-        if action.dest != 'help':  # Skip the help action
-            defaults[action.dest] = action.default
-    
-    # Identify which arguments differ from their defaults
-    passed_args = set()
-    for arg_name, arg_value in vars(args).items():
-        if arg_name in defaults and arg_value != defaults[arg_name]:
-            passed_args.add(arg_name)
-            
-    return passed_args
+    args = parser.parse_args()
+    sentinel = object()
+
+    # Make a copy of args where everything is the sentinel.
+    sentinel_ns = Namespace(**{key:sentinel for key in vars(args)})
+    parser.parse_args(namespace=sentinel_ns)
+
+    # Now everything in sentinel_ns that is still the sentinel was not explicitly passed.
+    explicit = set(key for key, value in vars(sentinel_ns).items() if value is not sentinel) 
+    return explicit
 
 def replace_args_from_config(config_file, args, parser):
     """Replaces arguments in argparse namespace from the yaml file. If the argument

@@ -25,7 +25,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
             resolution: tuple[int, int] = (128, 128),
             num_workers: int = 0,
-            poly_order: int = 10,
+            poly_order: int = 8,
             norm_method: Union[Literal['k', 'img', 'image_mean', 'image_mean2', 'std'], None] = 'k',
             self_supervsied: bool = False,
             sampling_method: str = '2d',
