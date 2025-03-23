@@ -114,6 +114,8 @@ def setup_model_parameters(args, thresholds):
             learn_partitioning_config = partitioning_config, 
             dual_domain_config = tripple_pathway_config,
             lr = args.lr,
+            lr_scheduler = args.lr_scheduler,
+            warmup_adam = args.warmup_adam,
             image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
             image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
             image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
@@ -183,6 +185,8 @@ if __name__ == '__main__':
     training_group.add_argument('--max_epochs', type=int, default=50)
     training_group.add_argument('--batch_size', type=int, default=1)
     training_group.add_argument('--lr', type=float, default=1e-3)
+    training_group.add_argument('--lr_scheduler', action='store_true') 
+    training_group.add_argument('--warmup_adam', action='store_true') 
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")

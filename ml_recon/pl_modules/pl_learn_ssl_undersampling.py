@@ -5,6 +5,7 @@ from typing import Literal, Union
 from functools import partial
 
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
+from torch.optim.lr_scheduler import StepLR, LinearLR
 
 from ml_recon.losses import L1L2Loss
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
@@ -21,6 +22,8 @@ class LearnedSSLLightning(plReconModel):
             varnet_config: VarnetConfig,
             dual_domain_config: DualDomainConifg,
             lr: float = 1e-3,
+            lr_scheduler: bool = False,
+            warmup_adam: bool = False,
             image_loss_scaling_lam_inv: float = 1e-4,
             image_loss_scaling_lam_full: float = 1e-4,
             image_loss_scaling_full_inv: float = 1e-4,
@@ -49,6 +52,8 @@ class LearnedSSLLightning(plReconModel):
         self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
 
         self.lr = lr
+        self.lr_scheduler = lr_scheduler
+        self.warmup_adam = warmup_adam
         self.image_scaling_lam_inv = image_loss_scaling_lam_inv
         self.image_scaling_lam_full = image_loss_scaling_lam_full
         self.image_scaling_full_inv = image_loss_scaling_full_inv
@@ -332,9 +337,23 @@ class LearnedSSLLightning(plReconModel):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        #warmup_scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1) 
-        #step_lr = StepLR(optimizer, step_size=50)
-        return optimizer
+        scheduler = []
+        if self.warmup_adam: 
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1, total_iters=900) 
+            scheduler.append(
+                    {
+                        'scheduler': warmup_scheduler, 
+                        'interval': 'step', 
+                    }
+                    )
+        if self.lr_scheduler:
+            step_lr = StepLR(optimizer, step_size=50, gamma=0.1)
+            scheduler.append(
+                    {
+                        'scheduler': step_lr
+                        }
+                    )
+        return optimizer, scheduler
 
     
     def calculate_k_nmse(self, batch):
