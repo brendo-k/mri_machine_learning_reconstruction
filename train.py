@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import torch
 import wandb
 import os
+from pytorch_lightning.callbacks import LearningRateMonitor
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
@@ -13,6 +14,7 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config
+
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -40,7 +42,7 @@ def main(args):
 
     trainer = pl.Trainer(max_epochs=args.max_epochs, 
                          logger=wandb_logger, 
-                         callbacks=callbacks, # type: ignore
+                         callbacks=[callbacks, LearningRateMonitor(logging_interval='step')], # type: ignore
                          )
 
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
@@ -128,7 +130,7 @@ def setup_model_parameters(args, thresholds):
             weight_decay=args.weight_decay,
             pass_through_size=args.pass_through_size,
             mask_theshold=thresholds,
-            enable_warmup_training=args.warmup_training
+            enable_warmup_training=args.warmup_training,
             )
         
     return model,data_module
@@ -231,6 +233,7 @@ if __name__ == '__main__':
     model_group.add_argument('--lambda_scaling', type=float, default=1)
 
     model_group.add_argument('--warmup_training', action='store_true')
+    model_group.add_argument('--use_schedulers', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
     model_group.add_argument('--norm_loss_by_masks', action='store_true')
     model_group.add_argument('--pass_inverse_data', action='store_true')

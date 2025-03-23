@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
 from typing import Literal, Union
-from functools import partial
 
+from torch.optim.lr_scheduler import StepLR, LinearLR
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 from torch.optim.lr_scheduler import StepLR, LinearLR
 
@@ -37,7 +37,7 @@ class LearnedSSLLightning(plReconModel):
             use_supervised_image_loss: bool = False, 
             weight_decay: float = 0, 
             is_mask_testing: bool = True,
-            mask_theshold: Union[dict, None] = None
+            mask_theshold: Union[dict, None] = None,
             ):
         super().__init__(
             contrast_order=varnet_config.contrast_order,
@@ -75,13 +75,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model.pass_through_model(k_space * mask, mask, fs_k_space)
         return estimate_k
 
-    def on_train_epoch_start(self):
-        # set epoch in train dataloader for updating new lambda masks
-        if self.trainer.train_dataloader:
-            self.trainer.train_dataloader.dataset.set_epoch(self.current_epoch)
-        return
     
-
     def training_step(self, batch, batch_idx):
         # init loss tensors (some may be unused)
 
@@ -353,7 +347,7 @@ class LearnedSSLLightning(plReconModel):
                         'scheduler': step_lr
                         }
                     )
-        return optimizer, scheduler
+        return [optimizer], scheduler
 
     
     def calculate_k_nmse(self, batch):

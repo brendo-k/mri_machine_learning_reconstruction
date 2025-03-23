@@ -1,6 +1,6 @@
 # Supervised config file for train.py
 max_epochs: 50
-batch_size: 4
+batch_size: 8
 lr: 0.001
 R: 6.0
 nx: 128
@@ -18,7 +18,7 @@ dataset: 'brats'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
 lambda_scaling: 1
-limit_volumes: 0.2
+limit_volumes: 0.4
 sampling_method: '1d'
 norm_method: 'image_mean'
 upsample_method: 'bilinear'

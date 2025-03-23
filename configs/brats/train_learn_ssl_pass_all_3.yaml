@@ -1,7 +1,7 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 100
-  batch_size: 4
+  max_epochs: 150
+  batch_size: 8
   lr: 0.001
 
 dataset_parameters:
@@ -11,7 +11,7 @@ dataset_parameters:
     - t1
   nx: 128
   ny: 128
-  limit_volumes: 0.2
+  limit_volumes: 0.4
 
 model_parameters:
   data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
@@ -40,6 +40,8 @@ model_parameters:
   norm_method: 'image_mean'
   warm_start: false
   upsample_method: 'bilinear'
+  warmup_adam: true
+  lr_scheduler: true
 
 
 logging_parameters:
