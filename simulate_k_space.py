@@ -89,7 +89,7 @@ if __name__ == '__main__':
     noise = float(sys.argv[4])
 
     # Create a pool of worker processes
-    num_processes = 4
+    num_processes = 10
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 
@@ -100,21 +100,21 @@ if __name__ == '__main__':
         files = os.listdir(os.path.join(dir, split))
         files = [os.path.join(dir, split, file) for file in files]
         seeds = [np.random.randint(0, 1_000_000_000) for _ in range(len(files))]
-        for file, seed in zip(files, seeds):
-             process_file(
-                 file, 
-                 os.path.join(save_dir, split),
-                 seed, 
-                 noise, 
-                 coil_file
-             )
-
-        #pool.starmap(process_file, 
-        #            zip(
-        #                files.__iter__(), 
-        #                repeat(os.path.join(save_dir, split)),
-        #                seeds,
-        #                repeat(noise),
-        #                repeat(coil_file)
-        #                )
-        #            )
+#        for file, seed in zip(files, seeds):
+#             process_file(
+#                 file, 
+#                 os.path.join(save_dir, split),
+#                 seed, 
+#                 noise, 
+#                 coil_file
+#             )
+#
+        pool.starmap(process_file, 
+                    zip(
+                        files.__iter__(), 
+                        repeat(os.path.join(save_dir, split)),
+                        seeds,
+                        repeat(noise),
+                        repeat(coil_file)
+                        )
+                    )

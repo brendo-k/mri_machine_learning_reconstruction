@@ -49,7 +49,9 @@ def main(args):
     trainer.test(model, datamodule=data_module)
 
     checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
-    remove_optimizer_state(checkpoint_path)
+
+    if not args.save_optimizer:
+        remove_optimizer_state(checkpoint_path)
     log_weights_to_wandb(wandb_logger, checkpoint_path)
 
 
@@ -142,11 +144,11 @@ def log_weights_to_wandb(wandb_logger, checkpoint_path):
     wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
 
 
-def remove_optimizer_state(checkpoint_path):
+def remove_optimizer_state(checkpoint_path, ):
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     if 'optimizer_states' in checkpoint:
         del checkpoint['optimizer_states']
-    torch.save(checkpoint, checkpoint_path)
+    return checkpoint
 
 
 def load_checkpoint(args, data_dir, test_dir):
@@ -192,6 +194,7 @@ if __name__ == '__main__':
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
+    training_group.add_argument("--save_optimizer", action='store_true')
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
