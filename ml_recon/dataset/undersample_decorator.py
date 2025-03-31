@@ -31,7 +31,8 @@ class UndersampleDecorator(Dataset):
         self_supervised: bool = False, 
         R_hat: float = math.nan,
         original_ssdu_partioning: bool = False,
-        sampling_method: str = '2d'
+        sampling_method: str = '2d', 
+        seed: int = 10
     ):
         super().__init__()
 
@@ -43,7 +44,8 @@ class UndersampleDecorator(Dataset):
         self.R_hat = R_hat
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
-        self.lambda_rng = np.random.default_rng() # generator for lambda mask seeds.
+        self.seed = seed
+        self.lambda_rng = np.random.default_rng(seed) # generator for lambda mask seeds.
         
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
@@ -92,7 +94,7 @@ class UndersampleDecorator(Dataset):
                 }
 
         if self.self_supervised:
-            input_mask, loss_mask = self.create_self_supervised_masks(index, first_undersampled, omega_mask, output)
+            input_mask, loss_mask = self.create_self_supervised_masks(first_undersampled, omega_mask)
             output.update(
                 {
                     'mask': input_mask.astype(np.float32),
@@ -115,7 +117,7 @@ class UndersampleDecorator(Dataset):
 
         return output
 
-    def create_self_supervised_masks(self, index, under, mask_omega, output):
+    def create_self_supervised_masks(self, under, mask_omega):
         if self.original_ssdu_partioning:
             input_mask = []
             loss_mask = []
@@ -146,7 +148,7 @@ class UndersampleDecorator(Dataset):
         # same mask every time since the random seed is the index value
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             under, mask_omega  = apply_undersampling_from_dist(
-                                        index,
+                                        index + self.seed,
                                         self.omega_prob,
                                         k_space, 
                                         )

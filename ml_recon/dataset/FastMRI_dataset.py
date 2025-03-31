@@ -5,6 +5,7 @@ from typing import Optional, Callable, Union, List
 import torchvision.transforms.functional as F
 import torch
 import h5py
+from ml_recon.utils.image_processing import k_to_img  
 
 from torch.utils.data import Dataset
 
@@ -66,24 +67,29 @@ class FastMRIDataset(Dataset):
         return self.length
 
     def __getitem__(self, index):
-        k_space = self.get_data_from_file(index)
-        k_space = k_space.flip(1)
+        data = self.get_data_from_file(index)
+        data = data.flip(1)
         if self.key == 'kspace':
-            k_space = self.resample_or_pad(k_space)
+            data = self.resample_or_pad(data)
+        else: 
+            data = self.resample_or_pad(data)
+            imgs = k_to_img(k_space=data, coil_dim=0)
+            data = imgs
+            
 
         # add contrast dimension
-        k_space = k_space.unsqueeze(0).numpy()
+        data = data.unsqueeze(0).numpy()
 
         if self.transforms:
-            k_space = self.transforms(k_space)
-        return k_space
+            data = self.transforms(data)
+        return data
     
     def get_data_from_file(self, index):
         volume_index = np.sum(self.slice_cumulative_sum <= index)
         slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
         file_name = self.file_names[volume_index]
         with h5py.File(file_name, 'r') as fr:
-            dataset = fr[self.key]
+            dataset = fr['kspace']
             assert isinstance(dataset, h5py.Dataset)
             k_space = torch.as_tensor(dataset[slice_index])
 

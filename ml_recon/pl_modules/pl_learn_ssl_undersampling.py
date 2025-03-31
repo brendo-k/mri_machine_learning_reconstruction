@@ -75,7 +75,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model.pass_through_model(k_space * mask, mask, fs_k_space)
         return estimate_k
 
-    
+    # Training function  
     def training_step(self, batch, batch_idx):
         # init loss tensors (some may be unused)
 
@@ -121,7 +121,6 @@ class LearnedSSLLightning(plReconModel):
             kwargs['on_step'] = False
             
         self.log(label, metric, on_epoch=True, **kwargs)
-
 
     @torch.no_grad() 
     def on_train_batch_end(self, outputs, batch, batch_idx):
@@ -313,6 +312,13 @@ class LearnedSSLLightning(plReconModel):
         self.my_test_batch_end(outputs, (estimate_k, ground_truth_image), batch_idx, dataloader_idx, label='gt')
         self.my_test_batch_end(outputs, (estimate_k, fully_sampled_image), batch_idx, dataloader_idx, label='fs')
     
+    def on_train_epoch_start(self):
+        # set epoch in train dataloader for updating new lambda masks
+        if self.trainer.train_dataloader:
+            self.trainer.train_dataloader.dataset.set_epoch(self.current_epoch)
+            self.trainer.val_dataloaders.dataset.undersampled_dataset.set_epoch(self.current_epoch) # type: ignore
+        return 
+    
     
     def infer_k_space(self, batch):
         k_space = batch[0]
@@ -352,7 +358,7 @@ class LearnedSSLLightning(plReconModel):
     
     def calculate_k_nmse(self, batch):
         estimate_k, fully_sampled_k = self.infer_k_space(batch)
-        nmse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3)) / fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
+        nmse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3)).sqrt() / fully_sampled_k.pow(2).abs().sum((-1, -2, -3)).sqrt()
         self.log_scalar("val_nmse/k-space_nmse", nmse_value.sum())
 
     def _setup_image_space_loss(self, image_loss_function, l1_scaling):

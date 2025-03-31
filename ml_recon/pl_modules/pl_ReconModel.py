@@ -167,12 +167,16 @@ class plReconModel(pl.LightningModule):
         
         image_background_mask = ground_truth_blurred > mask_threshold 
         mask =  self.dialate_mask(image_background_mask)
+
+        all_zero_masks = (mask == False).all(dim=(-1, -2))
+        if all_zero_masks.any():
+            mask[all_zero_masks] = True
         
         return mask
 
 
     
-    def dialate_mask(self, mask, kernel_size=7):
+    def dialate_mask(self, mask, kernel_size=5):
         b, contrast, h, w = mask.shape
         mask = mask.view(b*contrast, h, w)
         dialed_mask = self.dilate(mask.to(torch.float32), kernel_size)

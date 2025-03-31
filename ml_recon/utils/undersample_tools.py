@@ -9,13 +9,13 @@ def calc_k(lambda_probability, omega_probability):
     return K
     
 def apply_undersampling_from_dist(
-        index: int,  # index is neeed here to have determenistic (seed for rng)
+        seed: int,  # index is neeed here to have determenistic (seed for rng)
         prob_map, 
         k_space, 
 ) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:
     line_constrained = check_pdf_line_constrained(prob_map)
 
-    rng = get_random_generator(index)
+    rng = get_random_generator(seed)
     mask = get_mask_from_distribution(prob_map, rng, line_constrained)
     undersampled = k_space * np.expand_dims(mask, 1)
     return undersampled, np.expand_dims(mask, 1)

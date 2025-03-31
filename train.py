@@ -30,29 +30,36 @@ def main(args):
     thresholds = setup_masking_thresholds(args)
         
     if args.checkpoint: 
-        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+        pass
+        #model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+        model, data_module = setup_model_parameters(args, thresholds)
     else:
         model, data_module = setup_model_parameters(args, thresholds)
+    wandb_logger = setup_wandb_logger(args, model, data_module)
+
+    trainer = pl.Trainer(max_epochs=args.max_epochs, 
+                         logger=wandb_logger, 
+                         callbacks=[callbacks, LearningRateMonitor(logging_interval='step')], 
+                         )
+
     torch.set_float32_matmul_precision('medium')
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
+    trainer.test(model, datamodule=data_module)
+
+    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
+    if not args.save_optimizer:
+        remove_optimizer_state(checkpoint_path)
+    log_weights_to_wandb(wandb_logger, checkpoint_path)
+
+
+
+def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
     config = vars(args)
     wandb_experiment = wandb.init(config=config, project=args.project, name=args.run_name, dir=args.logger_dir)
     wandb_logger = WandbLogger(experiment=wandb_experiment)
-
-    trainer = pl.Trainer(max_epochs=args.max_epochs, 
-                         logger=wandb_logger, 
-                         callbacks=[callbacks, LearningRateMonitor(logging_interval='step')], # type: ignore
-                         )
-
-    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
-    trainer.test(model, datamodule=data_module)
-
-    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
-
-    if not args.save_optimizer:
-        remove_optimizer_state(checkpoint_path)
-    log_weights_to_wandb(wandb_logger, checkpoint_path)
+    return wandb_logger
 
 
 def setup_masking_thresholds(args):
@@ -148,12 +155,12 @@ def remove_optimizer_state(checkpoint_path, ):
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     if 'optimizer_states' in checkpoint:
         del checkpoint['optimizer_states']
-    return checkpoint
+    torch.save(checkpoint, checkpoint_path)
 
 
 def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
-    model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint)
+    model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr)
     data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, test_dir=test_dir)
     data_module.setup('train')
     return model, data_module

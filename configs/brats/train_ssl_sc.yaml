@@ -1,24 +1,26 @@
 # Supervised config file for train.py
-max_epochs: 50
-batch_size: 8
+max_epochs: 100
+batch_size: 4
 lr: 0.001
 R: 6.0
 nx: 128
 ny: 128
 supervised: false
-data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+data_dir: '/home/brenden/Documents/Coding/data/fastmri'
+test_dir: '/home/brenden/Documents/Coding/data/fastmri'
 num_workers: 2
 contrasts:
   - 't1'
 chans: 18
 depth: 4
 cascades: 6
-dataset: 'brats'
+dataset: 'fastmri'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
 lambda_scaling: 1
-limit_volumes: 0.4
+limit_volumes: 1
+mask_threshold_t1: 0.001
 sampling_method: '1d'
 norm_method: 'image_mean'
 upsample_method: 'bilinear'
+save_optimizer: True
