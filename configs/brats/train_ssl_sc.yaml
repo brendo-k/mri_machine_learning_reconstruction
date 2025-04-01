@@ -1,8 +1,8 @@
 # Supervised config file for train.py
 max_epochs: 100
-batch_size: 4
+batch_size: 6
 lr: 0.001
-R: 6.0
+R: 4.0
 nx: 128
 ny: 128
 supervised: false
@@ -13,13 +13,13 @@ contrasts:
   - 't1'
 chans: 18
 depth: 4
-cascades: 6
+cascades: 12
 dataset: 'fastmri'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
 lambda_scaling: 1
 limit_volumes: 1
-mask_threshold_t1: 0.001
+mask_threshold_t1: 0.0001
 sampling_method: '1d'
 norm_method: 'image_mean'
 upsample_method: 'bilinear'

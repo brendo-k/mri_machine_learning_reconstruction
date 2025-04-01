@@ -89,7 +89,7 @@ if __name__ == '__main__':
     noise = float(sys.argv[4])
 
     # Create a pool of worker processes
-    num_processes = 10
+    num_processes = 4
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 

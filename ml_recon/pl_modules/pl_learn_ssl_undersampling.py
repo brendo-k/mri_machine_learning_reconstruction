@@ -358,8 +358,8 @@ class LearnedSSLLightning(plReconModel):
     
     def calculate_k_nmse(self, batch):
         estimate_k, fully_sampled_k = self.infer_k_space(batch)
-        nmse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3)).sqrt() / fully_sampled_k.pow(2).abs().sum((-1, -2, -3)).sqrt()
-        self.log_scalar("val_nmse/k-space_nmse", nmse_value.sum())
+        nmse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3)) / fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
+        self.log_scalar("val_nmse/k-space_nmse", nmse_value.mean())
 
     def _setup_image_space_loss(self, image_loss_function, l1_scaling):
         if image_loss_function == 'ssim':
@@ -398,16 +398,11 @@ class LearnedSSLLightning(plReconModel):
                     torch.view_as_real(undersampled * loss_mask),
                     torch.view_as_real(estimate * loss_mask), 
                     )
-        #if self.is_norm_loss:
-        #    k_loss /= loss_mask.sum() # normalize based on loss mask
                     
         return k_loss * loss_scaling
 
 
     def _setup_k_space_loss(self, k_space_loss_function):
-        #if self.is_norm_loss:
-        #    reduce = 'sum'
-        #else:
         reduce = 'mean'
 
         if k_space_loss_function == 'l1l2':

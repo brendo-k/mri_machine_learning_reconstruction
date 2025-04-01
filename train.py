@@ -13,7 +13,7 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
 
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
-from ml_recon.utils import replace_args_from_config
+from ml_recon.utils import replace_args_from_config, restore_optimizer
 
 
 import pytorch_lightning as pl
@@ -25,39 +25,50 @@ def main(args):
     pl.seed_everything(8)
     file_name = get_unique_file_name(args)
 
-    callbacks = build_checkpoint_callbacks(file_name, args.checkpoint_dir)
+    callbacks = build_callbacks(args, file_name)
     
     thresholds = setup_masking_thresholds(args)
         
     if args.checkpoint: 
-        pass
-        #model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
-        model, data_module = setup_model_parameters(args, thresholds)
+        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+        callbacks.append(restore_optimizer(args.checkpoint))
     else:
         model, data_module = setup_model_parameters(args, thresholds)
     wandb_logger = setup_wandb_logger(args, model, data_module)
 
-    trainer = pl.Trainer(max_epochs=args.max_epochs, 
-                         logger=wandb_logger, 
-                         callbacks=[callbacks, LearningRateMonitor(logging_interval='step')], 
-                         )
+    trainer = pl.Trainer(
+        max_epochs=args.max_epochs, 
+        logger=wandb_logger, 
+        callbacks=callbacks,
+        )
 
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
-    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks.best_model_path)
+    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks[0].best_model_path)
     if not args.save_optimizer:
         remove_optimizer_state(checkpoint_path)
     log_weights_to_wandb(wandb_logger, checkpoint_path)
 
+def build_callbacks(args, file_name):
+    callbacks = []
+    callbacks.append(build_checkpoint_callbacks(file_name, args.checkpoint_dir))
+    callbacks.append(LearningRateMonitor(logging_interval='step'))
+    return callbacks
 
+def restore_optimizer_state(model, checkpoint_path):
+    optim = model.optimizers()
+    checkpoint = torch.load(args.checkpoint)
+    optim.load_state_dict(checkpoint['state_dict'])
 
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
     config = vars(args)
     wandb_experiment = wandb.init(config=config, project=args.project, name=args.run_name, dir=args.logger_dir)
+    wandb.define_metric("trainer/global_step")
+    wandb.define_metric("*", step_metric="trainer/global_step")
     wandb_logger = WandbLogger(experiment=wandb_experiment)
     return wandb_logger
 
@@ -162,6 +173,8 @@ def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr)
     data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, test_dir=test_dir)
+
+    
     data_module.setup('train')
     return model, data_module
 
