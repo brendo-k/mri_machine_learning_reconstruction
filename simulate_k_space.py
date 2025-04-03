@@ -13,7 +13,7 @@ import gc
 IMAGE_SIZE = (256, 256)
 
 # Define a function to process a single file
-def process_file(file, out_path, seed, noise, coil_file):
+def process_file(file, out_path, seed, noise, coil_file, num_coils):
     print(f'Starting file {file}, with seed: {seed}')
     patient_name = file.split('/')[-1]
 
@@ -30,7 +30,7 @@ def process_file(file, out_path, seed, noise, coil_file):
         
     images = np.stack(images, axis=0)
     images = images/np.max(images, axis=(1, 2), keepdims=True)
-    k_space = np.zeros((4, int(10), IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
+    k_space = np.zeros((4, num_coils, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
     gt_img = np.zeros((4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3))
     for i in range(images.shape[-1]):
         if i < 70: 
@@ -61,7 +61,7 @@ def process_file(file, out_path, seed, noise, coil_file):
 
     try:
         save_file = os.path.join(out_path, patient_name, patient_name + '.h5')
-        chunk_size = (1, 1, 10, IMAGE_SIZE[0], IMAGE_SIZE[1])
+        chunk_size = (1, 1, num_coils, IMAGE_SIZE[0], IMAGE_SIZE[1])
         with h5py.File(save_file, 'w') as fr:
             dset = fr.create_dataset("k_space", k_space.shape, dtype=np.complex64, chunks=chunk_size)
             dset[...] = k_space
@@ -87,6 +87,10 @@ if __name__ == '__main__':
     save_dir = str(sys.argv[2])
     coil_file = str(sys.argv[3])
     noise = float(sys.argv[4])
+
+    
+    maps = np.load(coil_file)
+    num_coils = maps.shape[0]
 
     # Create a pool of worker processes
     num_processes = 4
@@ -115,6 +119,7 @@ if __name__ == '__main__':
                         repeat(os.path.join(save_dir, split)),
                         seeds,
                         repeat(noise),
-                        repeat(coil_file)
+                        repeat(coil_file),
+                        repeat(num_coils)
                         )
                     )

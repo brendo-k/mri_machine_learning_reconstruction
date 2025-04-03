@@ -38,6 +38,7 @@ class LearnedSSLLightning(plReconModel):
             weight_decay: float = 0, 
             is_mask_testing: bool = True,
             mask_theshold: Union[dict, None] = None,
+            normalize_loss_by_mask: bool = True
             ):
         super().__init__(
             contrast_order=varnet_config.contrast_order,
@@ -65,6 +66,7 @@ class LearnedSSLLightning(plReconModel):
         self.weight_decay = weight_decay
         self.mask_threshold = mask_theshold
         self.test_metrics = is_mask_testing
+        self.norm_loss_by_mask = normalize_loss_by_mask
 
         # loss function init
         self._setup_image_space_loss(image_loss_function, image_loss_l1_grad_scaling)
@@ -398,6 +400,9 @@ class LearnedSSLLightning(plReconModel):
                     torch.view_as_real(undersampled * loss_mask),
                     torch.view_as_real(estimate * loss_mask), 
                     )
+        # reduce mean by the loss mask and not by the number of voxels
+        if self.norm_loss_by_mask:
+            k_loss = k_loss * undersampled.numel() / loss_mask.sum()
                     
         return k_loss * loss_scaling
 

@@ -1,7 +1,7 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 150
-  batch_size: 8
+  max_epochs: 100
+  batch_size: 3
   lr: 0.001
 
 dataset_parameters:
@@ -9,18 +9,18 @@ dataset_parameters:
   dataset: brats 
   contrasts:
     - t1
-  nx: 128
-  ny: 128
-  limit_volumes: 0.4
+  nx: 256
+  ny: 256
+  limit_volumes: 0.5
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
   chans: 18
   cascades: 6
-  ssim_scaling_full: 0.0001967930624924262 
-  ssim_scaling_set: 0.00007423655424702281
-  ssim_scaling_inverse: 0.0008890956809658261
+  ssim_scaling_full: 8.0e-5
+  ssim_scaling_set: 1.0e-5
+  ssim_scaling_inverse: 1.0e-5
   ssim_scaling_delta: 0
   lambda_scaling: 0.6920937050278195
   sigmoid_slope2: 200
@@ -40,8 +40,6 @@ model_parameters:
   norm_method: 'image_mean'
   warm_start: false
   upsample_method: 'bilinear'
-  warmup_adam: true
-  lr_scheduler: true
 
 
 logging_parameters:

@@ -1,6 +1,11 @@
 import pytest 
 import torch 
-from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning, VarnetConfig, DualDomainConifg, LearnPartitionConfig
+from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
+    LearnedSSLLightning, 
+    VarnetConfig, 
+    DualDomainConifg, 
+    LearnPartitionConfig,
+    )
 import numpy as np
 
 IMAGE_SIZE = (2, 128, 128)
@@ -10,7 +15,12 @@ def build_model() -> LearnedSSLLightning:
     return LearnedSSLLightning(
         LearnPartitionConfig(IMAGE_SIZE, inital_R_value=2),
         varnet_config=VarnetConfig(['t1']),
-        dual_domain_config=DualDomainConifg(True, True)
+        dual_domain_config=DualDomainConifg(
+            is_pass_inverse=True, 
+            is_pass_original=True,
+            inverse_no_grad=False,
+            original_no_grad=False,
+            )
         )
 
 @pytest.fixture()
@@ -48,7 +58,7 @@ def supervised_batch() -> dict:
     }
 
 def test_partitioning_ssl_learned(build_model: LearnedSSLLightning, ssl_batch): 
-    build_model.is_learn_partitioning = True
+    build_model.enable_learn_partitioning = True
 
 
     input_mask, loss_mask = build_model.partition_k_space(ssl_batch)
@@ -59,7 +69,7 @@ def test_partitioning_ssl_learned(build_model: LearnedSSLLightning, ssl_batch):
     assert loss_mask.dtype == torch.float32
 
 def test_partitioning_ssl_unlearned(build_model: LearnedSSLLightning, ssl_batch): 
-    build_model.is_learn_partitioning = False
+    build_model.enable_learn_partitioning = False
 
     input_mask, loss_mask = build_model.partition_k_space(ssl_batch)
     initial_mask = ssl_batch['undersampled'] != 0
@@ -70,7 +80,18 @@ def test_partitioning_ssl_unlearned(build_model: LearnedSSLLightning, ssl_batch)
 
 
 def test_supervised_partitioning(build_model: LearnedSSLLightning, supervised_batch): 
-    build_model.is_learn_partitioning = False
+    build_model.enable_learn_partitioning = False
+
+    input_mask, loss_mask = build_model.partition_k_space(supervised_batch)
+    initial_mask = supervised_batch['undersampled'] != 0
+
+    torch.testing.assert_close(input_mask, initial_mask.to(torch.float32))
+    torch.testing.assert_close(loss_mask, torch.ones_like(input_mask))
+    assert input_mask.dtype == torch.float32
+    assert loss_mask.dtype == torch.float32
+    
+def test_triple_pathway(build_model: LearnedSSLLightning, supervised_batch): 
+    build_model.enable_learn_partitioning = True
 
     input_mask, loss_mask = build_model.partition_k_space(supervised_batch)
     initial_mask = supervised_batch['undersampled'] != 0

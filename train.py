@@ -25,15 +25,15 @@ def main(args):
     pl.seed_everything(8)
     file_name = get_unique_file_name(args)
 
+    # build some callbacks for pytorch lightning
     callbacks = build_callbacks(args, file_name)
     
+    # setup threshold for masking background
     thresholds = setup_masking_thresholds(args)
-        
-    if args.checkpoint: 
-        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
-        callbacks.append(restore_optimizer(args.checkpoint))
-    else:
-        model, data_module = setup_model_parameters(args, thresholds)
+    
+    # setup pytorch lightning dataloder and datamodules
+    model, data_module = setup_model_and_dataloaders(args, callbacks, thresholds)
+    # setup wandb logger
     wandb_logger = setup_wandb_logger(args, model, data_module)
 
     trainer = pl.Trainer(
@@ -46,10 +46,23 @@ def main(args):
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
+    process_checkpoint(args, callbacks, wandb_logger)
+
+def process_checkpoint(args, callbacks, wandb_logger):
     checkpoint_path = os.path.join(args.checkpoint_dir, callbacks[0].best_model_path)
     if not args.save_optimizer:
+        # remove optimizer states to save space (limited space on wandb)
         remove_optimizer_state(checkpoint_path)
+    # log to wandb
     log_weights_to_wandb(wandb_logger, checkpoint_path)
+
+def setup_model_and_dataloaders(args, callbacks, thresholds):
+    if args.checkpoint: 
+        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+        callbacks.append(restore_optimizer(args.checkpoint))
+    else:
+        model, data_module = setup_model_parameters(args, thresholds)
+    return model,data_module
 
 def build_callbacks(args, file_name):
     callbacks = []
@@ -151,6 +164,7 @@ def setup_model_parameters(args, thresholds):
             pass_through_size=args.pass_through_size,
             mask_theshold=thresholds,
             enable_warmup_training=args.warmup_training,
+            normalize_loss_by_masks=args.norm_loss_by_masks,
             )
         
     return model,data_module

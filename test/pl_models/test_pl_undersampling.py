@@ -128,16 +128,16 @@ def test_supervisedMasks(define_datamodule):
 
     assert initial_mask.sum() > 0
     torch.testing.assert_close(undersampled_train, mask_train*fully_sampled)
-    torch.testing.assert_close(mask_train, initial_mask*fully_sampled != 0)
+    torch.testing.assert_close(mask_train, (initial_mask*fully_sampled != 0).to(torch.float32))
 
     assert initial_mask_val.sum() > 0
     torch.testing.assert_close(undersampled_val, mask_val*fully_sampled_val)
-    torch.testing.assert_close(mask_val, initial_mask_val * fully_sampled != 0)
+    torch.testing.assert_close(mask_val, (initial_mask_val * fully_sampled != 0).to(torch.float32))
     torch.testing.assert_close(mask_val, mask_val2)
 
     assert initial_mask_test.sum() > 0
     torch.testing.assert_close(undersampled_test, mask_test*fully_sampled_test)
-    torch.testing.assert_close(mask_test, initial_mask_test * fully_sampled != 0)
+    torch.testing.assert_close(mask_test, (initial_mask_test * fully_sampled != 0).to(torch.float32))
 
 @pytest.mark.parametrize("is_self_supervised", [True, False])
 def test_scaling(temp_h5_directories, is_self_supervised):
@@ -373,6 +373,10 @@ def test_ssl_non_determenistic(temp_h5_directories, set_name):
 
 @pytest.mark.parametrize("set_name", ["val", "test"]) # idk how to get the same slice from the train dataloader other than turning off shuffle
 def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
+    """
+    Make sure that the dataloaders generates a new mask every epoch
+    """
+
     data_module = UndersampledDataModule(
             'brats', 
             temp_h5_directories, 
@@ -387,13 +391,15 @@ def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
     data_module.setup(set_name)
 
     if set_name == "val":
-        dataset = data_module.val_dataloader()
+        dataloader = data_module.val_dataloader()
     else:
-        dataset = data_module.test_dataloader()
+        dataloader = data_module.test_dataloader()
 
     if set_name == 'test' or set_name == 'val':
-        batch = next(iter(dataset))[0]
-        batch2 = next(iter(dataset))[0]
+        dataloader.dataset.undersampled_dataset.set_epoch(0)  # type: ignore
+        batch = next(iter(dataloader))[0]
+        dataloader.dataset.undersampled_dataset.set_epoch(1)  # type: ignore
+        batch2 = next(iter(dataloader))[0]
         
     undersampled = batch['undersampled'] # type: ignore
     undersampled2 = batch2['undersampled']# type: ignore

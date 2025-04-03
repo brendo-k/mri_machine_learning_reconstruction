@@ -45,3 +45,27 @@ def test_pass_lambda_only(triple_pathway_model: TriplePathway, model_inputs):
     lambda_prediction = outputs['lambda_path']
     # make sure dc step is correct
     torch.testing.assert_close(lambda_prediction * initial_mask, undersampled_k)
+
+@pytest.mark.parametrize("pass_through_size", [10, 25, 40])
+def test_inverted_masks(triple_pathway_model: TriplePathway, model_inputs, pass_through_size):
+    pass_through_size = 10
+    triple_pathway_model.config.is_pass_inverse = True
+    triple_pathway_model.config.is_pass_original = False
+
+    k_space, initial_mask, second_mask = model_inputs
+
+    
+    input_set = initial_mask.to(bool) & second_mask.to(bool)
+    loss_set = initial_mask.to(bool) & ~second_mask.to(bool)
+
+    cloned_input_set = input_set.clone()
+    cloned_loss_set = loss_set.clone()
+
+    b, con, c, h, w = input_set.shape
+    middle_slice = slice(h//2 - pass_through_size//2, h//2 + pass_through_size//2) 
+
+    inverse_w_acs, lambda_wo_acs = TriplePathway.create_inverted_masks(input_set, loss_set, pass_through_size)
+
+    torch.testing.assert_close(lambda_wo_acs[..., middle_slice, middle_slice], cloned_loss_set[..., middle_slice, middle_slice])
+    torch.testing.assert_close(inverse_w_acs[..., middle_slice, middle_slice], cloned_input_set[..., middle_slice, middle_slice])
+
