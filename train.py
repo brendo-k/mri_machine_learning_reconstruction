@@ -164,7 +164,7 @@ def setup_model_parameters(args, thresholds):
             pass_through_size=args.pass_through_size,
             mask_theshold=thresholds,
             enable_warmup_training=args.warmup_training,
-            normalize_loss_by_masks=args.norm_loss_by_masks,
+            normalize_loss_by_mask=args.norm_loss_by_mask,
             )
         
     return model,data_module
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     model_group.add_argument('--warmup_training', action='store_true')
     model_group.add_argument('--use_schedulers', action='store_true')
     model_group.add_argument('--sense_method', type=str, default='first')
-    model_group.add_argument('--norm_loss_by_masks', action='store_true')
+    model_group.add_argument('--norm_loss_by_mask', action='store_true')
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--inverse_data_no_grad', action='store_true')

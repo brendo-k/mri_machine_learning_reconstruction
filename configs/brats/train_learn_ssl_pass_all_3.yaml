@@ -11,16 +11,16 @@ dataset_parameters:
     - t1
   nx: 256
   ny: 256
-  limit_volumes: 0.5
+  limit_volumes: 0.2
 
 model_parameters:
   data_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
   test_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
   chans: 18
   cascades: 6
-  ssim_scaling_full: 8.0e-5
-  ssim_scaling_set: 1.0e-5
-  ssim_scaling_inverse: 1.0e-5
+  ssim_scaling_full: 8.0e-6
+  ssim_scaling_set: 1.0e-6
+  ssim_scaling_inverse: 1.0e-6
   ssim_scaling_delta: 0
   lambda_scaling: 0.6920937050278195
   sigmoid_slope2: 200
