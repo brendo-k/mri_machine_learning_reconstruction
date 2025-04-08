@@ -1,8 +1,10 @@
 from argparse import ArgumentParser
 import torch
 import wandb
-import os
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pathlib import Path
+
+from tempfile import TemporaryDirectory
 
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
@@ -49,7 +51,7 @@ def main(args):
     process_checkpoint(args, callbacks, wandb_logger)
 
 def process_checkpoint(args, callbacks, wandb_logger):
-    checkpoint_path = os.path.join(args.checkpoint_dir, callbacks[0].best_model_path)
+    checkpoint_path = Path(args.checkpoint_dir) /callbacks[0].best_model_path
     if not args.save_optimizer:
         # remove optimizer states to save space (limited space on wandb)
         remove_optimizer_state(checkpoint_path)
@@ -70,7 +72,7 @@ def build_callbacks(args, file_name):
     callbacks.append(LearningRateMonitor(logging_interval='step'))
     return callbacks
 
-def restore_optimizer_state(model, checkpoint_path):
+def restore_optimizer_state(model):
     optim = model.optimizers()
     checkpoint = torch.load(args.checkpoint)
     optim.load_state_dict(checkpoint['state_dict'])
@@ -80,9 +82,10 @@ def setup_wandb_logger(args, model, data_module):
     hparams.update(data_module.hparams)
     config = vars(args)
     wandb_experiment = wandb.init(config=config, project=args.project, name=args.run_name, dir=args.logger_dir)
+
+    wandb_logger = WandbLogger(experiment=wandb_experiment)
     wandb.define_metric("trainer/global_step")
     wandb.define_metric("*", step_metric="trainer/global_step")
-    wandb_logger = WandbLogger(experiment=wandb_experiment)
     return wandb_logger
 
 
@@ -171,9 +174,16 @@ def setup_model_parameters(args, thresholds):
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     checkpoint_name = f"model-{wandb_logger.experiment.id}"
-    artifact = wandb.Artifact(name=checkpoint_name, type="model")
-    artifact.add_file(local_path=checkpoint_path, name='model.ckpt')
-    wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
+
+    with TemporaryDirectory() as tempdir: 
+        temp_checkpoint = Path(tempdir) / 'model.ckpt'
+        checkpoint = torch.load(checkpoint_path)
+        torch.save(temp_checkpoint, checkpoint)
+        remove_optimizer_state(temp_checkpoint)
+
+        artifact = wandb.Artifact(name=checkpoint_name, type="model")
+        artifact.add_file(local_path=temp_checkpoint.as_posix(), name='model.ckpt')
+        wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
 
 
 def remove_optimizer_state(checkpoint_path, ):
@@ -187,8 +197,6 @@ def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr)
     data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, test_dir=test_dir)
-
-    
     data_module.setup('train')
     return model, data_module
 
