@@ -30,14 +30,14 @@ def process_file(file, out_path, seed, noise, coil_file, num_coils):
         
     images = np.stack(images, axis=0)
     images = images/np.max(images, axis=(1, 2), keepdims=True)
-    k_space = np.zeros((4, num_coils, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3), dtype=np.complex64)
-    gt_img = np.zeros((4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 106)//3))
+    k_space = np.zeros((4, num_coils, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 100)//5), dtype=np.complex64)
+    gt_img = np.zeros((4, IMAGE_SIZE[0], IMAGE_SIZE[1], (images.shape[-1] - 100)//5))
     for i in range(images.shape[-1]):
         if i < 70: 
             continue
-        if i >= images.shape[-1]-36:
+        if i >= images.shape[-1]-30:
             break
-        if i % 3 == 0:
+        if i % 5 == 0:
             cur_images = images[..., i]
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
@@ -48,8 +48,8 @@ def process_file(file, out_path, seed, noise, coil_file, num_coils):
                                         noise_std=noise, 
                                         coil_file=coil_file
                                         )
-            k_space[..., (i-70)//3] = sim_k_space
-            gt_img[..., (i-70)//3] = gt
+            k_space[..., (i-70)//5] = sim_k_space
+            gt_img[..., (i-70)//5] = gt
 
     k_space = np.ascontiguousarray(np.transpose(k_space, (4, 0, 1, 2, 3)).astype(np.complex64))
     gt_img = np.ascontiguousarray(np.transpose(gt_img, (3, 0, 1, 2)))

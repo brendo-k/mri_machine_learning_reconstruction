@@ -3,9 +3,8 @@ import torch
 from pytorch_lightning.loggers import WandbLogger
 from typing import Literal, Union
 
-from torch.optim.lr_scheduler import StepLR, LinearLR
+from torch.optim.lr_scheduler import StepLR, LinearLR, CosineAnnealingWarmRestarts
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
-from torch.optim.lr_scheduler import StepLR, LinearLR
 
 from ml_recon.losses import L1L2Loss
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
@@ -339,23 +338,25 @@ class LearnedSSLLightning(plReconModel):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = []
+        schedulers = []
         if self.warmup_adam: 
             warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1, total_iters=900) 
-            scheduler.append(
-                    {
-                        'scheduler': warmup_scheduler, 
-                        'interval': 'step', 
-                    }
-                    )
+            schedulers.append(
+                {
+                    'scheduler': warmup_scheduler, 
+                    'interval': 'step', 
+                }
+            )
         if self.lr_scheduler:
-            step_lr = StepLR(optimizer, step_size=50, gamma=0.1)
-            scheduler.append(
-                    {
-                        'scheduler': step_lr
-                        }
-                    )
-        return [optimizer], scheduler
+            scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=2000, T_mult=2, eta_min=1e-4)
+            #step_lr = StepLR(optimizer, step_size=50, gamma=0.1)
+            schedulers.append(
+                {
+                    'scheduler': scheduler,
+                    'interval': 'step', 
+                }
+            )
+        return [optimizer], schedulers
 
     
     def calculate_k_nmse(self, batch):
