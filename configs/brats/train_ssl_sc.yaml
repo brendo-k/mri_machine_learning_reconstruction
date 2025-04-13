@@ -11,9 +11,9 @@ test_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
 num_workers: 2
 contrasts:
   - 't1'
-chans: 12
+chans: 18
 depth: 4
-cascades: 4
+cascades: 6
 dataset: 'brats'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
@@ -24,3 +24,4 @@ sampling_method: '1d'
 norm_method: 'image_mean'
 upsample_method: 'bilinear'
 save_optimizer: True
+

@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import torch
 import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 from tempfile import TemporaryDirectory
@@ -21,6 +22,7 @@ from ml_recon.utils import replace_args_from_config, restore_optimizer
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.tuner.tuning import Tuner
 from datetime import datetime
 
 def main(args):
@@ -43,6 +45,8 @@ def main(args):
         logger=wandb_logger, 
         callbacks=callbacks,
         )
+
+    tuner = Tuner(trainer)
 
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
@@ -74,15 +78,15 @@ def build_callbacks(args, file_name):
 
 def restore_optimizer_state(model):
     optim = model.optimizers()
-    checkpoint = torch.load(args.checkpoint)
+    checkpoint = torch.load(args.checkpoint, weights_only=False)
     optim.load_state_dict(checkpoint['state_dict'])
 
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
-    config = vars(args)
-    wandb_experiment = wandb.init(config=config, project=args.project, name=args.run_name, dir=args.logger_dir)
+    #config = vars(args)
 
+    wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
     wandb_logger = WandbLogger(experiment=wandb_experiment)
     wandb.define_metric("trainer/global_step")
     wandb.define_metric("*", step_metric="trainer/global_step")
@@ -177,8 +181,8 @@ def log_weights_to_wandb(wandb_logger, checkpoint_path):
 
     with TemporaryDirectory() as tempdir: 
         temp_checkpoint = Path(tempdir) / 'model.ckpt'
-        checkpoint = torch.load(checkpoint_path)
-        torch.save(temp_checkpoint, checkpoint)
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
+        torch.save(checkpoint, temp_checkpoint.as_posix())
         remove_optimizer_state(temp_checkpoint)
 
         artifact = wandb.Artifact(name=checkpoint_name, type="model")

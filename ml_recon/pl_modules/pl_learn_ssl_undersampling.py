@@ -347,6 +347,13 @@ class LearnedSSLLightning(plReconModel):
                     'interval': 'step', 
                 }
             )
+            #warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1, total_iters=800) 
+            #scheduler.append(
+            #        {
+            #            'scheduler': warmup_scheduler, 
+            #            'interval': 'step', 
+            #        }
+            #        )
         if self.lr_scheduler:
             scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=2000, T_mult=2, eta_min=1e-4)
             #step_lr = StepLR(optimizer, step_size=50, gamma=0.1)

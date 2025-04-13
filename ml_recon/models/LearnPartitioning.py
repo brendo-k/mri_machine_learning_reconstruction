@@ -89,6 +89,7 @@ class LearnPartitioning(nn.Module):
             if self.config.sampling_method == '2d':
                 init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
             else: 
+                #init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
                 init_prob = gen_pdf_columns(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
             init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (config.image_size[0], 1, 1)))
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
