@@ -6,19 +6,19 @@ R: 6.0
 nx: 256
 ny: 256
 supervised: false
-data_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
-test_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
+data_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
+test_dir: '/home/kadotab/scratch/sim_subset_mar_4/'
 num_workers: 2
 contrasts:
   - 't1'
-chans: 18
+chans: 64
 depth: 4
-cascades: 6
+cascades: 12
 dataset: 'brats'
 project: 'MRI Reconstruction'
 k_loss: 'l1'
 lambda_scaling: 1
-limit_volumes: 0.2
+limit_volumes: 1
 mask_threshold_t1: 0.11
 sampling_method: '1d'
 norm_method: 'image_mean'
