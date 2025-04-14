@@ -9,7 +9,6 @@ import os
 import torch
 import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor
-import matplotlib.pyplot as plt
 
 # my libraries
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
@@ -25,7 +24,7 @@ from ml_recon.utils import replace_args_from_config, restore_optimizer
 # pytorch lightning tools and trainers
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.loggers import DummyLogger
+from pytorch_lightning.loggers.logger import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.tuner.tuning import Tuner
 
