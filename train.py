@@ -1,29 +1,33 @@
+# python libraries
 from argparse import ArgumentParser
+from pathlib import Path
+from datetime import datetime
+from tempfile import TemporaryDirectory
+import os 
+
+# deep learning libraries
 import torch
 import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor
 import matplotlib.pyplot as plt
-from pathlib import Path
 
-from tempfile import TemporaryDirectory
-
+# my libraries
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
     VarnetConfig, 
     LearnPartitionConfig, 
     DualDomainConifg
     )
-
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.models.MultiContrastVarNet import VarnetConfig
 from ml_recon.utils import replace_args_from_config, restore_optimizer
 
-
+# pytorch lightning tools and trainers
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.loggers import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.tuner.tuning import Tuner
-from datetime import datetime
 
 def main(args):
     pl.seed_everything(8)
@@ -81,14 +85,15 @@ def restore_optimizer_state(model):
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
-    #config = vars(args)
-
-    wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
-    wandb_logger = WandbLogger(experiment=wandb_experiment)
-    wandb.define_metric("trainer/global_step")
-    wandb.define_metric("*", step_metric="trainer/global_step")
-    return wandb_logger
-
+    if os.environ['SLURM_LOCALID'] is None or os.environ['SLURM_LOCALID'] == 1:
+        wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
+        logger = WandbLogger(experiment=wandb_experiment)
+        wandb.define_metric("trainer/global_step")
+        wandb.define_metric("*", step_metric="trainer/global_step")
+    else: 
+        logger = DummyLogger()
+    return logger
+    
 
 def setup_masking_thresholds(args):
     possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
@@ -174,18 +179,20 @@ def setup_model_parameters(args, thresholds):
     return model,data_module
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
-    checkpoint_name = f"model-{wandb_logger.experiment.id}"
+    # only run on the first rank if dataparallel job
+    if os.environ['SLURM_LOCALID'] is None or os.environ['SLURM_LOCALID'] == 1:
+        checkpoint_name = f"model-{wandb_logger.experiment.id}"
 
-    # always remove optimizer state when logging to wandb
-    with TemporaryDirectory() as tempdir: 
-        temp_checkpoint = Path(tempdir) / 'model.ckpt'
-        checkpoint = torch.load(checkpoint_path, weights_only=False)
-        torch.save(checkpoint, temp_checkpoint.as_posix())
-        remove_optimizer_state(temp_checkpoint)
+        # always remove optimizer state when logging to wandb
+        with TemporaryDirectory() as tempdir: 
+            temp_checkpoint = Path(tempdir) / 'model.ckpt'
+            checkpoint = torch.load(checkpoint_path, weights_only=False)
+            torch.save(checkpoint, temp_checkpoint.as_posix())
+            remove_optimizer_state(temp_checkpoint)
 
-        artifact = wandb.Artifact(name=checkpoint_name, type="model")
-        artifact.add_file(local_path=temp_checkpoint.as_posix(), name='model.ckpt')
-        wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
+            artifact = wandb.Artifact(name=checkpoint_name, type="model")
+            artifact.add_file(local_path=temp_checkpoint.as_posix(), name='model.ckpt')
+            wandb_logger.experiment.log_artifact(artifact, aliases=['latest'])
 
 
 def remove_optimizer_state(checkpoint_path, ):
