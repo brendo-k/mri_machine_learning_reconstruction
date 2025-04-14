@@ -55,10 +55,7 @@ def main(args):
     process_checkpoint(args, callbacks, wandb_logger)
 
 def process_checkpoint(args, callbacks, wandb_logger):
-    checkpoint_path = Path(args.checkpoint_dir) /callbacks[0].best_model_path
-    if not args.save_optimizer:
-        # remove optimizer states to save space (limited space on wandb)
-        remove_optimizer_state(checkpoint_path)
+    checkpoint_path = Path(args.checkpoint_dir) / callbacks[0].best_model_path
     # log to wandb
     log_weights_to_wandb(wandb_logger, checkpoint_path)
 
@@ -179,6 +176,7 @@ def setup_model_parameters(args, thresholds):
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     checkpoint_name = f"model-{wandb_logger.experiment.id}"
 
+    # always remove optimizer state when logging to wandb
     with TemporaryDirectory() as tempdir: 
         temp_checkpoint = Path(tempdir) / 'model.ckpt'
         checkpoint = torch.load(checkpoint_path, weights_only=False)
@@ -240,7 +238,6 @@ if __name__ == '__main__':
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
-    training_group.add_argument("--save_optimizer", action='store_true')
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
