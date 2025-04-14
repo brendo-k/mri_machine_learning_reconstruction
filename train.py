@@ -84,7 +84,7 @@ def restore_optimizer_state(model):
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
-    if os.environ['SLURM_LOCALID'] is None or os.environ['SLURM_LOCALID'] == 1:
+    if os.environ['SLURM_LOCALID'] is None or int(os.environ['SLURM_LOCALID']) == 1:
         wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
         logger = WandbLogger(experiment=wandb_experiment)
         wandb.define_metric("trainer/global_step")
