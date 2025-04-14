@@ -1,0 +1,29 @@
+# Self supervised config file for train.py
+dataset_params:
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  dataset: 'brats'
+  nx: 256
+  ny: 256
+  num_workers: 2
+  norm_method: 'image_mean'
+  contrasts:
+    - 't1'
+  limit_volumes: 1
+  R: 8.0
+  sampling_method: '1d'
+  mask_threshold_t1: 0.1
+
+training_params:
+  max_epochs: 50
+  batch_size: 4
+  lr: 0.001
+  supervised: false
+  k_loss: 'l1'
+  lambda_scaling: 1
+  project: 'MRI Reconstruction'
+
+model_parameters:
+  chans: 64
+  depth: 4
+  cascades: 12
