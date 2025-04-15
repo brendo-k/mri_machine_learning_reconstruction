@@ -38,6 +38,7 @@ model_parameters:
   warmup_training: False
   norm_method: 'image_mean'
   warm_start: true
+  upsample_method: 'bilinear'
 
 
 logging_parameters:

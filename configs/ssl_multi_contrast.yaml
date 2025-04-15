@@ -30,3 +30,4 @@ model_parameters:
   chans: 64
   depth: 4
   cascades: 12
+  upsample_method: 'bilinear'
