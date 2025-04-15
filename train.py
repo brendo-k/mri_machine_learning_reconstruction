@@ -84,7 +84,7 @@ def restore_optimizer_state(model):
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
-    if os.environ['SLURM_LOCALID'] is None or int(os.environ['SLURM_LOCALID']) == 0:
+    if os.environ.get('SLURM_LOCALID') is None or int(os.environ['SLURM_LOCALID']) == 0:
         wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
         logger = WandbLogger(experiment=wandb_experiment)
         wandb.define_metric("trainer/global_step")
@@ -179,7 +179,7 @@ def setup_model_parameters(args, thresholds):
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     # only run on the first rank if dataparallel job
-    if os.environ['SLURM_LOCALID'] is None or os.environ['SLURM_LOCALID'] == 0:
+    if os.environ.get('SLURM_LOCALID') is None or os.environ['SLURM_LOCALID'] == 0:
         checkpoint_name = f"model-{wandb_logger.experiment.id}"
 
         # always remove optimizer state when logging to wandb
