@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from tempfile import TemporaryDirectory
 import os 
+import dataclasses 
 
 # deep learning libraries
 import torch
@@ -84,6 +85,10 @@ def restore_optimizer_state(model):
 def setup_wandb_logger(args, model, data_module):
     hparams = dict(model.hparams)
     hparams.update(data_module.hparams)
+    for key in hparams.keys():
+        if dataclasses.is_dataclass(hparams[key]):
+            hparams[key] = dataclasses.asdict(hparams[key])
+
     if os.environ.get('SLURM_LOCALID') is None or int(os.environ['SLURM_LOCALID']) == 0:
         wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
         logger = WandbLogger(experiment=wandb_experiment)
