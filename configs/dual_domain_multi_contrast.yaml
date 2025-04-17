@@ -16,8 +16,8 @@ dataset_parameters:
 model_parameters:
   data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
   test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  chans: 32
-  cascades: 6
+  chans: 64
+  cascades: 12
   ssim_scaling_full: 0 
   ssim_scaling_set: 0
   ssim_scaling_inverse: 0
