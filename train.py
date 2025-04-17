@@ -209,7 +209,7 @@ def remove_optimizer_state(checkpoint_path, ):
 def load_checkpoint(args, data_dir, test_dir):
     print("Loading Checkpoint!")
     if os.environ.get('SLURM_LOCALID') is not None:
-        device = int(os.environ['SLURM_LOCALID']) 
+        device = f"cuda:{int(os.environ['SLURM_LOCALID'])}"
     else:
         device = 'cpu' if torch.cuda.is_available() else 'cuda:0'
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr, map_location=device)
