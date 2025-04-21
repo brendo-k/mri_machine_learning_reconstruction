@@ -93,7 +93,7 @@ class LearnedSSLLightning(plReconModel):
         )
 
 
-        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
+        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask, 'train')
         loss: torch.Tensor = sum(loss for loss in loss_dict.values()) # type: ignore
 
         for key, value in loss_dict.items():
@@ -205,7 +205,7 @@ class LearnedSSLLightning(plReconModel):
         )
 
         # log loss
-        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask)
+        loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask, 'val')
         loss = sum(loss for loss in loss_dict.values())
 
         self.log_scalar(f"val_losses/loss", loss, prog_bar=True, sync_dist=True)
@@ -472,7 +472,7 @@ class LearnedSSLLightning(plReconModel):
     def k_to_img_scaled(self, k_space, scaling_factor):
         return k_to_img(k_space) / scaling_factor
 
-    def calculate_loss(self, estimates, undersampled_k, fully_sampled, input_mask, dc_mask):
+    def calculate_loss(self, estimates, undersampled_k, fully_sampled, input_mask, dc_mask, label):
         """
         Calculate the loss for different pathways in the reconstruction process.
         Args:
@@ -509,8 +509,11 @@ class LearnedSSLLightning(plReconModel):
             assert isinstance(ssim_val, torch.Tensor)
             loss_dict['image_loss'] = 1 - ssim_val
 
-        # merge dictionaries 
-        loss_dict = loss_dict | self.calculate_k_loss(lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling, 'lambda')
+        # plot each loss individually
+        k_losses = self.calculate_k_loss(lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling, 'lambda')
+        for key, value in k_losses.items():
+            self.log(f'{label}/{key}', value)
+        loss_dict['k_loss'] = sum([values for values in k_losses.values()])/len(k_losses)
 
         # calculate full lambda image loss pathway
         if full_k is not None:
@@ -519,14 +522,17 @@ class LearnedSSLLightning(plReconModel):
                 lambda_k, 
                 undersampled_k, 
             )
-            self.log('train/unscaled_full_lambda', loss_dict['image_loss_full_lambda'])
+            self.log(f'{label}/unscaled_full_lambda', loss_dict['image_loss_full_lambda'])
             loss_dict['image_loss_full_lambda'] *= lam_full_scaling
 
         # calculate inverse lambda image and k-space loss pathway 
         if inverse_k is not None:
             # k space loss
-            loss_dict = loss_dict | self.calculate_inverse_k_loss(input_mask, dc_mask, inverse_k, undersampled_k)
-            # image space loss
+            inverse_k_losses = self.calculate_inverse_k_loss(input_mask, dc_mask, inverse_k, undersampled_k)
+            for key, value in inverse_k_losses.items():
+                self.log(f'{label}/{key}', value)
+            loss_dict['k_loss_inverse'] = sum([values for values in inverse_k_losses.values()])/len(inverse_k_losses)
+        # image space loss
             loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
                 lambda_k, 
                 inverse_k,

@@ -32,7 +32,7 @@ class UndersampleDecorator(Dataset):
         R_hat: float = math.nan,
         original_ssdu_partioning: bool = False,
         sampling_method: str = '2d', 
-        seed: int = 10
+        seed: Union[int, None] = None
     ):
         super().__init__()
 
@@ -44,8 +44,9 @@ class UndersampleDecorator(Dataset):
         self.R_hat = R_hat
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
-        self.seed = seed
         self.lambda_rng = np.random.default_rng(seed) # generator for lambda mask seeds.
+        self.omega_seed_offset = self.lambda_rng.integers(0, 2**32)
+
         
         assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
 
@@ -69,11 +70,12 @@ class UndersampleDecorator(Dataset):
     def __len__(self):
         return self.dataset.__len__() # type: ignore
     
+    # this is needed because for some reason, every epoch the dataloaders are reset to the same state. 
+    # Therefore, if I use the same np.random_default_rng() it will repeat itself.
     def set_epoch(self, epoch):
         self.epoch = epoch
         seed = (self.lambda_rng.integers(0, 2**23) + self.epoch) % 2**23 
         self.lambda_rng = np.random.default_rng(seed)
-
 
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
@@ -148,7 +150,7 @@ class UndersampleDecorator(Dataset):
         # same mask every time since the random seed is the index value
         if self.sampling_type == '2d' or self.sampling_type == '1d': 
             under, mask_omega  = apply_undersampling_from_dist(
-                                        index + self.seed,
+                                        index,
                                         self.omega_prob,
                                         k_space, 
                                         )

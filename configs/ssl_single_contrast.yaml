@@ -8,7 +8,7 @@ dataset_params:
   num_workers: 2
   norm_method: 'image_mean'
   contrasts:
-    - 't1'
+    - 't2'
   limit_volumes: 1
   R: 8.0
   sampling_method: '1d'
