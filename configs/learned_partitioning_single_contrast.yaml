@@ -42,7 +42,6 @@ model_parameters:
   warmup_training: True
   norm_method: 'image_mean'
   warm_start: True
-  upsample_method: 'bilinear'
   norm_loss_by_mask: False
   warmup_adam: False
 
