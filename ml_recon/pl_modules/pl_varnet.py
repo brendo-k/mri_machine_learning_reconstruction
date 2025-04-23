@@ -34,7 +34,7 @@ class pl_VarNet(plReconModel):
 
         super().__init__(config.contrast_order)
 
-        self.save_hyperparameters()
+        #self.save_hyperparameters()
 
         # reconstruction model
         self.model = MultiContrastVarNet(config)

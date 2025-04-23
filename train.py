@@ -83,14 +83,9 @@ def restore_optimizer_state(model):
     optim.load_state_dict(checkpoint['state_dict'])
 
 def setup_wandb_logger(args, model, data_module):
-    hparams = dict(model.hparams)
-    hparams.update(data_module.hparams)
-    for key in hparams.keys():
-        if dataclasses.is_dataclass(hparams[key]):
-            hparams[key] = dataclasses.asdict(hparams[key])
-
     if os.environ.get('SLURM_LOCALID') is None or int(os.environ['SLURM_LOCALID']) == 0:
-        wandb_experiment = wandb.init(config=hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
+        print(model.hparams)
+        wandb_experiment = wandb.init(config=model.hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
         logger = WandbLogger(experiment=wandb_experiment)
         wandb.define_metric("trainer/global_step")
         wandb.define_metric("*", step_metric="trainer/global_step")

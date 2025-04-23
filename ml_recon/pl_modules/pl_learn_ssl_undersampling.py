@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
 from typing import Literal, Union
+import dataclasses
 
 from torch.optim.lr_scheduler import StepLR, LinearLR, CosineAnnealingWarmRestarts
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
@@ -44,12 +45,18 @@ class LearnedSSLLightning(plReconModel):
             is_mask_testing=is_mask_testing,
             mask_threshold=mask_theshold
         )
-        self.save_hyperparameters(ignore=['recon_model', 'partition_model'])
+        
+
 
         if enable_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
 
         self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
+
+        # convert to dicts because save hyperparameter method does not like dataclasses
+        dual_domain_config = dataclasses.asdict(dual_domain_config) #type: ignore
+        varnet_config = dataclasses.asdict(varnet_config) #type: ignore
+        learn_partitioning_config = dataclasses.asdict(learn_partitioning_config) #type: ignore
 
         self.lr = lr
         self.lr_scheduler = lr_scheduler
@@ -70,6 +77,7 @@ class LearnedSSLLightning(plReconModel):
         # loss function init
         self._setup_image_space_loss(image_loss_function, image_loss_l1_grad_scaling)
         self._setup_k_space_loss(k_space_loss_function)
+        self.save_hyperparameters()
 
 
     def forward(self, k_space, mask, fs_k_space):
@@ -78,12 +86,14 @@ class LearnedSSLLightning(plReconModel):
 
     # Training function  
     def training_step(self, batch, batch_idx):
-        # init loss tensors (some may be unused)
-
+        # get data 
         fully_sampled = batch['fs_k_space']
         undersampled_k = batch['undersampled']
-
+        
+        # split data (loss mask is all ones if supervised)
         input_mask, loss_mask = self.partition_k_space(batch)
+
+        # recon undersampled data
         estimates = self.recon_model.forward(
             undersampled_k,
             fully_sampled, 
@@ -91,11 +101,12 @@ class LearnedSSLLightning(plReconModel):
             loss_mask,
             return_all=False,
         )
-
-
+        
+        # calculate loss
         loss_dict = self.calculate_loss(estimates, undersampled_k, fully_sampled, input_mask, loss_mask, 'train')
         loss: torch.Tensor = sum(loss for loss in loss_dict.values()) # type: ignore
 
+        # log
         for key, value in loss_dict.items():
             self.log_scalar(f"train/{key}", value)
 
