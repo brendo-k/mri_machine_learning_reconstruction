@@ -1,0 +1,4 @@
+python train.py -c=configs/learned_partitioning_single_contrast.yaml --chans 18 --cascades 4 --limit_volumes 0.2 --data_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --test_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --max_epochs 100 --contrast t2 --R 8 --lr 1e-3 --sigmoid_slope2 600
+python train.py -c=configs/learned_partitioning_single_contrast.yaml --chans 18 --cascades 4 --limit_volumes 0.2 --data_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --test_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --max_epochs 100 --contrast t2 --R 8 --lr 1e-3 --sigmoid_slope1 20
+python train.py -c=configs/learned_partitioning_single_contrast.yaml --chans 18 --cascades 4 --limit_volumes 0.2 --data_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --test_dir /home/brenden/Documents/Coding/data/sim_subset_1e-2/ --max_epochs 100 --contrast t2 --R 8 --lr 1e-3 --norm_loss_by_mask 
+

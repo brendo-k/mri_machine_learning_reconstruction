@@ -10,29 +10,27 @@ class DualDomainConifg:
     is_pass_original: bool = False 
     inverse_no_grad: bool = False
     original_no_grad: bool = False
+    pass_all_lines: bool = False
+    pass_through_size: int = 10
 
 class TriplePathway(nn.Module):
     """
     Dual domain self-supervised learning module. Handles passing inverse, lambda, and original
-    data through reconstruction networks.
+    data through a single reconstruciton network.
+
+    
     """
-    def __init__(
-            self,
-            dual_domain_config: DualDomainConifg, # config for triple pathway dual domain 
-            varnet_config: VarnetConfig, # config for VarNet Reconstruction
-            pass_through_size: int = 10 # size of center region passed through to inverse mask
-        ):
+    def __init__(self, dual_domain_config: DualDomainConifg, varnet_config: VarnetConfig):
         super().__init__()
         self.config = dual_domain_config
+        # same model used for each pathway
         self.recon_model = MultiContrastVarNet(varnet_config)
-        self.pass_through_size = pass_through_size
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
     def forward(self, undersampled_k, fully_sampled_k, input_set, target_set, return_all=False):
         estimate_lambda = self.pass_through_lambda_path(undersampled_k, fully_sampled_k, input_set)
 
-        # these pathways only make sense in the self-supervised case
         estimate_inverse = None
         if self.config.is_pass_inverse or return_all:
             if self.config.inverse_no_grad:
@@ -74,7 +72,12 @@ class TriplePathway(nn.Module):
 
 
     def pass_through_inverse_path(self, undersampled, fs_k_space, lambda_set, inverse_set):
-        mask_inverse_w_acs, _ = TriplePathway.create_inverted_masks(lambda_set, inverse_set, self.pass_through_size)
+        mask_inverse_w_acs, _ = TriplePathway.create_inverted_masks(
+            lambda_set, 
+            inverse_set, 
+            self.config.pass_through_size, 
+            self.config.pass_all_lines
+        )
 
         estimate_inverse = self.pass_through_model(undersampled*mask_inverse_w_acs, mask_inverse_w_acs, fs_k_space)
             
@@ -86,13 +89,18 @@ class TriplePathway(nn.Module):
         return estimate_lambda
 
     @staticmethod
-    def create_inverted_masks(lambda_set, inverse_set, pass_through_size):
+    def create_inverted_masks(lambda_set, inverse_set, pass_through_size, pass_all_lines):
         _, _, _, h, w = lambda_set.shape
         mask_inverse_w_acs = inverse_set.clone()
         mask_lambda_wo_acs = lambda_set.clone()
+
         lower_bound = pass_through_size // 2
         upper_bound = pass_through_size - lower_bound
-        center_slice = slice(h//2-lower_bound, h//2+upper_bound)
-        mask_inverse_w_acs[:, :, :, center_slice, center_slice] = lambda_set[:, :, :, center_slice, center_slice]
-        mask_lambda_wo_acs[:, :, :, center_slice, center_slice] = inverse_set[:, :, :, center_slice, center_slice]
+        if pass_all_lines:
+            center_slice_h = slice(0, h)
+        else:
+            center_slice_h = slice(h//2-lower_bound, h//2+upper_bound)
+        center_slice_w = slice(w//2-lower_bound, w//2+upper_bound)
+        mask_inverse_w_acs[:, :, :, center_slice_h, center_slice_w] = lambda_set[:, :, :, center_slice_h, center_slice_w]
+        mask_lambda_wo_acs[:, :, :, center_slice_h, center_slice_w] = inverse_set[:, :, :, center_slice_h, center_slice_w]
         return mask_inverse_w_acs, mask_lambda_wo_acs

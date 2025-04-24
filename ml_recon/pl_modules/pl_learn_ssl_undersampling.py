@@ -18,9 +18,9 @@ from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 class LearnedSSLLightning(plReconModel):
     def __init__(
         self, 
-        learn_partitioning_config: LearnPartitionConfig,
-        varnet_config: VarnetConfig,
-        dual_domain_config: DualDomainConifg,
+        learn_partitioning_config: Union[LearnPartitionConfig, dict],
+        varnet_config: Union[VarnetConfig, dict],
+        dual_domain_config: Union[DualDomainConifg, dict],
         lr: float = 1e-3,
         lr_scheduler: bool = False,
         warmup_adam: bool = False,
@@ -40,6 +40,17 @@ class LearnedSSLLightning(plReconModel):
         mask_theshold: Union[dict, None] = None,
         normalize_loss_by_mask: bool = True
     ):
+
+        # since we convert to dicts for uploading to wandb, we need to convert back to dataclasses
+        # Needed when loading checkpoints
+        if isinstance(learn_partitioning_config, dict):
+            learn_partitioning_config = LearnPartitionConfig(**learn_partitioning_config)
+        if isinstance(varnet_config, dict):
+            varnet_config = VarnetConfig(**varnet_config)
+        if isinstance(dual_domain_config, dict):
+            dual_domain_config = DualDomainConifg(**dual_domain_config)
+
+
         super().__init__(
             contrast_order=varnet_config.contrast_order,
             is_mask_testing=is_mask_testing,
@@ -51,7 +62,7 @@ class LearnedSSLLightning(plReconModel):
         if enable_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
 
-        self.recon_model = TriplePathway(dual_domain_config, varnet_config, pass_through_size=pass_through_size)
+        self.recon_model = TriplePathway(dual_domain_config, varnet_config)
 
         # convert to dicts because save hyperparameter method does not like dataclasses
         dual_domain_config = dataclasses.asdict(dual_domain_config) #type: ignore
@@ -461,7 +472,12 @@ class LearnedSSLLightning(plReconModel):
 
 
     def calculate_inverse_k_loss(self, input_mask, loss_mask, inverse_k, undersampled_k):
-        _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(input_mask, loss_mask, self.pass_through_size)
+        _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(
+            input_mask, 
+            loss_mask, 
+            self.recon_model.config.pass_through_size, 
+            self.recon_model.config.pass_all_lines
+        )
         k_loss_inverse = self.calculate_k_loss(inverse_k, undersampled_k, lambda_k_wo_acs, (1 - self.lambda_loss_scaling), 'inverse')
         return k_loss_inverse
 

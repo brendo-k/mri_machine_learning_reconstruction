@@ -4,7 +4,6 @@ from pathlib import Path
 from datetime import datetime
 from tempfile import TemporaryDirectory
 import os 
-import dataclasses 
 
 # deep learning libraries
 import torch
@@ -26,11 +25,10 @@ from ml_recon.utils import replace_args_from_config, restore_optimizer
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, SpikeDetection
 from pytorch_lightning.tuner.tuning import Tuner
 
 def main(args):
-    pl.seed_everything(8)
     file_name = get_unique_file_name(args)
 
     # build some callbacks for pytorch lightning
@@ -75,6 +73,7 @@ def build_callbacks(args, file_name):
     callbacks = []
     callbacks.append(build_checkpoint_callbacks(file_name, args.checkpoint_dir))
     callbacks.append(LearningRateMonitor(logging_interval='step'))
+    callbacks.append(SpikeDetection())
     return callbacks
 
 def restore_optimizer_state(model):

@@ -25,15 +25,12 @@ class LearnPartitioning(nn.Module):
     """
     PyTorch module for learning partioning of k-space for self-supervised learning
     """
-    def __init__(
-            self,
-            learn_part_config: LearnPartitionConfig, 
-        ):
+    def __init__(self, learn_part_config: LearnPartitionConfig):
         super().__init__()
         
         self.config = learn_part_config
         
-        # Initialize R values
+        # Initialize partitioning weights W
         self._setup_sampling_weights(learn_part_config)
 
 

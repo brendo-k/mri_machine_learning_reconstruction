@@ -2,7 +2,7 @@ training_parameters:
   num_workers: 2
   max_epochs: 200
   batch_size: 4
-  lr: 0.004
+  lr: 0.001
 
 dataset_parameters:
   R: 6.0
@@ -33,15 +33,15 @@ model_parameters:
   learn_sampling: true 
   image_loss: ssim
   all_data_no_grad: true 
-  inverse_data_no_grad: true 
+  inverse_data_no_grad: false 
   pass_through_size: 10
   sampling_method: 1d
   mask_threshold_t2: 0.11
   mask_threshold_t1: 0.11
   mask_threshold_flair: 0.11
-  warmup_training: True
+  warmup_training: False
   norm_method: 'image_mean'
-  warm_start: True
+  warm_start: False
   norm_loss_by_mask: False
   warmup_adam: False
 
