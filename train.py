@@ -11,22 +11,20 @@ import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor
 
 # my libraries
+from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from ml_recon.utils import replace_args_from_config, restore_optimizer
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
     VarnetConfig, 
     LearnPartitionConfig, 
     DualDomainConifg
     )
-from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
-from ml_recon.models.MultiContrastVarNet import VarnetConfig
-from ml_recon.utils import replace_args_from_config, restore_optimizer
 
 # pytorch lightning tools and trainers
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, SpikeDetection
-from pytorch_lightning.tuner.tuning import Tuner
 
 def main(args):
     file_name = get_unique_file_name(args)
@@ -40,15 +38,13 @@ def main(args):
     # setup pytorch lightning dataloder and datamodules
     model, data_module = setup_model_and_dataloaders(args, callbacks, thresholds)
     # setup wandb logger
-    wandb_logger = setup_wandb_logger(args, model, data_module)
+    wandb_logger = setup_wandb_logger(args, model)
 
     trainer = pl.Trainer(
         max_epochs=args.max_epochs, 
         logger=wandb_logger, 
         callbacks=callbacks,
         )
-
-    tuner = Tuner(trainer)
 
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
@@ -73,7 +69,7 @@ def build_callbacks(args, file_name):
     callbacks = []
     callbacks.append(build_checkpoint_callbacks(file_name, args.checkpoint_dir))
     callbacks.append(LearningRateMonitor(logging_interval='step'))
-    callbacks.append(SpikeDetection())
+    #callbacks.append(SpikeDetection())
     return callbacks
 
 def restore_optimizer_state(model):
@@ -81,7 +77,7 @@ def restore_optimizer_state(model):
     checkpoint = torch.load(args.checkpoint, weights_only=False)
     optim.load_state_dict(checkpoint['state_dict'])
 
-def setup_wandb_logger(args, model, data_module):
+def setup_wandb_logger(args, model):
     if os.environ.get('SLURM_LOCALID') is None or int(os.environ['SLURM_LOCALID']) == 0:
         print(model.hparams)
         wandb_experiment = wandb.init(config=model.hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
@@ -105,6 +101,8 @@ def setup_masking_thresholds(args):
     return thresholds
 
 def setup_model_parameters(args, thresholds):
+    # setup model configurations
+
     data_module = UndersampledDataModule(
                 args.dataset, 
                 args.data_dir, 
@@ -128,7 +126,6 @@ def setup_model_parameters(args, thresholds):
             cascades=args.cascades, 
             channels=args.chans,
             depth=args.depth,
-            sensetivity_estimation=args.sense_method,
             dropout=args.dropout, 
             upsample_method=args.upsample_method, 
             conv_after_upsample=args.conv_after_upsample
@@ -148,7 +145,9 @@ def setup_model_parameters(args, thresholds):
             is_pass_inverse=args.pass_inverse_data,
             is_pass_original=args.pass_all_data,
             inverse_no_grad=args.inverse_data_no_grad,
-            original_no_grad=args.all_data_no_grad
+            original_no_grad=args.all_data_no_grad,
+            pass_all_lines=args.pass_all_lines,
+            pass_through_size=args.pass_through_size
         )
 
     model = LearnedSSLLightning(
@@ -163,18 +162,16 @@ def setup_model_parameters(args, thresholds):
             image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
             lambda_scaling=args.lambda_scaling, 
             image_loss_function=args.image_loss,
-            image_loss_l1_grad_scaling=args.l1_grad_scaling,
             k_space_loss_function=args.k_loss,
             enable_learn_partitioning=args.learn_sampling, 
             use_supervised_image_loss=args.supervised_image,
             weight_decay=args.weight_decay,
-            pass_through_size=args.pass_through_size,
             mask_theshold=thresholds,
             enable_warmup_training=args.warmup_training,
             normalize_loss_by_mask=args.norm_loss_by_mask,
             )
         
-    return model,data_module
+    return model, data_module
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     # only run on the first rank if dataparallel job
@@ -263,7 +260,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
     dataset_group.add_argument('--norm_method', default='k')
 
-
+    # model parameters
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)
     model_group.add_argument('--warm_start', action='store_true')
@@ -273,37 +270,43 @@ if __name__ == '__main__':
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--pass_through_size', type=int, default=10)
+    model_group.add_argument('--pass_all_lines', action='store_true')
     model_group.add_argument('--dropout', type=float, default=0.0) 
     model_group.add_argument('--weight_decay', type=float, default=0.0) 
     model_group.add_argument('--conv_after_upsample', action='store_true') 
     model_group.add_argument('--upsample_method', type=str, default='conv') 
 
+    # loss function parameters
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_delta', type=float, default=0.0)
     model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
     model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
-    model_group.add_argument('--l1_grad_scaling', type=float, default=1)
     model_group.add_argument('--lambda_scaling', type=float, default=1)
 
-    model_group.add_argument('--warmup_training', action='store_true')
     model_group.add_argument('--use_schedulers', action='store_true')
-    model_group.add_argument('--sense_method', type=str, default='first')
     model_group.add_argument('--norm_loss_by_mask', action='store_true')
+    model_group.add_argument('--warmup_training', action='store_true')
+
+    # configure pathways in triple pathway
     model_group.add_argument('--pass_inverse_data', action='store_true')
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--inverse_data_no_grad', action='store_true')
     model_group.add_argument('--all_data_no_grad', action='store_true')
-    model_group.add_argument('--learn_sampling', action='store_true')
+
+    # masking for metrics
     model_group.add_argument('--mask_threshold_t2', type=float)
     model_group.add_argument('--mask_threshold_t1', type=float)
     model_group.add_argument('--mask_threshold_flair', type=float)
     model_group.add_argument('--mask_threshold_t1ce', type=float)
-
+    
+    # training type (supervised, self-supervised)
     model_group.add_argument('--supervised', action='store_true')
     model_group.add_argument('--supervised_image', action='store_true')
-
+    model_group.add_argument('--learn_sampling', action='store_true')
+    
+    #logging parameters
     logger_group = parser.add_argument_group('Logging Parameters')
     logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
     logger_group.add_argument('--run_name', type=str)

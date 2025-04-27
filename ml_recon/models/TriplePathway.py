@@ -22,18 +22,18 @@ class TriplePathway(nn.Module):
     """
     def __init__(self, dual_domain_config: DualDomainConifg, varnet_config: VarnetConfig):
         super().__init__()
-        self.config = dual_domain_config
+        self.dual_domain_config = dual_domain_config
         # same model used for each pathway
         self.recon_model = MultiContrastVarNet(varnet_config)
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
-    def forward(self, undersampled_k, fully_sampled_k, input_set, target_set, return_all=False):
+    def forward(self, undersampled_k, fully_sampled_k, input_set, target_set, return_all=False) -> dict:
         estimate_lambda = self.pass_through_lambda_path(undersampled_k, fully_sampled_k, input_set)
 
         estimate_inverse = None
-        if self.config.is_pass_inverse or return_all:
-            if self.config.inverse_no_grad:
+        if self.dual_domain_config.is_pass_inverse or return_all:
+            if self.dual_domain_config.inverse_no_grad:
                 with torch.no_grad():
                     estimate_inverse = self.pass_through_inverse_path(undersampled_k, fully_sampled_k, input_set, target_set)
             else:
@@ -42,8 +42,8 @@ class TriplePathway(nn.Module):
 
         # these pathways only make sense in the self-supervised case, pass through original undersampled data
         estimate_full = None
-        if self.config.is_pass_original or return_all:
-            if self.config.original_no_grad:
+        if self.dual_domain_config.is_pass_original or return_all:
+            if self.dual_domain_config.original_no_grad:
                 with torch.no_grad():
                     estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
             else:
@@ -75,8 +75,8 @@ class TriplePathway(nn.Module):
         mask_inverse_w_acs, _ = TriplePathway.create_inverted_masks(
             lambda_set, 
             inverse_set, 
-            self.config.pass_through_size, 
-            self.config.pass_all_lines
+            self.dual_domain_config.pass_through_size, 
+            self.dual_domain_config.pass_all_lines
         )
 
         estimate_inverse = self.pass_through_model(undersampled*mask_inverse_w_acs, mask_inverse_w_acs, fs_k_space)

@@ -1,15 +1,12 @@
 # ssl_model.py
 import torch
 import torch.nn as nn
-import einops
-from typing import List, Tuple, Optional
-from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
-from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares
-from ml_recon.utils.undersample_tools import gen_pdf_bern, gen_pdf_columns
+from typing import Tuple, Literal
 import numpy as np
 from dataclasses import dataclass
-from typing import Literal
+
+from ml_recon.utils.kmax_relaxation import KMaxSoftmaxFunction
+from ml_recon.utils.undersample_tools import gen_pdf_bern, gen_pdf_columns
 
 @dataclass
 class LearnPartitionConfig:
@@ -20,6 +17,8 @@ class LearnPartitionConfig:
     sigmoid_slope_sampling: float = 200
     is_warm_start: bool = True
     sampling_method: Literal['2d', '1d', 'pi'] = '2d'
+    line_constrained: bool = False
+
 
 class LearnPartitioning(nn.Module):
     """

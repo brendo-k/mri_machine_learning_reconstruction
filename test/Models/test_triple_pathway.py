@@ -25,8 +25,8 @@ def model_inputs():
 
 
 def test_pass_lambda_only(triple_pathway_model: TriplePathway, model_inputs):
-    triple_pathway_model.config.is_pass_inverse = False
-    triple_pathway_model.config.is_pass_original = False
+    triple_pathway_model.dual_domain_config.is_pass_inverse = False
+    triple_pathway_model.dual_domain_config.is_pass_original = False
 
     k_space, initial_mask, second_mask = model_inputs
     
@@ -49,8 +49,8 @@ def test_pass_lambda_only(triple_pathway_model: TriplePathway, model_inputs):
 @pytest.mark.parametrize("pass_through_size", [10, 25, 40])
 def test_inverted_masks(triple_pathway_model: TriplePathway, model_inputs, pass_through_size):
     pass_through_size = 10
-    triple_pathway_model.config.is_pass_inverse = True
-    triple_pathway_model.config.is_pass_original = False
+    triple_pathway_model.dual_domain_config.is_pass_inverse = True
+    triple_pathway_model.dual_domain_config.is_pass_original = False
 
     k_space, initial_mask, second_mask = model_inputs
 

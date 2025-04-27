@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from typing import Tuple, Union
+from typing import Tuple, Literal
 from functools import partial
 
 from ml_recon.models import Unet
@@ -17,10 +17,9 @@ class VarnetConfig:
     cascades: int = 5
     sense_chans: int = 8
     channels: int = 18
-    sensetivity_estimation: str = 'first' # can be first, joint, individual
     dropout: float = 0
     depth: int = 4
-    upsample_method: str = 'conv'
+    upsample_method: Literal['conv', 'bilinear', 'max'] = 'conv'
     conv_after_upsample: bool = False
 
 
@@ -38,8 +37,7 @@ class MultiContrastVarNet(nn.Module):
                 depth=config.depth, 
                 upsample_method=config.upsample_method,
                 conv_after_upsample=config.conv_after_upsample
-                )
-            #model_backbone = torch.compile(model_backbone)
+            )
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
         
@@ -51,7 +49,7 @@ class MultiContrastVarNet(nn.Module):
         # model to estimate sensetivities
         self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans, upsample_method=config.upsample_method, conv_after_upsample=config.conv_after_upsample)
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones((config.cascades)))
+        self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
 
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
@@ -72,8 +70,6 @@ class MultiContrastVarNet(nn.Module):
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step
-            #current_regularization = self.lambda_reg[i]
-            #current_regularization = current_regularization[None, :, None, None, None]
             current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
         return current_k
 

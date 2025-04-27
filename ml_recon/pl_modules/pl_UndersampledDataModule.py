@@ -33,6 +33,10 @@ class UndersampledDataModule(pl.LightningDataModule):
             acs_lines: int = 10, 
             limit_volumes: Optional[Union[int, float]] = None
             ):
+        """
+            dataset_name:
+            
+        """
 
         super().__init__()
         self.save_hyperparameters()
