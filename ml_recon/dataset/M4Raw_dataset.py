@@ -1,12 +1,12 @@
 import numpy as np
 import os
-from typing import Union, Callable, List
-import torchvision.transforms.functional as F
-import torch
+from pathlib import Path
+from typing import Union, Callable, List, Optional
 import h5py
 
+import torchvision.transforms.functional as F
+import torch
 from torch.utils.data import Dataset
-from typing import Union, Optional
 
 class M4Raw(Dataset):
     """
@@ -32,7 +32,7 @@ class M4Raw(Dataset):
 
     def __init__(
             self,
-            data_dir: Union[str, os.PathLike],
+            data_dir: Union[str, Path],
             nx:int = 256,
             ny:int = 256,
             transforms: Union[Callable, None] = None, 
@@ -43,13 +43,15 @@ class M4Raw(Dataset):
 
         # call super constructor
         super().__init__()
+        if isinstance(data_dir, str): 
+            data_dir = Path(data_dir)
         self.nx = nx
         self.ny = ny
         self.key = data_key
 
         self.transforms = transforms
 
-        files = os.listdir(data_dir)
+        files = list(data_dir.iterdir())
         self.file_names = []
         slices = []
         contrast_order = []
@@ -61,8 +63,7 @@ class M4Raw(Dataset):
         elif isinstance(limit_volumes, float):
             limit_volumes = int(limit_volumes * len(files))
             
-        for file in files[:limit_volumes]:
-            file_path = os.path.join(data_dir, file)
+        for file_path in files[:limit_volumes]:
             self.file_names.append(file_path)
 
             with h5py.File(file_path, 'r') as fr:

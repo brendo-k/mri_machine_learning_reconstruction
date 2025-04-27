@@ -1,5 +1,5 @@
 import numpy as np
-import os
+from pathlib import Path
 import json
 from typing import Optional, Callable, Union, List
 import torchvision.transforms.functional as F
@@ -16,7 +16,7 @@ class FastMRIDataset(Dataset):
     """
     def __init__(
             self,
-            data_dir: Union[str, os.PathLike],
+            data_dir: Union[str, Path],
             nx:int = 256,
             ny:int = 256,
             transforms: Optional[Callable] = None,
@@ -27,6 +27,10 @@ class FastMRIDataset(Dataset):
 
         # call super constructor
         super().__init__()
+
+        if isinstance(data_dir, str): 
+            data_dir = Path(data_dir)
+
         self.nx = nx
         self.ny = ny
         assert len(contrasts) == 1
@@ -36,7 +40,7 @@ class FastMRIDataset(Dataset):
         self.contrast_order = ['t1']
         self.key = data_key
 
-        sample_dir = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+        sample_dir = [f for f in data_dir.iterdir() if f.is_file()]
         sample_dir.sort()
 
         slices = []
@@ -48,14 +52,13 @@ class FastMRIDataset(Dataset):
         elif isinstance(limit_volumes, int):
             limit_volumes = limit_volumes
             
-        for sample in sample_dir[:limit_volumes]:
-            full_path = os.path.join(data_dir, sample)
-            with h5py.File(full_path, 'r') as fr:
+        for path in sample_dir[:limit_volumes]:
+            with h5py.File(path, 'r') as fr:
                 # loop through all the slices
                 dataset = fr[self.key]
                 assert isinstance(dataset, h5py.Dataset)
                 slices.append(dataset.shape[0])
-                self.file_names.append(full_path)
+                self.file_names.append(path)
             
         self.slice_cumulative_sum = np.cumsum(slices)
         self.length = self.slice_cumulative_sum[-1]

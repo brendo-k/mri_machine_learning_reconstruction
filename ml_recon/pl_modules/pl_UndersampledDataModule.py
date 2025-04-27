@@ -1,16 +1,19 @@
+# import standard lib modules
+from typing import Optional, Union, Literal
+from pathlib import Path
+
+# import DL modules
+import pytorch_lightning as pl
+from torch.utils.data import DataLoader
+
+# import my modules
 from ml_recon.dataset.undersample_decorator import UndersampleDecorator
-from ml_recon.utils import ifft_2d_img, root_sum_of_squares, k_to_img
+from ml_recon.utils import k_to_img
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.M4Raw_dataset import M4Raw
 from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.test_dataset import TestDataset
 
-from torch.utils.data import DataLoader
-from typing import Optional, Union, Literal
-
-import pytorch_lightning as pl
-
-import os
 
 
 class UndersampledDataModule(pl.LightningDataModule):
@@ -41,8 +44,8 @@ class UndersampledDataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
     
-        self.data_dir = data_dir
-        self.test_dir = test_dir
+        self.data_dir = Path(data_dir)
+        self.test_dir = Path(test_dir)
         self.contrasts = contrasts
         self.num_contrasts = len(contrasts)
         self.acs_lines = acs_lines
@@ -66,13 +69,16 @@ class UndersampledDataModule(pl.LightningDataModule):
 
     def setup(self, stage):
         super().setup(stage)
+        
 
         # get directories for different split folders
-        train_dir = os.path.join(self.data_dir, 'train')
-        val_dir = os.path.join(self.data_dir, 'val')
-        val_gt_dir = os.path.join(self.test_dir, 'val')
-        test_dir = os.path.join(self.data_dir, 'test')
-        test_gt_dir = os.path.join(self.test_dir, 'test')
+        train_dir = self.data_dir / 'train'
+        val_dir = self.data_dir / 'val'
+        test_dir = self.data_dir / 'test'
+
+        # ground truth denoised directories
+        val_gt_dir = self.test_dir / 'val'
+        test_gt_dir = self.test_dir / 'test'
 
         # keywords to control dataset data
         dataset_keyword_args = {
@@ -89,63 +95,71 @@ class UndersampledDataModule(pl.LightningDataModule):
                 'sampling_method': self.sampling_method,
                 'self_supervised': self.self_supervised,
                 'acs_lines' : self.acs_lines, 
-                'poly_order': self.poly_order
+                'poly_order': self.poly_order,
+                'original_ssdu_partioning': self.ssdu_partioning
         }
 
 
-        train_dataset = self.dataset_class(
+        # undersampled training dataset
+        self.train_dataset = UndersampleDecorator(
+            self.dataset_class(
                 train_dir, 
                 **dataset_keyword_args
-                )
-        self.train_dataset = UndersampleDecorator(
-                train_dataset,
-                original_ssdu_partioning=self.ssdu_partioning,
-                transforms=self.transforms,
-                **undersample_keyword_args
-                )
+            ),
+            transforms=self.transforms,
+            **undersample_keyword_args
+        )
 
 
-        noisy_val_dataset = self.dataset_class(
+        # if fastmri, no ground truth so just convert fully sampled k-space to img
+        if self.dataset_class == FastMRIDataset:
+            test_transforms = convert_k_to_img()
+        else:
+            test_transforms = None
+
+        # undersampled validation dataset
+        noisy_val_dataset_undersampled = UndersampleDecorator(
+            self.dataset_class(
                 val_dir, 
                 **dataset_keyword_args
-                )
-        noisy_val_dataset_undersampled = UndersampleDecorator(
-                noisy_val_dataset,
-                original_ssdu_partioning=self.ssdu_partioning,
-                transforms=self.transforms,
-                **undersample_keyword_args
-                )
+            ),
+            transforms=self.transforms,
+            **undersample_keyword_args
+        )
+        # denoised val dataset
         gt_val_dataset = self.dataset_class(
             val_gt_dir, 
             data_key=self.test_data_key, 
             **dataset_keyword_args
         )
+        # both noisy and ground truth val dataset
         self.val_dataset = TestDataset(
             noisy_val_dataset_undersampled,
             gt_val_dataset, 
-            transforms=None
+            transforms=test_transforms
         )
 
 
-        noisy_test_dataset = self.dataset_class(
+        # noisy test dataset
+        noisy_test_dataset_undersampled = UndersampleDecorator(
+            self.dataset_class(
                 test_dir, 
                 **dataset_keyword_args
-                )
+            ),
+            **undersample_keyword_args,
+            transforms=self.transforms
+        )
+        # ground truth test dataset
         gt_test_dataset = self.dataset_class(
             test_gt_dir, 
             data_key=self.test_data_key, 
             **dataset_keyword_args
         )
-        noisy_test_dataset_undersampled = UndersampleDecorator(
-                noisy_test_dataset,
-                original_ssdu_partioning=self.ssdu_partioning,
-                **undersample_keyword_args,
-                transforms=self.transforms
-                )
+        # both datasets combined
         self.test_dataset = TestDataset(
             noisy_test_dataset_undersampled,
             gt_test_dataset, 
-            transforms=None
+            transforms=test_transforms
         )
         
 
@@ -182,7 +196,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             test_data_key = 'ground_truth'
         elif dataset_name == 'fastmri':
             dataset_class = FastMRIDataset
-            test_data_key = 'reconstruction_rss'
+            test_data_key = 'kspace'
         elif dataset_name == 'm4raw':
             dataset_class = M4Raw
             test_data_key = 'reconstruction_rss'
@@ -208,7 +222,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 class normalize_image_max(object):
     def __call__(self, data: dict):
         input = data['undersampled']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        img = k_to_img(input, coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
@@ -229,7 +243,7 @@ class normalize_k_max(object):
 class normalize_image_mean(object):
     def __call__(self, data):
         input = data['undersampled']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        img = k_to_img(input, coil_dim=1)
         scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
@@ -240,7 +254,7 @@ class normalize_image_mean(object):
 class normalize_image_mean2(object):
     def __call__(self, data):
         input = data['undersampled']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        img = k_to_img(input, coil_dim=1)
         scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
         
         data['undersampled'] /= scaling_factor
@@ -251,10 +265,18 @@ class normalize_image_mean2(object):
 class normalize_image_std(object):
     def __call__(self, data):
         input = data['undersampled']
-        img = root_sum_of_squares(ifft_2d_img(input), coil_dim=1)
+        img = k_to_img(input, coil_dim=1)
         scaling_factor = img.std((1, 2), keepdim=True).unsqueeze(1)
         
         data['undersampled'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
+
+class convert_k_to_img(object):
+    def __call__(self, data):
+        input_data, _ = data
+        k_space = input_data['fs_k_space']
+        imgs = k_to_img(k_space, coil_dim=1)
+
+        return input_data, imgs

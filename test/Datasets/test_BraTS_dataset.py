@@ -1,12 +1,11 @@
-import torch
 import tempfile
 import h5py
 import numpy as np
 import pytest
 import os
 
+
 from ml_recon.dataset.BraTS_dataset import BratsDataset
-from ml_recon.dataset.undersample_decorator import UndersampleDecorator
 
 @pytest.fixture
 def brats_dataset(mock_brats_dataset_dir) -> BratsDataset:
@@ -27,7 +26,7 @@ def mock_brats_dataset_dir():
             file_path = os.path.join(sample_dir, 'data_i.h5')
             with h5py.File(file_path, 'w') as f:
                 # Create a mock k-space dataset
-                kspace_data = np.random.rand(10, 4, 256, 256) + 1j * np.random.rand(10, 4, 256, 256)
+                kspace_data = np.random.rand(10, 4, 16, 256, 256) + 1j * np.random.rand(10, 4, 16, 256, 256)
                 f.create_dataset('k_space', data=kspace_data)
                 
                 # Create a mock contrasts dataset
@@ -43,4 +42,12 @@ def test_init(brats_dataset):
     assert 't1' in contrast_order
     assert 't1ce' in contrast_order
     assert 't2' in contrast_order
+
+def test_data(brats_dataset):
+    data = brats_dataset[0]
+
+    assert data.ndim == 4
+    assert isinstance(data, np.ndarray)
+    assert data.shape == (4, 16, 128, 128)
+    assert data.dtype == np.complex128
 

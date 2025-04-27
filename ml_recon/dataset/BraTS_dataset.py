@@ -1,8 +1,8 @@
-import os
 import csv
+from pathlib import Path
 import time
 import h5py
-from typing import Callable, Optional, Union, Collection
+from typing import Callable, Optional, Union, Collection, Tuple
 import torchvision.transforms.functional as F 
 
 import torch
@@ -14,13 +14,13 @@ from torch.utils.data import Dataset
 
 class BratsDataset(Dataset):
     """
-    Takes data directory and creates a dataset for BraTS dataset. Need to simulate first 
-    using ml_recon/utils/simulate_brats
+    Takes data directory and creates a dataset objcet for BraTS dataset. 
+    Need to simulate first using simulate_k_space.py
     """
 
     def __init__(
             self,
-            data_dir: Union[str, os.PathLike], 
+            data_dir: Union[str, Path], 
             nx:int = 256,
             ny:int = 256,
             contrasts: Collection[str] = ['t1', 't2', 'flair', 't1ce'], 
@@ -31,13 +31,16 @@ class BratsDataset(Dataset):
         assert contrasts, 'Contrast list should not be empty!'
 
         super().__init__()
+        if isinstance(data_dir, str):
+            data_dir = Path(data_dir)
+
         self.nx = nx
         self.ny = ny
         self.transforms = transforms
         self.contrasts = np.array([contrast.lower() for contrast in contrasts])
         self.data_key = data_key
 
-        sample_dir = os.listdir(data_dir)
+        sample_dir = list(data_dir.iterdir())
         sample_dir.sort()
 
         slices = []
@@ -52,10 +55,9 @@ class BratsDataset(Dataset):
         elif isinstance(limit_volumes, float):
             limit_volumes = int(limit_volumes * len(sample_dir))
             
-        for sample in sample_dir[:limit_volumes]:
-            sample_path = os.path.join(data_dir, sample)
-            sample_file = [file for file in os.listdir(sample_path) if 'h5' in file]
-            sample_file_path = os.path.join(sample_path, sample_file[0])
+        for sample_path in sample_dir[:limit_volumes]:
+            sample_file = list(sample_path.glob('*.h5')) 
+            sample_file_path = sample_file[0]
             with h5py.File(sample_file_path, 'r') as fr:
                 k_space = fr[self.data_key]
                 assert isinstance(k_space, h5py.Dataset)
@@ -88,7 +90,7 @@ class BratsDataset(Dataset):
     def __len__(self):
         return self.length
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> torch.Tensor:
         volume_index, slice_index = self.get_vol_slice_index(index)
         data = self.get_data_from_indecies(volume_index, slice_index)
 
@@ -99,7 +101,7 @@ class BratsDataset(Dataset):
 
     # get the volume index and slice index. This is done using the cumulative sum
     # of the number of slices.
-    def get_vol_slice_index(self, index):
+    def get_vol_slice_index(self, index) -> Tuple[int, int]:
         volume_index = np.sum(self.cumulative_slice_sum <= index)
         # if volume index is zero, slice is just index
         if volume_index == 0:
@@ -111,7 +113,7 @@ class BratsDataset(Dataset):
         
         return volume_index, slice_index 
     
-    def get_data_from_indecies(self, volume_index, slice_index):
+    def get_data_from_indecies(self, volume_index, slice_index) -> torch.Tensor:
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
             dataset = fr[self.data_key]
