@@ -38,6 +38,7 @@ class L1L2Loss(torch.nn.Module):
 
 class L1ImageGradLoss(torch.nn.Module):
     def __init__(self, grad_scaling):
+        super().__init__()
         self.grad_scaling = grad_scaling
     
     def forward(self, targ, pred):

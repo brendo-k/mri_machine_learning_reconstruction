@@ -21,8 +21,8 @@ model_parameters:
   cascades: 12
   depth: 4
   ssim_scaling_full: 1.0e-4
-  ssim_scaling_set: 1.0e-5
-  ssim_scaling_inverse: 5.0e-5
+  ssim_scaling_set: 1.0e-4
+  ssim_scaling_inverse: 5.0e-4
   ssim_scaling_delta: 0
   lambda_scaling: 0.65
   sigmoid_slope2: 200
@@ -31,7 +31,7 @@ model_parameters:
   pass_inverse_data: true
   pass_all_data: true
   learn_sampling: true 
-  image_loss: ssim
+  image_loss: l1_grad
   all_data_no_grad: true 
   inverse_data_no_grad: false 
   pass_through_size: 10
@@ -39,7 +39,7 @@ model_parameters:
   mask_threshold_t2: 0.11
   mask_threshold_t1: 0.11
   mask_threshold_flair: 0.11
-  warmup_training: False
+  warmup_training: True
   norm_method: 'image_mean'
   warm_start: False
   norm_loss_by_mask: False

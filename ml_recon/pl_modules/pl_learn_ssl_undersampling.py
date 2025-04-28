@@ -154,9 +154,10 @@ class LearnedSSLLightning(plReconModel):
         if not isinstance(self.logger, WandbLogger):
             return
 
-        # log first batch of every 10th epoch
-        # if batch_idx != 0 or self.current_epoch % 1 != 0:
-        #    return
+        #log first batch of every 1st epoch
+        if batch_idx != 0 or self.current_epoch % 1 != 0:
+           return
+
         wandb_logger = self.logger
 
         fully_sampled = batch["fs_k_space"]
@@ -494,7 +495,7 @@ class LearnedSSLLightning(plReconModel):
         elif image_loss_function == "l1":
             image_loss = torch.nn.L1Loss()
         elif image_loss_function == "l1_grad":
-            image_loss = L1ImageGradLoss(grad_scaling=2)
+            image_loss = L1ImageGradLoss(grad_scaling=10)
         else:
             raise ValueError(f"unsuported image loss function: {image_loss_function}")
         self.image_loss_func = image_loss
