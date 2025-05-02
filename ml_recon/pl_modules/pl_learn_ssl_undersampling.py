@@ -537,11 +537,7 @@ class LearnedSSLLightning(plReconModel):
         elif image_loss_function == "l1":
             image_loss = torch.nn.L1Loss()
         elif image_loss_function == "l1_grad":
-<<<<<<< Updated upstream
-            image_loss = L1ImageGradLoss(grad_scaling=image_loss_scaling_grad)
-=======
             image_loss = L1ImageGradLoss(grad_scaling=0.5)
->>>>>>> Stashed changes
         else:
             raise ValueError(f"unsuported image loss function: {image_loss_function}")
         self.image_loss_func = image_loss
