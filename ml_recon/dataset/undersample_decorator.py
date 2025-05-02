@@ -48,7 +48,7 @@ class UndersampleDecorator(Dataset):
         self.omega_seed_offset = self.lambda_rng.integers(0, 2**32)
 
         
-        assert (not self.original_ssdu_partioning or self_supervised), 'Only partioing if self-supervised!'
+        assert self.original_ssdu_partioning and not self_supervised, 'Only partioing if self-supervised!'
 
         if self.sampling_type == '2d' or self.sampling_type == 'pi' :
             self.omega_prob = gen_pdf_bern(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore

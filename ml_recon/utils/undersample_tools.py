@@ -1,26 +1,19 @@
 import numpy as np
 from numpy.typing import NDArray
-from typing import Tuple
+from typing import Tuple, Union
 
 
-def calc_k(lambda_probability, omega_probability):
-    K = (1 - omega_probability) / (1 - omega_probability * lambda_probability)
-    K = K.astype(float)
-    return K
-    
 def apply_undersampling_from_dist(
         seed: int,  # index is neeed here to have determenistic (seed for rng)
         prob_map, 
         k_space, 
-) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:
-    line_constrained = check_pdf_line_constrained(prob_map)
+) -> Tuple[NDArray[np.complex64], NDArray[np.bool]]:
 
-    rng = get_random_generator(seed)
-    mask = get_mask_from_distribution(prob_map, rng, line_constrained)
+    mask = get_mask_from_distribution(prob_map, seed)
     undersampled = k_space * np.expand_dims(mask, 1)
     return undersampled, np.expand_dims(mask, 1)
 
-def check_pdf_line_constrained(prob_map):
+def is_line_constrained(prob_map: NDArray[np.float32]):
     middle_slice = prob_map[0, :, prob_map.shape[-1]//2]
     if (middle_slice == middle_slice[0]).all():
         line_constrained = True
@@ -28,17 +21,18 @@ def check_pdf_line_constrained(prob_map):
         line_constrained = False
     return line_constrained
     
-   
-def get_random_generator(index):
-    rng = np.random.default_rng(index)
-    return rng
 
+def get_mask_from_distribution(
+    prob_map: NDArray[np.float32], 
+    seed: Union[int, None]
+) -> NDArray[np.bool_]:
 
+    rng = np.random.default_rng(seed)
 
-def get_mask_from_distribution(prob_map: NDArray[np.float32], rng, line_constrained) -> NDArray[np.bool_]:
     prob_map[prob_map > 0.999] = 1
-    if line_constrained:
-        (_, ny, nx) = np.shape(prob_map)
+
+    if is_line_constrained(prob_map):
+        (_, ny, _) = np.shape(prob_map)
         mask1d = rng.binomial(1, prob_map[:, 0, :]).astype(bool)
         mask = np.repeat(mask1d[:, np.newaxis, :], ny, axis=1)
     else:
@@ -80,7 +74,13 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
     return prob_map
 
 
-def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=0.4):
+def ssdu_gaussian_selection(
+        initial_mask: NDArray[np.float32], 
+        std_scale: float=4., 
+        rho: float=0.4, 
+        seed:Union[int, None] = None
+):
+    rng = np.random.default_rng(seed)
 
     ncol, nrow = initial_mask.shape
     
@@ -93,13 +93,12 @@ def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=
     center_ky - acs_shape // 2:center_ky + acs_shape // 2] = 0
 
     loss_mask = np.zeros_like(initial_mask)
-    count = 0
     required_points = int(np.ceil(np.sum(initial_mask[:]) * rho))
     remaning_points = required_points
     while np.sum(loss_mask) < required_points:
 
-        indx = np.round(np.random.normal(loc=center_kx, scale=(nrow - 1) / std_scale, size=int(remaning_points))).astype(int)
-        indy = np.round(np.random.normal(loc=center_ky, scale=(ncol - 1) / std_scale, size=int(remaning_points))).astype(int)
+        indx = np.round(rng.normal(loc=center_kx, scale=(nrow - 1) / std_scale, size=int(remaning_points))).astype(int)
+        indy = np.round(rng.normal(loc=center_ky, scale=(ncol - 1) / std_scale, size=int(remaning_points))).astype(int)
 
         valid_x = np.logical_and(indx >= 0, indx < nrow)
         valid_y = np.logical_and(indy >= 0, indy < ncol)
@@ -110,7 +109,6 @@ def ssdu_gaussian_selection(initial_mask: NDArray[np.float32], std_scale=4, rho=
         points = temp_mask[indy, indx]
         loss_mask[indy, indx] = points
         remaning_points = required_points - np.sum(loss_mask)
-
 
     input_mask = initial_mask - loss_mask
 
