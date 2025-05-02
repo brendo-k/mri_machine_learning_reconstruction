@@ -537,7 +537,11 @@ class LearnedSSLLightning(plReconModel):
         elif image_loss_function == "l1":
             image_loss = torch.nn.L1Loss()
         elif image_loss_function == "l1_grad":
+<<<<<<< Updated upstream
             image_loss = L1ImageGradLoss(grad_scaling=image_loss_scaling_grad)
+=======
+            image_loss = L1ImageGradLoss(grad_scaling=0.5)
+>>>>>>> Stashed changes
         else:
             raise ValueError(f"unsuported image loss function: {image_loss_function}")
         self.image_loss_func = image_loss
@@ -690,11 +694,11 @@ class LearnedSSLLightning(plReconModel):
         k_losses = self.calculate_k_loss(
             lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling, "lambda"
         )
+
         for key, value in k_losses.items():
             self.log(f"{label}/{key}", value)
-        loss_dict["k_loss"] = sum([values for values in k_losses.values()]) / len(
-            k_losses
-        )
+
+        loss_dict["k_loss"] = sum([values for values in k_losses.values()]) / len(k_losses)
 
         # calculate full lambda image loss pathway
         if full_k is not None:
@@ -716,10 +720,7 @@ class LearnedSSLLightning(plReconModel):
             )
             for key, value in inverse_k_losses.items():
                 self.log(f"{label}/{key}", value)
-            loss_dict["k_loss_inverse"] = sum(
-                [values for values in inverse_k_losses.values()]
-            ) / len(inverse_k_losses)
-            # image space loss
+            loss_dict["k_loss_inverse"] = sum([values for values in inverse_k_losses.values()]) / len(inverse_k_losses) # image space loss
             loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
                 lambda_k,
                 inverse_k,

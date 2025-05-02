@@ -1,6 +1,3 @@
-"""
-"""
-
 import torch
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from typing import Union, Literal, Optional, Sequence, Any
