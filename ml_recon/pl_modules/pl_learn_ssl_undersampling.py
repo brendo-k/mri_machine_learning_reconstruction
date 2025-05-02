@@ -5,7 +5,7 @@ from typing import Literal, Union
 import dataclasses
 
 
-from torch.optim.lr_scheduler import StepLR, LinearLR, CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingWarmRestarts
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.losses import L1L2Loss, SSIM_Loss, L1ImageGradLoss
@@ -31,6 +31,7 @@ class LearnedSSLLightning(plReconModel):
         image_loss_scaling_full_inv: float = 1e-4,
         lambda_scaling: float = 1,
         image_loss_function: str = "ssim",
+        image_loss_scaling_grad: float = 10, 
         k_space_loss_function: Literal["l1l2", "l1", "l2"] = "l1l2",
         enable_learn_partitioning: bool = True,
         enable_warmup_training: bool = False,
@@ -40,6 +41,18 @@ class LearnedSSLLightning(plReconModel):
         mask_theshold: Union[dict, None] = None,
         normalize_loss_by_mask: bool = True,
     ):
+        """
+        This function trains all MRI reconstruction models
+
+        We train all models with this class. Supervised training is decided automatically based on the data given.
+
+        We assume the dataloader has the keys:
+        'undersampled': undersampled k-space from inital undersampling (Omega mask)
+        'fs_k_space': fully sampled k-space
+        'lambda_mask': One partition of k-space. If supervised, lambda_mask is the initial undersampling mask (Omega Mask)
+        'loss_mask': Other partition of k-space. If supervised, loss_mask is all ones. 
+        """
+
         # since we convert to dicts for uploading to wandb, we need to convert back to dataclasses
         # Needed when loading checkpoints
         if isinstance(learn_partitioning_config, dict):
@@ -81,9 +94,11 @@ class LearnedSSLLightning(plReconModel):
         self.mask_threshold = mask_theshold
         self.test_metrics = is_mask_testing
         self.norm_loss_by_mask = normalize_loss_by_mask
+        self.image_loss_scaling_grad = image_loss_scaling_grad
 
+        
         # loss function init
-        self._setup_image_space_loss(image_loss_function)
+        self._setup_image_space_loss(image_loss_function, image_loss_scaling_grad)
         self._setup_k_space_loss(k_space_loss_function)
         self.save_hyperparameters()
 
@@ -93,8 +108,23 @@ class LearnedSSLLightning(plReconModel):
         )
         return estimate_k
 
-    # Training function
     def training_step(self, batch, _):
+        """
+        Training loop function 
+
+        This function loads data, partitions k-space if self-supervised then passes 
+        data through triple pathways reconstruction network. The estimated outputs are
+        then used to cacluate the loss function.
+
+        Args:
+            batch: dict, batch of data from above
+
+        Returns:
+            torch.Tensor, Returns final loss of this training batch
+
+        Example:
+            This is called internally by PyTorch Lightning
+        """
         # get data
         fully_sampled = batch["fs_k_space"]
         undersampled_k = batch["undersampled"]
@@ -151,6 +181,22 @@ class LearnedSSLLightning(plReconModel):
     # Plotting of different metrics during training
     @torch.no_grad()
     def on_train_batch_end(self, outputs, batch, batch_idx):
+        """
+        Hook to call when training batch is finished
+
+        This function plots images and training  metrics for visualization on WandB
+
+        Args:
+            outputs: torch.Tensor, loss from training_step
+            batch: dict, same from training_step
+            batch_idx: int, Integer of batch during training loop
+
+        Returns:
+            None
+
+        Example:
+            Called internally by PyTorch Lightning        
+        """
         if not isinstance(self.logger, WandbLogger):
             return
 
@@ -196,7 +242,7 @@ class LearnedSSLLightning(plReconModel):
             self.log(
                 f"train_metrics/nmse_{pathway}", sum(nmse_values) / len(nmse_values)
             )
-            ssim_val, ssim_images = ssim(
+            _, ssim_images = ssim(
                 fully_sampled_images[0].unsqueeze(1),
                 estimate_images[0].unsqueeze(1),
                 data_range=(0, 1),
@@ -227,9 +273,8 @@ class LearnedSSLLightning(plReconModel):
                 "probability", self.split_along_contrasts(probability), self.global_step
             )
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, _):
         noisy_data = batch[0]
-        gt_data = batch[1]
         undersampled_k = noisy_data["undersampled"]
         fully_sampled = noisy_data["fs_k_space"]
 
@@ -248,13 +293,13 @@ class LearnedSSLLightning(plReconModel):
         )
         loss = sum(loss for loss in loss_dict.values())
 
-        self.log_scalar(f"val_losses/loss", loss, prog_bar=True, sync_dist=True)
+        self.log_scalar("val_losses/loss", loss, prog_bar=True, sync_dist=True)
         for key, value in loss_dict.items():
             self.log_scalar(f"val_losses/{key}", value)
 
         self.calculate_k_nmse(batch)
 
-    def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
+    def on_validation_batch_end(self, outputs, batch, batch_idx):
         if batch_idx > 4 or self.current_epoch % 1 != 0:
             plot_images = False
         else:
@@ -421,9 +466,7 @@ class LearnedSSLLightning(plReconModel):
         # set epoch in train dataloader for updating new lambda masks
         if self.trainer.train_dataloader:
             self.trainer.train_dataloader.dataset.set_epoch(self.current_epoch)
-            self.trainer.val_dataloaders.dataset.undersampled_dataset.set_epoch(
-                self.current_epoch
-            )  # type: ignore
+            self.trainer.val_dataloaders.dataset.undersampled_dataset.set_epoch(self.current_epoch)  # type: ignore
         return
 
     def infer_k_space(self, batch):
@@ -484,18 +527,17 @@ class LearnedSSLLightning(plReconModel):
 
     def calculate_k_nmse(self, batch):
         estimate_k, fully_sampled_k = self.infer_k_space(batch)
-        nmse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum(
-            (-1, -2, -3)
-        ) / fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
-        self.log_scalar("val_nmse/k-space_nmse", nmse_value.mean())
+        mse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3))
+        l2_norm = fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
+        self.log_scalar("val_nmse/k-space_nmse", (mse_value/l2_norm).mean())
 
-    def _setup_image_space_loss(self, image_loss_function):
+    def _setup_image_space_loss(self, image_loss_function, image_loss_scaling_grad):
         if image_loss_function == "ssim":
             image_loss = SSIM_Loss(kernel_size=7, data_range=(0.0, 1.0))
         elif image_loss_function == "l1":
             image_loss = torch.nn.L1Loss()
         elif image_loss_function == "l1_grad":
-            image_loss = L1ImageGradLoss(grad_scaling=10)
+            image_loss = L1ImageGradLoss(grad_scaling=image_loss_scaling_grad)
         else:
             raise ValueError(f"unsuported image loss function: {image_loss_function}")
         self.image_loss_func = image_loss
