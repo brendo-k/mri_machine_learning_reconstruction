@@ -1,8 +1,9 @@
+from typing import Literal, Union
+import dataclasses
+
 import numpy as np
 import torch
 from pytorch_lightning.loggers import WandbLogger
-from typing import Literal, Union
-import dataclasses
 
 
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingWarmRestarts
@@ -31,15 +32,11 @@ class LearnedSSLLightning(plReconModel):
         image_loss_scaling_full_inv: float = 1e-4,
         lambda_scaling: float = 1,
         image_loss_function: str = "ssim",
-        image_loss_scaling_grad: float = 10, 
         k_space_loss_function: Literal["l1l2", "l1", "l2"] = "l1l2",
         enable_learn_partitioning: bool = True,
         enable_warmup_training: bool = False,
         use_supervised_image_loss: bool = False,
-        weight_decay: float = 0,
         is_mask_testing: bool = True,
-        mask_theshold: Union[dict, None] = None,
-        normalize_loss_by_mask: bool = True,
     ):
         """
         This function trains all MRI reconstruction models
@@ -67,7 +64,6 @@ class LearnedSSLLightning(plReconModel):
         super().__init__(
             contrast_order=varnet_config.contrast_order,
             is_mask_testing=is_mask_testing,
-            mask_threshold=mask_theshold,
         )
 
         if enable_learn_partitioning:
@@ -90,15 +86,11 @@ class LearnedSSLLightning(plReconModel):
         self.enable_warmup_training = enable_warmup_training
         self.enable_learn_partitioning = enable_learn_partitioning
         self.use_superviesd_image_loss = use_supervised_image_loss
-        self.weight_decay = weight_decay
-        self.mask_threshold = mask_theshold
         self.test_metrics = is_mask_testing
-        self.norm_loss_by_mask = normalize_loss_by_mask
-        self.image_loss_scaling_grad = image_loss_scaling_grad
 
         
         # loss function init
-        self._setup_image_space_loss(image_loss_function, image_loss_scaling_grad)
+        self._setup_image_space_loss(image_loss_function)
         self._setup_k_space_loss(k_space_loss_function)
         self.save_hyperparameters()
 
@@ -180,7 +172,7 @@ class LearnedSSLLightning(plReconModel):
 
     # Plotting of different metrics during training
     @torch.no_grad()
-    def on_train_batch_end(self, outputs, batch, batch_idx):
+    def on_train_batch_end(self, outputs, batch, batch_idx): 
         """
         Hook to call when training batch is finished
 
@@ -299,7 +291,7 @@ class LearnedSSLLightning(plReconModel):
 
         self.calculate_k_nmse(batch)
 
-    def on_validation_batch_end(self, outputs, batch, batch_idx):
+    def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         if batch_idx > 4 or self.current_epoch % 1 != 0:
             plot_images = False
         else:
@@ -493,9 +485,7 @@ class LearnedSSLLightning(plReconModel):
         return estimate_k, fully_sampled_k
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.lr, weight_decay=self.weight_decay
-        )
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         schedulers = []
         if self.warmup_adam:
             warmup_scheduler = LinearLR(
@@ -533,7 +523,7 @@ class LearnedSSLLightning(plReconModel):
         l2_norm = fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
         self.log_scalar("val_nmse/k-space_nmse", (mse_value/l2_norm).mean())
 
-    def _setup_image_space_loss(self, image_loss_function, image_loss_scaling_grad):
+    def _setup_image_space_loss(self, image_loss_function):
         if image_loss_function == "ssim":
             image_loss = SSIM_Loss(kernel_size=7, data_range=(0.0, 1.0))
         elif image_loss_function == "l1":
@@ -568,12 +558,6 @@ class LearnedSSLLightning(plReconModel):
                 torch.view_as_real(estimate[:, index, ...] * loss_mask[:, index, ...]),
             )
             # reduce mean by the loss mask and not by the number of voxels
-            if self.norm_loss_by_mask:
-                k_loss = (
-                    k_loss
-                        * undersampled[:, index, ...].numel()
-                        / loss_mask[:, index, ...].sum()
-                )
 
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling
 
@@ -583,7 +567,7 @@ class LearnedSSLLightning(plReconModel):
         reduce = "mean"
 
         if k_space_loss_function == "l1l2":
-            self.k_space_loss = L1L2Loss(norm_all_k=False, reduce=reduce)
+            self.k_space_loss = L1L2Loss(norm_all_k=False)
         elif k_space_loss_function == "l1":
             self.k_space_loss = torch.nn.L1Loss(reduction=reduce)
         elif k_space_loss_function == "l2":

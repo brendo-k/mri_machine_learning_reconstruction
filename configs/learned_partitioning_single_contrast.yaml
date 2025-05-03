@@ -15,15 +15,14 @@ dataset_parameters:
   limit_volumes: 0.2
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_4_chan'
-  chans: 64
-  cascades: 12
+  data_dir: '/home/brenden/Documents/Coding/data/M4Raw_first_repetition/'
+  test_dir: '/home/brenden/Documents/Coding/data/M4Raw_Averaged/'
+  chans: 10
+  cascades: 6
   depth: 4
   ssim_scaling_full: 1.0e-4
   ssim_scaling_set: 1.0e-4
   ssim_scaling_inverse: 1.0e-4
-  ssim_scaling_delta: 0
   lambda_scaling: 0.65
   sigmoid_slope2: 200
   sigmoid_slope1: 5

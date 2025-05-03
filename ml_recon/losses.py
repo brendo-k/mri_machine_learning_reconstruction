@@ -4,13 +4,8 @@ from typing import Union, Literal, Optional, Sequence, Any
 
 
 class L1L2Loss(torch.nn.Module):
-    def __init__(
-        self, 
-        norm_all_k: bool, 
-        reduce_mean: bool = True
-    ):
+    def __init__(self, norm_all_k: bool,):
         self.norm_all_k = norm_all_k
-        self.reduce_mean = reduce_mean
         
     def forward(self, target: torch.Tensor, predicted: torch.Tensor):
         assert not torch.isnan(target).any()
@@ -28,8 +23,7 @@ class L1L2Loss(torch.nn.Module):
         l1_norm = (torch.linalg.vector_norm(target, 1, dim=norm_dims) + 1e-20)
 
         loss  = torch.sum(l2_component/l2_norm + l1_component/l1_norm)
-        if self.reduce_mean:
-            loss /= predicted.numel()
+        loss /= predicted.numel()
         
         return loss
 

@@ -27,7 +27,6 @@ class plReconModel(pl.LightningModule):
         super().__init__()
         self.contrast_order = contrast_order
         self.is_mask_testing = is_mask_testing
-        self.mask_threshold = mask_threshold
 
 
     def my_test_step(self, batch, batch_index, label=''):
@@ -150,33 +149,38 @@ class plReconModel(pl.LightningModule):
 
 
     def get_image_background_mask(self, ground_truth_image):
+        # ground truth image shape b, con, h, w
         if not self.is_mask_testing:
             return torch.ones_like(ground_truth_image)
-        mask_threshold = []
-        for contrast in self.contrast_order:
-            if self.mask_threshold and contrast.lower() in self.mask_threshold:
-                mask_threshold.append(self.mask_threshold[contrast.lower()])
-            else:
-                mask_threshold.append(0.1)
         
-        mask_threshold = torch.tensor(mask_threshold, device=ground_truth_image.device)
+        # get noise
+        noise = ground_truth_image[..., :20, :20]
+        # take the max value and scale up a bit
+        mask_threshold = noise.amax((-1, -2)) * 1.2
+
+        # same shape as image
         mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
         
-        # gaussian blur only blurs last 2 dims
+        # gaussian blur image for better masking (blurring improves SNR)
         ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=31, sigma=25.0) # type: ignore
         
+        # get mask
         image_background_mask = ground_truth_blurred > mask_threshold 
+        
         mask =  self.dialate_mask(image_background_mask)
-
-        all_zero_masks = (mask == False).all(dim=-1).all(dim=-1)
-        if all_zero_masks.any():
-            mask[all_zero_masks] = True
+        
+        # If there are any masks that are all zero, set to all 1s
+        all_zero_masks_indecies = (~mask ).all(dim=(-1, -2))
+        # check if there are zero mask indexes
+        if all_zero_masks_indecies.any():
+            mask[all_zero_masks_indecies, :, :] = True
         
         return mask
 
 
     
     def dialate_mask(self, mask, kernel_size=5):
+        
         b, contrast, h, w = mask.shape
         mask = mask.view(b*contrast, h, w)
         dialed_mask = self.dilate(mask.to(torch.float32), kernel_size)

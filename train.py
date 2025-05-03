@@ -24,7 +24,7 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, SpikeDetection
+from pytorch_lightning.callbacks import ModelCheckpoint 
 
 def main(args):
     file_name = get_unique_file_name(args)
@@ -32,11 +32,8 @@ def main(args):
     # build some callbacks for pytorch lightning
     callbacks = build_callbacks(args, file_name)
     
-    # setup threshold for masking background
-    thresholds = setup_masking_thresholds(args)
-    
     # setup pytorch lightning dataloder and datamodules
-    model, data_module = setup_model_and_dataloaders(args, callbacks, thresholds)
+    model, data_module = setup_model_and_dataloaders(args, callbacks)
     # setup wandb logger
     wandb_logger = setup_wandb_logger(args, model)
 
@@ -60,12 +57,12 @@ def process_checkpoint(args, callbacks, wandb_logger):
     # log to wandb
     log_weights_to_wandb(wandb_logger, checkpoint_path)
 
-def setup_model_and_dataloaders(args, callbacks, thresholds):
+def setup_model_and_dataloaders(args, callbacks):
     if args.checkpoint: 
         model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
         callbacks.append(restore_optimizer(args.checkpoint))
     else:
-        model, data_module = setup_model_parameters(args, thresholds)
+        model, data_module = setup_model_parameters(args)
     return model,data_module
 
 def build_callbacks(args, file_name):
@@ -92,18 +89,7 @@ def setup_wandb_logger(args, model):
     return logger
     
 
-def setup_masking_thresholds(args):
-    possible_contrasts = ['t1', 't2', 'flair', 't1ce'] 
-    thresholds = {}
-    for contrast in possible_contrasts:
-        threshold = getattr(args, f'mask_threshold_{contrast}')
-        if threshold is not None:
-            thresholds[contrast] = threshold
-    if len(thresholds) == 0: 
-        thresholds = None
-    return thresholds
-
-def setup_model_parameters(args, thresholds):
+def setup_model_parameters(args):
     # setup model configurations
 
     data_module = UndersampledDataModule(
@@ -159,7 +145,6 @@ def setup_model_parameters(args, thresholds):
         dual_domain_config = tripple_pathway_config,
         lr = args.lr,
         lr_scheduler = args.lr_scheduler,
-        warmup_adam = args.warmup_adam,
         image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
         image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
         image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
@@ -168,10 +153,7 @@ def setup_model_parameters(args, thresholds):
         k_space_loss_function=args.k_loss,
         enable_learn_partitioning=args.learn_sampling, 
         use_supervised_image_loss=args.supervised_image,
-        weight_decay=args.weight_decay,
-        mask_theshold=thresholds,
         enable_warmup_training=args.warmup_training,
-        normalize_loss_by_mask=args.norm_loss_by_mask,
     )
 
     return model, data_module
@@ -299,12 +281,6 @@ if __name__ == '__main__':
     model_group.add_argument('--inverse_data_no_grad', action='store_true')
     model_group.add_argument('--all_data_no_grad', action='store_true')
 
-    # masking for metrics
-    model_group.add_argument('--mask_threshold_t2', type=float)
-    model_group.add_argument('--mask_threshold_t1', type=float)
-    model_group.add_argument('--mask_threshold_flair', type=float)
-    model_group.add_argument('--mask_threshold_t1ce', type=float)
-    
     # training type (supervised, self-supervised)
     model_group.add_argument('--supervised', action='store_true')
     model_group.add_argument('--supervised_image', action='store_true')

@@ -26,7 +26,7 @@ def mock_brats_dataset_dir():
             file_path = os.path.join(sample_dir, 'data_i.h5')
             with h5py.File(file_path, 'w') as f:
                 # Create a mock k-space dataset
-                kspace_data = np.random.rand(10, 4, 16, 256, 256) + 1j * np.random.rand(10, 4, 16, 256, 256)
+                kspace_data = np.random.rand(3, 4, 8, 130, 130) + 1j * np.random.rand(3, 4, 8, 130, 130)
                 f.create_dataset('k_space', data=kspace_data)
                 
                 # Create a mock contrasts dataset
@@ -48,6 +48,6 @@ def test_data(brats_dataset):
 
     assert data.ndim == 4
     assert isinstance(data, np.ndarray)
-    assert data.shape == (4, 16, 128, 128)
+    assert data.shape == (4, 8, 128, 128)
     assert data.dtype == np.complex128
 
