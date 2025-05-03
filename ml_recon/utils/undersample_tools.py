@@ -7,7 +7,7 @@ def apply_undersampling_from_dist(
         seed: int,  # index is neeed here to have determenistic (seed for rng)
         prob_map, 
         k_space, 
-) -> Tuple[NDArray[np.complex64], NDArray[np.bool]]:
+) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:
 
     mask = get_mask_from_distribution(prob_map, seed)
     undersampled = k_space * np.expand_dims(mask, 1)
@@ -74,14 +74,12 @@ def gen_pdf_columns(nx, ny, one_over_R, poylnomial_power, c_sq):
     return prob_map
 
 
-def ssdu_gaussian_selection(
-        initial_mask: NDArray[np.float32], 
-        std_scale: float=4., 
-        rho: float=0.4, 
-        seed:Union[int, None] = None
+def ssdu_part_one_contrast(
+    initial_mask: NDArray[np.float32], 
+    std_scale: float,
+    rho: float, 
+    rng: np.random.Generator
 ):
-    rng = np.random.default_rng(seed)
-
     ncol, nrow = initial_mask.shape
     
     center_kx = nrow//2
@@ -112,6 +110,25 @@ def ssdu_gaussian_selection(
 
     input_mask = initial_mask - loss_mask
 
+    return input_mask, loss_mask
+
+
+def ssdu_gaussian_selection(
+        initial_mask: NDArray[np.float32], 
+        std_scale: float=4., 
+        rho: float=0.4, 
+        seed:Union[int, None] = None
+):
+    input_mask = []
+    loss_mask = []
+    rng = np.random.default_rng(seed)
+    for i in range(initial_mask.shape[0]):
+        input, loss = ssdu_part_one_contrast(initial_mask[i], std_scale, rho, rng)
+        input_mask.append(np.expand_dims(input, 0))
+        loss_mask.append(np.expand_dims(loss, 0))
+
+    input_mask = np.stack(input_mask, axis=0)
+    loss_mask = np.stack(loss_mask, axis=0)
     return input_mask, loss_mask
 
 def gen_pdf_bern(nx, ny, delta, p, c_sq):

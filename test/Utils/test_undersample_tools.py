@@ -7,7 +7,6 @@ from ml_recon.utils.undersample_tools import (
     gen_pdf_bern, 
     get_mask_from_distribution, 
     apply_undersampling_from_dist,
-    scale_pdf,
     ssdu_gaussian_selection
     )
 
@@ -24,7 +23,7 @@ def test_line_probability_mask(resolution):
 @pytest.mark.parametrize("acceleration_factor", [2, 4, 6, 8])
 def test_bern_2d(acceleration_factor):
     
-    pdf = gen_pdf_bern(120, 320, 1/acceleration_factor, 8, 10)
+    pdf = gen_pdf_bern(320, 120, 1/acceleration_factor, 8, 10)
     
     assert pdf.shape == (320, 120)
     torch.testing.assert_close(pdf[320//2-5:320//2+5, 120//2 - 5: 120//2 + 5], np.ones((10, 10)))
@@ -45,36 +44,12 @@ def test_columns(acceleration_factor):
     assert pdf.min() >= 0
 
 
-@pytest.mark.parametrize('R_hat', [2, 3, 4, 5, 6, 7])
-def test_scaling(R_hat):
-    
-    pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
-    pdf_R4 = gen_pdf_bern(120, 320, 1/R_hat, 8, 10)
-    
-    scaled_pdf = scale_pdf(pdf_R8, R_hat, 10)
-
-    np.testing.assert_allclose(scaled_pdf, pdf_R4) 
-    
-def test_scaling_multiple_dims():
-    
-    pdf_R8 = gen_pdf_bern(120, 320, 1/8, 8, 10)
-    pdf_R8 = np.tile(pdf_R8[np.newaxis, :, :], (6, 1, 1))
-    pdf_R8_copy = pdf_R8.copy()
-    pdf_R4 = gen_pdf_bern(120, 320, 1/4, 8, 10)
-    pdf_R4 = np.tile(pdf_R4[np.newaxis, :, :], (6, 1, 1))
-    
-    scaled_pdf = scale_pdf(pdf_R8, 4, 10)
-
-    np.testing.assert_allclose(scaled_pdf, pdf_R4) 
-
-    #ensure no inplace operations took place
-    np.testing.assert_allclose(pdf_R8, pdf_R8_copy) 
     
 def test_ssdu_selection():
-    mask = (np.random.randn(128, 128) > 0).astype(np.float32)
+    mask = (np.random.randn(1, 128, 128) > 0).astype(np.float32)
     input, loss = ssdu_gaussian_selection(mask)
 
-    torch.testing.assert_close(input + loss, mask)
+    torch.testing.assert_close((input + loss)[:, 0, :, :], mask)
 
 
 def test_apply_undersampling_not_same():
@@ -83,12 +58,7 @@ def test_apply_undersampling_not_same():
     pdf_R4 = gen_pdf_bern(128, 128, 1/4, 8, 10)
     pdf_R4 = np.stack([pdf_R4 for _ in range(k_space.shape[0])])
 
-    undersampled_k, mask = apply_undersampling_from_dist(
-        0, 
-        pdf_R4,
-        k_space,
-        line_constrained=False, 
-    )
+    undersampled_k, mask = apply_undersampling_from_dist(0, pdf_R4, k_space)
 
     k_mask = undersampled_k != 0 
     np.testing.assert_allclose(k_mask[:, [0], ...], mask)
@@ -96,18 +66,20 @@ def test_apply_undersampling_not_same():
 
 
 def test_ssdu_gaussian_selection_shape():
-    input_mask = np.ones((64, 64), dtype=np.float32)
+    input_mask = np.ones((1, 64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
+
+    input_mask = input_mask[:, None, :, :]
     assert trn_mask.shape == input_mask.shape
     assert loss_mask.shape == input_mask.shape
 
 def test_ssdu_gaussian_selection_no_overlap():
-    input_mask = np.ones((64, 64), dtype=np.float32)
+    input_mask = np.ones((1, 64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
     assert np.all((trn_mask * loss_mask) == 0)
 
 def test_ssdu_gaussian_selection_rho():
-    input_mask = np.ones((64, 64), dtype=np.float32)
+    input_mask = np.ones((1, 64, 64), dtype=np.float32)
     rho = 0.4
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask, rho=rho)
     expected_loss_count = int(np.ceil(np.sum(input_mask) * rho))
@@ -115,11 +87,13 @@ def test_ssdu_gaussian_selection_rho():
     assert expected_loss_count == actual_loss_count, f"Expected {expected_loss_count} loss pixels, got {actual_loss_count}"
 
 def test_ssdu_gaussian_selection_acs_region():
-    input_mask = np.ones((64, 64), dtype=np.float32)
+    input_mask = np.ones((1, 64, 64), dtype=np.float32)
     trn_mask, loss_mask = ssdu_gaussian_selection(input_mask)
-    center_kx = input_mask.shape[1] // 2
-    center_ky = input_mask.shape[0] // 2
+    center_kx = input_mask.shape[2] // 2
+    center_ky = input_mask.shape[1] // 2
     acs_shape = 10
-    acs_region = loss_mask[center_kx - acs_shape // 2:center_kx + acs_shape // 2,
-                           center_ky - acs_shape // 2:center_ky + acs_shape // 2]
+
+    center_kx = slice(center_kx-acs_shape//2,center_kx+acs_shape//2)
+    center_ky = slice(center_ky-acs_shape//2,center_ky+acs_shape//2)
+    acs_region = loss_mask[:, center_kx, center_ky] 
     assert np.all(acs_region == 0) 

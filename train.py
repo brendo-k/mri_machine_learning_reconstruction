@@ -1,16 +1,16 @@
-# python libraries
+# python modules
 from argparse import ArgumentParser
 from pathlib import Path
 from datetime import datetime
 from tempfile import TemporaryDirectory
 import os 
 
-# deep learning libraries
+# deep learning modules
 import torch
 import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor
 
-# my libraries
+# my modules
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.utils import replace_args_from_config, restore_optimizer
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
@@ -46,7 +46,10 @@ def main(args):
         callbacks=callbacks,
         )
 
+    # use tensor cores
     torch.set_float32_matmul_precision('medium')
+
+
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
@@ -104,73 +107,73 @@ def setup_model_parameters(args, thresholds):
     # setup model configurations
 
     data_module = UndersampledDataModule(
-                args.dataset, 
-                args.data_dir, 
-                args.test_dir,
-                batch_size=args.batch_size, 
-                resolution=(args.ny, args.nx),
-                num_workers=args.num_workers,
-                contrasts=args.contrasts,
-                sampling_method=args.sampling_method,
-                R=args.R,
-                self_supervsied=(not args.supervised), 
-                ssdu_partioning=args.ssdu_partitioning,
-                acs_lines=args.acs_lines,
-                norm_method=args.norm_method,
-                limit_volumes=args.limit_volumes
-                ) 
+        args.dataset, 
+        args.data_dir, 
+        args.test_dir,
+        batch_size=args.batch_size, 
+        resolution=(args.ny, args.nx),
+        num_workers=args.num_workers,
+        contrasts=args.contrasts,
+        sampling_method=args.sampling_method,
+        R=args.R,
+        self_supervsied=(not args.supervised), 
+        ssdu_partioning=args.ssdu_partitioning,
+        acs_lines=args.acs_lines,
+        norm_method=args.norm_method,
+        limit_volumes=args.limit_volumes
+    ) 
     data_module.setup('train')
-        
+
     varnet_config = VarnetConfig(
-            contrast_order=data_module.contrast_order,
-            cascades=args.cascades, 
-            channels=args.chans,
-            depth=args.depth,
-            dropout=args.dropout, 
-            upsample_method=args.upsample_method, 
-            conv_after_upsample=args.conv_after_upsample
-        )
-        
+        contrast_order=data_module.contrast_order,
+        cascades=args.cascades, 
+        channels=args.chans,
+        depth=args.depth,
+        dropout=args.dropout, 
+        upsample_method=args.upsample_method, 
+        conv_after_upsample=args.conv_after_upsample
+    )
+
     partitioning_config = LearnPartitionConfig(
-            image_size=(len(args.contrasts), args.ny, args.nx),
-            inital_R_value=args.R_hat,
-            k_center_region = 10,
-            sigmoid_slope_probability = args.sigmoid_slope1,
-            sigmoid_slope_sampling = args.sigmoid_slope2,
-            is_warm_start = args.warm_start,
-            sampling_method = args.sampling_method
-        )
+        image_size=(len(args.contrasts), args.ny, args.nx),
+        inital_R_value=args.R_hat,
+        k_center_region = 10,
+        sigmoid_slope_probability = args.sigmoid_slope1,
+        sigmoid_slope_sampling = args.sigmoid_slope2,
+        is_warm_start = args.warm_start,
+        sampling_method = args.sampling_method
+    )
 
     tripple_pathway_config = DualDomainConifg(
-            is_pass_inverse=args.pass_inverse_data,
-            is_pass_original=args.pass_all_data,
-            inverse_no_grad=args.inverse_data_no_grad,
-            original_no_grad=args.all_data_no_grad,
-            pass_all_lines=args.pass_all_lines,
-            pass_through_size=args.pass_through_size
-        )
+        is_pass_inverse=args.pass_inverse_data,
+        is_pass_original=args.pass_all_data,
+        inverse_no_grad=args.inverse_data_no_grad,
+        original_no_grad=args.all_data_no_grad,
+        pass_all_lines=args.pass_all_lines,
+        pass_through_size=args.pass_through_size
+    )
 
     model = LearnedSSLLightning(
-            varnet_config = varnet_config, 
-            learn_partitioning_config = partitioning_config, 
-            dual_domain_config = tripple_pathway_config,
-            lr = args.lr,
-            lr_scheduler = args.lr_scheduler,
-            warmup_adam = args.warmup_adam,
-            image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
-            image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
-            image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
-            lambda_scaling=args.lambda_scaling, 
-            image_loss_function=args.image_loss,
-            k_space_loss_function=args.k_loss,
-            enable_learn_partitioning=args.learn_sampling, 
-            use_supervised_image_loss=args.supervised_image,
-            weight_decay=args.weight_decay,
-            mask_theshold=thresholds,
-            enable_warmup_training=args.warmup_training,
-            normalize_loss_by_mask=args.norm_loss_by_mask,
-            )
-        
+        varnet_config = varnet_config, 
+        learn_partitioning_config = partitioning_config, 
+        dual_domain_config = tripple_pathway_config,
+        lr = args.lr,
+        lr_scheduler = args.lr_scheduler,
+        warmup_adam = args.warmup_adam,
+        image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
+        image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
+        image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
+        lambda_scaling=args.lambda_scaling, 
+        image_loss_function=args.image_loss,
+        k_space_loss_function=args.k_loss,
+        enable_learn_partitioning=args.learn_sampling, 
+        use_supervised_image_loss=args.supervised_image,
+        weight_decay=args.weight_decay,
+        mask_theshold=thresholds,
+        enable_warmup_training=args.warmup_training,
+        normalize_loss_by_mask=args.norm_loss_by_mask,
+    )
+
     return model, data_module
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):

@@ -364,9 +364,7 @@ class LearnedSSLLightning(plReconModel):
             label="masked",
         )
 
-    def log_image_space_metrics(
-        self, estimate_image, fully_sampled_image, ground_truth_image, label
-    ):
+    def log_image_space_metrics(self, estimate_image, fully_sampled_image, ground_truth_image, label):
         ssim_full = evaluate_over_contrasts(ssim, fully_sampled_image, estimate_image)
         nmse_full = evaluate_over_contrasts(nmse, fully_sampled_image, estimate_image)
         for i, contrast in enumerate(self.contrast_order):
@@ -432,10 +430,14 @@ class LearnedSSLLightning(plReconModel):
         )  # noisy, fully sampled ground truth
 
         gt_metrics = self.my_test_step(
-            (estimate_k, ground_truth_image), batch_index, "gt"
+            (estimate_k, ground_truth_image), 
+            batch_index, 
+            "gt"
         )
         fs_metrics = self.my_test_step(
-            (estimate_k, fully_sampled_image), batch_index, "fs"
+            (estimate_k, fully_sampled_image), 
+            batch_index, 
+            "fs"
         )
 
         return {"gt_metrics": gt_metrics, "fs_metrics": fs_metrics}
@@ -569,8 +571,8 @@ class LearnedSSLLightning(plReconModel):
             if self.norm_loss_by_mask:
                 k_loss = (
                     k_loss
-                    * undersampled[:, index, ...].numel()
-                    / loss_mask[:, index, ...].sum()
+                        * undersampled[:, index, ...].numel()
+                        / loss_mask[:, index, ...].sum()
                 )
 
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling

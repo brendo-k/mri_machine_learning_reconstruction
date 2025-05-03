@@ -40,7 +40,7 @@ class MultiContrastVarNet(nn.Module):
             )
         else:
             model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
-        
+
         # module cascades
         self.cascades = nn.ModuleList(
             [VarnetBlock(model_backbone()) for _ in range(config.cascades)]
@@ -79,7 +79,7 @@ class VarnetBlock(nn.Module):
         super().__init__()
         self.model = model
 
-        
+
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, k_space, sensetivities):
         # Reduce
@@ -100,7 +100,7 @@ class VarnetBlock(nn.Module):
         images = fft_2d_img(images, axes=[-1, -2])
 
         return images
-    
+
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
         mean = x.mean(dim=(2, 3), keepdim=True)
@@ -115,4 +115,4 @@ class VarnetBlock(nn.Module):
     ) -> torch.Tensor:
         x = x * std + mean
         return x
-    
+

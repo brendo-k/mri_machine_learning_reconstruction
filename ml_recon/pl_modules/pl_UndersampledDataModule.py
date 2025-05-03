@@ -18,32 +18,32 @@ from ml_recon.dataset.test_dataset import TestDataset
 
 class UndersampledDataModule(pl.LightningDataModule):
     def __init__(
-            self, 
-            dataset_name: Literal['fastmri', 'm4raw', 'brats'],
-            data_dir: str, 
-            test_dir: str,
-            batch_size: int, 
-            R: float = 6,
-            R_hat: float = 2.0,
-            contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
-            resolution: tuple[int, int] = (128, 128),
-            num_workers: int = 0,
-            poly_order: int = 8,
-            norm_method: Union[Literal['k', 'img', 'image_mean', 'image_mean2', 'std'], None] = 'k',
-            self_supervsied: bool = False,
-            sampling_method: str = '2d',
-            ssdu_partioning: bool = False,
-            acs_lines: int = 10, 
-            limit_volumes: Optional[Union[int, float]] = None
-            ):
+        self, 
+        dataset_name: Literal['fastmri', 'm4raw', 'brats'],
+        data_dir: str, 
+        test_dir: str,
+        batch_size: int, 
+        R: float = 6,
+        R_hat: float = 2.0,
+        contrasts: list[str] = ['t1', 't1ce', 't2', 'flair'],
+        resolution: tuple[int, int] = (128, 128),
+        num_workers: int = 0,
+        poly_order: int = 8,
+        norm_method: Union[Literal['k', 'img', 'image_mean', 'image_mean2', 'std'], None] = 'k',
+        self_supervsied: bool = False,
+        sampling_method: str = '2d',
+        ssdu_partioning: bool = False,
+        acs_lines: int = 10, 
+        limit_volumes: Optional[Union[int, float]] = None
+    ):
         """
             dataset_name:
-            
+
         """
 
         super().__init__()
         self.save_hyperparameters()
-    
+
         self.data_dir = Path(data_dir)
         self.test_dir = Path(test_dir)
         self.contrasts = contrasts
@@ -60,16 +60,16 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.sampling_method = sampling_method
         self.norm_method = norm_method
         self.limit_volumes = limit_volumes
-        
+
         self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
         self.transforms = self.setup_data_normalization(norm_method)
 
 
-    
+
 
     def setup(self, stage):
         super().setup(stage)
-        
+
 
         # get directories for different split folders
         train_dir = self.data_dir / 'train'
@@ -87,18 +87,17 @@ class UndersampledDataModule(pl.LightningDataModule):
             'contrasts': self.contrasts, 
             'limit_volumes': self.limit_volumes
         }
-        
+
         # keywords to control k-space undersamplig 
         undersample_keyword_args = {
-                'R': self.R,
-                'R_hat': self.R_hat,
-                'sampling_method': self.sampling_method,
-                'self_supervised': self.self_supervised,
-                'acs_lines' : self.acs_lines, 
-                'poly_order': self.poly_order,
-                'original_ssdu_partioning': self.ssdu_partioning
+            'R': self.R,
+            'R_hat': self.R_hat,
+            'sampling_method': self.sampling_method,
+            'self_supervised': self.self_supervised,
+            'acs_lines' : self.acs_lines, 
+            'poly_order': self.poly_order,
+            'original_ssdu_partioning': self.ssdu_partioning
         }
-
 
         # undersampled training dataset
         self.train_dataset = UndersampleDecorator(
@@ -139,7 +138,6 @@ class UndersampledDataModule(pl.LightningDataModule):
             transforms=test_transforms
         )
 
-
         # noisy test dataset
         noisy_test_dataset_undersampled = UndersampleDecorator(
             self.dataset_class(
@@ -161,34 +159,34 @@ class UndersampledDataModule(pl.LightningDataModule):
             gt_test_dataset, 
             transforms=test_transforms
         )
-        
+
 
         self.contrast_order = self.train_dataset.contrast_order
-    
+
     def train_dataloader(self):
         return DataLoader(
-                self.train_dataset, 
-                batch_size=self.batch_size, 
-                num_workers=self.num_workers,
-                shuffle=True,
-                pin_memory=True
-                )
+            self.train_dataset, 
+            batch_size=self.batch_size, 
+            num_workers=self.num_workers,
+            shuffle=True,
+            pin_memory=True
+        )
 
     def val_dataloader(self):
         return DataLoader(
-                self.val_dataset, 
-                batch_size=self.batch_size*4, 
-                num_workers=self.num_workers,
-                pin_memory=True
-                )
+            self.val_dataset, 
+            batch_size=self.batch_size*4, 
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
 
     def test_dataloader(self):
         return DataLoader(
-                self.test_dataset, 
-                batch_size=self.batch_size*4, 
-                num_workers=self.num_workers,
-                pin_memory=True
-                )
+            self.test_dataset, 
+            batch_size=self.batch_size*4, 
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
     def setup_dataset_type(self, dataset_name):
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
@@ -234,7 +232,7 @@ class normalize_k_max(object):
     def __call__(self, data):
         input = data['undersampled']
         scaling_factor = input.abs().amax((1, 2, 3), keepdim=True)
-        
+
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
@@ -256,7 +254,7 @@ class normalize_image_mean2(object):
         input = data['undersampled']
         img = k_to_img(input, coil_dim=1)
         scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
-        
+
         data['undersampled'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
@@ -267,7 +265,7 @@ class normalize_image_std(object):
         input = data['undersampled']
         img = k_to_img(input, coil_dim=1)
         scaling_factor = img.std((1, 2), keepdim=True).unsqueeze(1)
-        
+
         data['undersampled'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor

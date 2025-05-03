@@ -84,3 +84,25 @@ def test_inital_mask_determenistic(supervised_dataset):
     
     # should have the same mask
     assert ((data1['undersampled'] != 0) == (data2['undersampled'] != 0)).all()
+
+@pytest.mark.parametrize('sampling_method', ['2d', '1d', 'pi'])
+def test_non_deterministic_self_supervsied(mock_brats_dataset_dir, sampling_method):
+    dataset = BratsDataset(mock_brats_dataset_dir, nx=128, ny=128)
+    undersample_dataset = UndersampleDecorator(
+        dataset, 
+        R=4, 
+        acs_lines=ACS_LINES, 
+        self_supervised=True, 
+        R_hat=2, 
+        sampling_method=sampling_method, 
+        )
+    
+    data1 = undersample_dataset[0]
+    data2 = undersample_dataset[0]
+
+    # inital undersampling should be the same
+    assert ((data1['undersampled'] != 0) == (data2['undersampled'] != 0)).all()
+    # partitioning masks should be different
+    assert ((data1['mask']) != (data2['mask'])).any()
+    assert ((data1['loss_mask']) != (data2['loss_mask'])).any()
+    torch.testing.assert_close(data1['fs_k_space'], data2['fs_k_space'])
