@@ -104,9 +104,8 @@ def setup_model_parameters(args):
         R=args.R,
         self_supervsied=(not args.supervised), 
         ssdu_partioning=args.ssdu_partitioning,
-        acs_lines=args.acs_lines,
-        norm_method=args.norm_method,
-        limit_volumes=args.limit_volumes
+        limit_volumes=args.limit_volumes,
+        same_mask_every_epoch=args.same_mask_all_epochs
     ) 
     data_module.setup('train')
 
@@ -115,9 +114,6 @@ def setup_model_parameters(args):
         cascades=args.cascades, 
         channels=args.chans,
         depth=args.depth,
-        dropout=args.dropout, 
-        upsample_method=args.upsample_method, 
-        conv_after_upsample=args.conv_after_upsample
     )
 
     partitioning_config = LearnPartitionConfig(
@@ -144,7 +140,6 @@ def setup_model_parameters(args):
         learn_partitioning_config = partitioning_config, 
         dual_domain_config = tripple_pathway_config,
         lr = args.lr,
-        lr_scheduler = args.lr_scheduler,
         image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
         image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
         image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
@@ -233,7 +228,6 @@ if __name__ == '__main__':
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
     dataset_group.add_argument('--R', type=float, default=6.0)
-    dataset_group.add_argument('--acs_lines', type=int, default=10)
     dataset_group.add_argument('--dataset', type=str, default='m4raw')
     dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
     dataset_group.add_argument('--data_dir', type=str)
@@ -243,7 +237,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--limit_volumes', type=float, default=1.0)
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
-    dataset_group.add_argument('--norm_method', default='k')
+    dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')
@@ -256,10 +250,6 @@ if __name__ == '__main__':
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--pass_through_size', type=int, default=10)
     model_group.add_argument('--pass_all_lines', action='store_true')
-    model_group.add_argument('--dropout', type=float, default=0.0) 
-    model_group.add_argument('--weight_decay', type=float, default=0.0) 
-    model_group.add_argument('--conv_after_upsample', action='store_true') 
-    model_group.add_argument('--upsample_method', type=str, default='conv') 
 
     # loss function parameters
     model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)

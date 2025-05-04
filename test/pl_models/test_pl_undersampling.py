@@ -4,9 +4,9 @@ import h5py
 import tempfile
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from ml_recon.dataset.test_dataset import TestDataset
 
 BATCH_SIZE = 2
 DATA_SIZE = (8, 4, 3, 128, 128)
@@ -40,7 +40,7 @@ def temp_h5_directories(scope='session'):
         yield temp_dir
 
 @pytest.fixture
-def define_datamodule(temp_h5_directories):
+def build_supervised_datamodule(temp_h5_directories):
     data_module = UndersampledDataModule(
             'brats', 
             temp_h5_directories, 
@@ -57,9 +57,10 @@ def define_datamodule(temp_h5_directories):
 
 
 @pytest.mark.parametrize("is_self_supervised", [True, False])
-def test_supervisedR(temp_h5_directories, is_self_supervised):
+def test_inital_undersampling_R(temp_h5_directories, is_self_supervised):
     """
-    Tests to ensure that the R value of the mask and the shape of undersampled data is consistent with values chosen
+    This tests ensures the inital undersampling of k-space has a consistent
+    R value. 
     """
     data_module = UndersampledDataModule(
             'brats', 
@@ -79,46 +80,46 @@ def test_supervisedR(temp_h5_directories, is_self_supervised):
     test_batch = next(iter(data_module.test_dataloader()))
 
     undersampled = train_batch['undersampled']
-    undersampled_val = val_batch['undersampled']
+    undersampled_val = val_batch[0]['undersampled']
     undersampled_test = test_batch[0]['undersampled']
-    average_undersampling = (undersampled != 0).to(torch.float32).mean((-1, -2))
-    average_undersampling_val = (undersampled_val != 0).to(torch.float32).mean((-1, -2))
-    average_undersampling_test = (undersampled_test != 0).to(torch.float32).mean((-1, -2))
+
+    initial_mask = (undersampled != 0).to(torch.float32)
+    initial_mask_val = (undersampled_val != 0).to(torch.float32)
+    initial_mask_test = (undersampled_test != 0).to(torch.float32)
+
+    given_R = initial_mask.mean(dim=(-1, -2))
+    given_R_val = initial_mask_val.mean(dim=(-1, -2))
+    given_R_test = initial_mask_test.mean(dim=(-1, -2))
 
     assert undersampled.ndim == 5
     assert undersampled.shape == (BATCH_SIZE,) + DATA_SIZE[1:]
-    torch.testing.assert_close(average_undersampling, torch.full_like(average_undersampling, 1/4), atol=0.01, rtol=0)
+    torch.testing.assert_close(given_R, torch.full_like(given_R, 1/4), atol=0.01, rtol=0)
 
     assert undersampled_val.ndim == 5
-    assert undersampled_val.shape == (BATCH_SIZE,) + DATA_SIZE[1:]
-    torch.testing.assert_close(average_undersampling_val, torch.full_like(average_undersampling, 1/4), atol=0.01, rtol=0)
+    assert undersampled_val.shape == (4*BATCH_SIZE,) + DATA_SIZE[1:]
+    torch.testing.assert_close(given_R_val, torch.full_like(given_R_val, 1/4), atol=0.01, rtol=0)
 
     assert undersampled_test.ndim == 5
-    assert undersampled_test.shape == (BATCH_SIZE,) + DATA_SIZE[1:], f"{undersampled_test.shape}"
-    torch.testing.assert_close(average_undersampling_test, torch.full_like(average_undersampling, 1/4), atol=0.01, rtol=0)
+    assert undersampled_test.shape == (4*BATCH_SIZE,) + DATA_SIZE[1:], f"{undersampled_test.shape}"
+    torch.testing.assert_close(given_R_test, torch.full_like(given_R_test, 1/4), atol=0.01, rtol=0)
 
 
-def test_supervisedMasks(define_datamodule):
-    data_module = define_datamodule
+def test_supervisedMasks(build_supervised_datamodule):
+    data_module = build_supervised_datamodule
 
     train_batch = next(iter(data_module.train_dataloader()))
-    train_batch2 = next(iter(data_module.train_dataloader()))
     val_batch = next(iter(data_module.val_dataloader()))
-    val_batch2 = next(iter(data_module.val_dataloader()))
     test_batch = next(iter(data_module.test_dataloader()))
 
     undersampled_train = train_batch['undersampled']
     mask_train = train_batch['mask']
-    mask_train2 = train_batch2['mask']
     initial_mask = undersampled_train != 0
     fully_sampled = train_batch['fs_k_space']
 
     val_batch = val_batch[0]
-    val_batch2 = val_batch2[0]
     undersampled_val = val_batch['undersampled']
     initial_mask_val = undersampled_val != 0
     mask_val = val_batch['mask']
-    mask_val2 = val_batch2['mask']
     fully_sampled_val = val_batch['fs_k_space']
 
     undersampled_test = test_batch[0]['undersampled']
@@ -128,16 +129,15 @@ def test_supervisedMasks(define_datamodule):
 
     assert initial_mask.sum() > 0
     torch.testing.assert_close(undersampled_train, mask_train*fully_sampled)
-    torch.testing.assert_close(mask_train, (initial_mask*fully_sampled != 0).to(torch.float32))
+    torch.testing.assert_close(mask_train, (initial_mask != 0).to(torch.float32))
 
     assert initial_mask_val.sum() > 0
     torch.testing.assert_close(undersampled_val, mask_val*fully_sampled_val)
-    torch.testing.assert_close(mask_val, (initial_mask_val * fully_sampled != 0).to(torch.float32))
-    torch.testing.assert_close(mask_val, mask_val2)
+    torch.testing.assert_close(mask_val, (initial_mask_val != 0).to(torch.float32))
 
     assert initial_mask_test.sum() > 0
     torch.testing.assert_close(undersampled_test, mask_test*fully_sampled_test)
-    torch.testing.assert_close(mask_test, (initial_mask_test * fully_sampled != 0).to(torch.float32))
+    torch.testing.assert_close(mask_test, (initial_mask_test != 0).to(torch.float32))
 
 @pytest.mark.parametrize("is_self_supervised", [True, False])
 def test_scaling(temp_h5_directories, is_self_supervised):
@@ -173,14 +173,16 @@ def test_scaling(temp_h5_directories, is_self_supervised):
     mask_test = test_batch[0]['mask']
     fully_sampled_test = test_batch[0]['fs_k_space']
 
+    print(undersampled.shape)
+
     torch.testing.assert_close(undersampled.abs().amax((-1, -2, -3)), torch.ones(undersampled.shape[:2]))
-    torch.testing.assert_close(fully_sampled.abs().amax((-1, -2, -3)), torch.ones(undersampled.shape[:2]))
+    torch.testing.assert_close(fully_sampled.abs().amax((-1, -2, -3)), torch.ones(fully_sampled.shape[:2]))
 
     torch.testing.assert_close(undersampled_val.abs().amax((-1, -2, -3)), torch.ones(undersampled_val.shape[:2]))
-    torch.testing.assert_close(fully_sampled_val.abs().amax((-1, -2, -3)), torch.ones(undersampled.shape[:2]))
+    torch.testing.assert_close(fully_sampled_val.abs().amax((-1, -2, -3)), torch.ones(undersampled_val.shape[:2]))
 
     torch.testing.assert_close(undersampled_test.abs().amax((-1, -2, -3)), torch.ones(undersampled_test.shape[:2]))
-    torch.testing.assert_close(fully_sampled_test.abs().amax((-1, -2, -3)), torch.ones(undersampled.shape[:2]))
+    torch.testing.assert_close(fully_sampled_test.abs().amax((-1, -2, -3)), torch.ones(undersampled_test.shape[:2]))
 
 @pytest.mark.parametrize("set_name", ["train", "val", "test"])
 def test_ssduSets(temp_h5_directories, set_name):
@@ -276,7 +278,15 @@ def test_ssduNonDetermenistic(temp_h5_directories, set_name):
     else:
         dataset = data_module.test_dataset
 
+    if isinstance(dataset, TestDataset):
+        dataset.undersampled_dataset.set_epoch(0)
+    else:
+        dataset.set_epoch(0)
     batch = dataset[0]
+    if isinstance(dataset, TestDataset):
+        dataset.undersampled_dataset.set_epoch(1)
+    else:
+        dataset.set_epoch(1)
     batch2 = dataset[0]
     if set_name == 'test' or set_name == 'val':
         batch = batch[0]# type: ignore
@@ -352,9 +362,19 @@ def test_ssl_non_determenistic(temp_h5_directories, set_name):
         dataset = data_module.val_dataset
     else:
         dataset = data_module.test_dataset
+    
 
+    if isinstance(dataset, TestDataset):
+        dataset.undersampled_dataset.set_epoch(0)
+    else:
+        dataset.set_epoch(0)
     batch = dataset[0]
+    if isinstance(dataset, TestDataset):
+        dataset.undersampled_dataset.set_epoch(1)
+    else:
+        dataset.set_epoch(1)
     batch2 = dataset[0]
+
     if set_name == 'test' or set_name == 'val':
         batch = batch[0]# type: ignore
         batch2 = batch2[0]# type: ignore
@@ -371,7 +391,7 @@ def test_ssl_non_determenistic(temp_h5_directories, set_name):
     assert (loss_mask != loss_mask2).any()
     torch.testing.assert_close(mask2 + loss_mask2, mask + loss_mask)
 
-@pytest.mark.parametrize("set_name", ["val", "test"]) # idk how to get the same slice from the train dataloader other than turning off shuffle
+@pytest.mark.parametrize("set_name", ["train", "val", "test"]) # idk how to get the same slice from the train dataloader other than turning off shuffle
 def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
     """
     Make sure that the dataloaders generates a new mask every epoch
@@ -389,8 +409,10 @@ def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
             R=4
             ) 
     data_module.setup(set_name)
-
-    if set_name == "val":
+    
+    if set_name == "train":
+        dataloader = data_module.train_dataloader()
+    elif set_name == "val":
         dataloader = data_module.val_dataloader()
     else:
         dataloader = data_module.test_dataloader()
@@ -400,6 +422,58 @@ def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
         batch = next(iter(dataloader))[0]
         dataloader.dataset.undersampled_dataset.set_epoch(1)  # type: ignore
         batch2 = next(iter(dataloader))[0]
+    else:
+        # set the seed so shuffle gets the same batch every time
+        torch.manual_seed(0)
+        # set the epoch to the first epoch
+        dataloader.dataset.set_epoch(0)  # type: ignore
+        batch = next(iter(dataloader))
+
+        # reset the seed so same batch is generated
+        torch.manual_seed(0)
+        # increment epoch
+        dataloader.dataset.set_epoch(1)  # type: ignore
+        batch2 = next(iter(dataloader))        
+
+    undersampled = batch['undersampled'] 
+    undersampled2 = batch2['undersampled']
+    mask = batch['mask']
+    mask2 = batch2['mask']
+    loss_mask = batch['loss_mask']
+    loss_mask2 = batch2['loss_mask']
+
+    torch.testing.assert_close(undersampled, undersampled2)
+    assert (mask2 != mask).any()
+    assert (loss_mask != loss_mask2).any()
+    torch.testing.assert_close(mask2 + loss_mask2, mask + loss_mask)
+
+def test_same_partitioning_mask(temp_h5_directories):
+    """
+    Make sure that the dataloaders generates a new mask every epoch
+    """
+
+    data_module = UndersampledDataModule(
+        'brats', 
+        temp_h5_directories, 
+        temp_h5_directories, 
+        batch_size=BATCH_SIZE, 
+        resolution=DATA_SIZE[3:],
+        num_workers=2,
+        contrasts=['t1', 't2', 't1ce', 'flair'],
+        self_supervsied=True,
+        R=4,
+        same_mask_every_epoch=True
+    ) 
+
+    data_module.setup('train')
+    dataloader = data_module.train_dataloader()
+    
+    torch.manual_seed(0)
+    dataloader.dataset.set_epoch(0)  # type: ignore
+    batch = next(iter(dataloader))
+    torch.manual_seed(0)
+    dataloader.dataset.set_epoch(1)  # type: ignore
+    batch2 = next(iter(dataloader))
         
     undersampled = batch['undersampled'] # type: ignore
     undersampled2 = batch2['undersampled']# type: ignore
@@ -409,6 +483,6 @@ def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
     loss_mask2 = batch2['loss_mask']# type: ignore
 
     torch.testing.assert_close(undersampled, undersampled2)
-    assert (mask2 != mask).any()
-    assert (loss_mask != loss_mask2).any()
+    torch.testing.assert_close(mask, mask2)
+    torch.testing.assert_close(loss_mask, loss_mask2)
     torch.testing.assert_close(mask2 + loss_mask2, mask + loss_mask)

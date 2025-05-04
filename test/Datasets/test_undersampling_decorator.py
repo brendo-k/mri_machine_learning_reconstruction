@@ -97,7 +97,9 @@ def test_non_deterministic_self_supervsied(mock_brats_dataset_dir, sampling_meth
         sampling_method=sampling_method, 
         )
     
+    undersample_dataset.set_epoch(0)
     data1 = undersample_dataset[0]
+    undersample_dataset.set_epoch(1)
     data2 = undersample_dataset[0]
 
     # inital undersampling should be the same

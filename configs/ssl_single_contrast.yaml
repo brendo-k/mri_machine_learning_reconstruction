@@ -1,7 +1,7 @@
 # Self supervised config file for train.py
 dataset_params:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan/'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
   dataset: 'brats'
   nx: 256
   ny: 256

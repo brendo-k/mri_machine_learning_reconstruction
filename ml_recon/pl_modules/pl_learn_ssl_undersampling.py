@@ -6,7 +6,7 @@ import torch
 from pytorch_lightning.loggers import WandbLogger
 
 
-from torch.optim.lr_scheduler import LinearLR, CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 from ml_recon.losses import L1L2Loss, SSIM_Loss, L1ImageGradLoss
@@ -487,23 +487,6 @@ class LearnedSSLLightning(plReconModel):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         schedulers = []
-        if self.warmup_adam:
-            warmup_scheduler = LinearLR(
-                optimizer, start_factor=0.1, end_factor=1, total_iters=900
-            )
-            schedulers.append(
-                {
-                    "scheduler": warmup_scheduler,
-                    "interval": "step",
-                }
-            )
-            # warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1, total_iters=800)
-            # scheduler.append(
-            #        {
-            #            'scheduler': warmup_scheduler,
-            #            'interval': 'step',
-            #        }
-            #        )
         if self.lr_scheduler:
             scheduler = CosineAnnealingWarmRestarts(
                 optimizer, T_0=2000, T_mult=2, eta_min=1e-4

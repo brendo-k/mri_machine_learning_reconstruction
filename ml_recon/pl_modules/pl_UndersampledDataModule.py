@@ -34,7 +34,8 @@ class UndersampledDataModule(pl.LightningDataModule):
         sampling_method: str = '2d',
         ssdu_partioning: bool = False,
         acs_lines: int = 10, 
-        limit_volumes: Optional[Union[int, float]] = None
+        limit_volumes: Optional[Union[int, float]] = None,
+        same_mask_every_epoch: bool = False,
     ):
         """
             dataset_name:
@@ -60,6 +61,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.sampling_method = sampling_method
         self.norm_method = norm_method
         self.limit_volumes = limit_volumes
+        self.same_mask_every_epoch = same_mask_every_epoch
 
         self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
         self.transforms = self.setup_data_normalization(norm_method)
@@ -96,7 +98,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             'self_supervised': self.self_supervised,
             'acs_lines' : self.acs_lines, 
             'poly_order': self.poly_order,
-            'original_ssdu_partioning': self.ssdu_partioning
+            'original_ssdu_partioning': self.ssdu_partioning,
+            'same_mask_every_epoch': self.same_mask_every_epoch
         }
 
         # undersampled training dataset

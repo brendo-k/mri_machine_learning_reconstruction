@@ -123,7 +123,7 @@ def ssdu_gaussian_selection(
     loss_mask = []
     rng = np.random.default_rng(seed)
     for i in range(initial_mask.shape[0]):
-        input, loss = ssdu_part_one_contrast(initial_mask[i], std_scale, rho, rng)
+        input, loss = ssdu_part_one_contrast(initial_mask[i, 0], std_scale, rho, rng)
         input_mask.append(np.expand_dims(input, 0))
         loss_mask.append(np.expand_dims(loss, 0))
 

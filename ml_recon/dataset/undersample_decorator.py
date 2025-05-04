@@ -1,6 +1,5 @@
 import numpy as np
 from numpy.typing import NDArray
-import random
 import torch
 import math
 from torch.utils.data import Dataset
@@ -23,7 +22,7 @@ class UndersampleDecorator(Dataset):
 
     def __init__(
         self, 
-        dataset: Dataset, 
+        dataset, 
         R: float = 4, 
         poly_order: int = 8,
         acs_lines: int = 10,
@@ -32,6 +31,7 @@ class UndersampleDecorator(Dataset):
         R_hat: float = math.nan,
         original_ssdu_partioning: bool = False,
         sampling_method: str = '2d', 
+        same_mask_every_epoch: bool = False,
         seed: Union[int, None] = None
     ):
         super().__init__()
@@ -44,41 +44,49 @@ class UndersampleDecorator(Dataset):
         self.R_hat = R_hat
         self.acs_lines = acs_lines
         self.original_ssdu_partioning = original_ssdu_partioning
-        self.lambda_rng = np.random.default_rng(seed) # generator for lambda mask seeds.
-        self.omega_seed_offset = self.lambda_rng.integers(0, 2**32)
+        self.same_mask_every_epoch = same_mask_every_epoch
+        self.self_supervised = self_supervised
+        self.seed = seed
+
+        # setting seeds for random masks
+        rng = np.random.default_rng(seed)
+        self.lambda_seeds = rng.integers(0, high=2**23, size=(len(dataset), 1))
+        self.omega_seed_offset = rng.integers(0, 2**23)
 
 
         if self.sampling_type in ['2d', 'pi']:
             pdf_generator = gen_pdf_bern
         elif self.sampling_type == '1d':
             pdf_generator = gen_pdf_columns
+        else:
+            raise ValueError(f'Wrong sampling type! {self.sampling_type}')
 
-        self.omega_prob = pdf_generator(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) # type: ignore
-        self.lambda_prob = pdf_generator(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) # type: ignore
+        self.omega_prob = pdf_generator(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) 
+        self.lambda_prob = pdf_generator(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) 
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
         self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
         self.transforms = transforms
-        self.acs_lines = acs_lines
 
-        #self supervised
-        self.self_supervised = self_supervised
 
     def __len__(self):
-        return self.dataset.__len__() # type: ignore
+        return len(self.dataset)
 
     # this is needed because for some reason, every epoch the dataloaders are reset to the same state. 
-    # Therefore, if I use the same np.random_default_rng() it will repeat itself.
+    # Therefore, if I use the same np.random_default_rng(seed) it will repeat itself.
     def set_epoch(self, epoch):
         self.epoch = epoch
-        seed = (self.lambda_rng.integers(0, 2**23) + self.epoch) % 2**23 
-        self.lambda_rng = np.random.default_rng(seed)
+
+        if not self.same_mask_every_epoch:
+            # generate new seed array for every epoch
+            seed = (self.omega_seed_offset + self.epoch) % 2**23 
+            self.lambda_seeds = np.random.default_rng(seed).integers(0, 2**23, size=(len(self.dataset), 1))
 
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
         fully_sampled_k_space = k_space.copy()
 
-        zero_fill_mask = fully_sampled_k_space != 0 
+        zero_fill_mask = (fully_sampled_k_space != 0)
         first_undersampled, omega_mask = self.compute_initial_mask(index, k_space)
         omega_mask = omega_mask.astype(np.float32)
 
@@ -93,7 +101,7 @@ class UndersampleDecorator(Dataset):
         }
 
         if self.self_supervised:
-            input_mask, loss_mask = self.create_self_supervised_masks(first_undersampled, omega_mask)
+            input_mask, loss_mask = self.create_self_supervised_masks(first_undersampled, omega_mask, index)
             output.update(
                 {
                     'mask': input_mask.astype(np.float32),
@@ -104,7 +112,7 @@ class UndersampleDecorator(Dataset):
         else:
             output.update(
                 {
-                    'is_self_supervised':np.array([False])
+                    'is_self_supervised': np.array([False])
                 }
             )
 
@@ -116,12 +124,12 @@ class UndersampleDecorator(Dataset):
 
         return output
 
-    def create_self_supervised_masks(self, under, mask_omega):
+    def create_self_supervised_masks(self, under, mask_omega, index):
         if self.original_ssdu_partioning:
             input_mask, loss_mask = ssdu_gaussian_selection(mask_omega)
 
         else:
-            seed = self.lambda_rng.integers(0, 2**23)
+            seed = self.lambda_seeds[index].item()
 
             _, mask_lambda = apply_undersampling_from_dist(seed, self.lambda_prob, under)
 
@@ -133,9 +141,9 @@ class UndersampleDecorator(Dataset):
 
     def compute_initial_mask(self, index, k_space):
         # same mask every time since the random seed is the index value
-        if self.sampling_type == '2d' or self.sampling_type == '1d': 
+        if self.sampling_type in ['2d', '1d']: 
             under, mask_omega  = apply_undersampling_from_dist(
-                index,
+                index + self.omega_seed_offset,
                 self.omega_prob,
                 k_space, 
             )
