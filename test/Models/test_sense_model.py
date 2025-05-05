@@ -8,19 +8,23 @@ def sensitivity_model():
     """Fixture to create a SensetivityModel_mc instance for testing."""
     return SensetivityModel_mc(in_chans=2, out_chans=2, chans=18)
 
+@pytest.fixture()
+def sense_data():
+    x = torch.rand((2, 1, 6, 256, 128), dtype=torch.complex64)
+    mask = (torch.rand((2, 1, 6, 256, 128)) > 0).to(torch.float32)
+    return x, mask
+
 @torch.no_grad()
-def test_passthrough(sensitivity_model):
-    x = torch.rand((2, 1, 6, 640, 320))
-    mask = torch.rand((2, 1, 6, 640, 320))
+def test_passthrough(sensitivity_model, sense_data):
+    x, mask = sense_data
     output = sensitivity_model(x, mask)
 
     assert output.shape == x.shape
 
 
 @torch.no_grad()
-def test_scaling():
-    x = torch.rand((2, 1, 20, 640, 320))
-    mask = torch.zeros(2, 1, 20, 640, 320)
+def test_scaling(sense_data):
+    x, mask = sense_data
     mask[..., 150:170] = 1
     mask = mask.to(torch.bool)
 

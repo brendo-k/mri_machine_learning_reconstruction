@@ -98,7 +98,7 @@ class Unet(nn.Module):
 
 
 class Unet_down(nn.Module):
-    def __init__(self, in_channel, out_channel, drop_prob, relu_slope):
+    def __init__(self, in_channel: int, out_channel: int, drop_prob:float = 0.0, relu_slope=0.2):
         super().__init__()
         self.down = down()
         self.conv = double_conv(in_channel, out_channel, drop_prob, relu_slope)

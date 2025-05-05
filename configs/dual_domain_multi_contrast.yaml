@@ -18,9 +18,9 @@ model_parameters:
   test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
   chans: 64
   cascades: 12
-  ssim_scaling_full: 0 
-  ssim_scaling_set: 0
-  ssim_scaling_inverse: 0
+  image_scaling_lam_full: 8.0e-5
+  image_scaling_full_inv: 1.0e-5
+  image_scaling_lam_inv: 1.0e-5
   lambda_scaling: 0.65
   sigmoid_slope2: 200
   sigmoid_slope1: 5

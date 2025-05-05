@@ -41,13 +41,17 @@ def main(args):
         max_epochs=args.max_epochs, 
         logger=wandb_logger, 
         callbacks=callbacks,
+        fast_dev_run=args.fast_dev_run
         )
 
     # use tensor cores
     torch.set_float32_matmul_precision('medium')
 
-
-    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
+    try:
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
+    except AssertionError as error: 
+        print(error.args)
+        raise error
     trainer.test(model, datamodule=data_module)
 
     process_checkpoint(args, callbacks, wandb_logger)
@@ -140,9 +144,9 @@ def setup_model_parameters(args):
         learn_partitioning_config = partitioning_config, 
         dual_domain_config = tripple_pathway_config,
         lr = args.lr,
-        image_loss_scaling_lam_full=args.ssim_scaling_full + args.ssim_scaling_delta,
-        image_loss_scaling_lam_inv=args.ssim_scaling_set + args.ssim_scaling_delta,
-        image_loss_scaling_full_inv=args.ssim_scaling_inverse + args.ssim_scaling_delta,
+        image_loss_scaling_lam_full=args.image_scaling_lam_full + args.ssim_scaling_delta,
+        image_loss_scaling_lam_inv=args.image_scaling_lam_inv + args.ssim_scaling_delta,
+        image_loss_scaling_full_inv=args.image_scaling_full_inv + args.ssim_scaling_delta,
         lambda_scaling=args.lambda_scaling, 
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
@@ -224,6 +228,7 @@ if __name__ == '__main__':
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
+    training_group.add_argument("--fast_dev_run", action='store_true')
     
     # dataset parameters
     dataset_group = parser.add_argument_group('Dataset Parameters')
@@ -252,9 +257,9 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_all_lines', action='store_true')
 
     # loss function parameters
-    model_group.add_argument('--ssim_scaling_set', type=float, default=0.0)
-    model_group.add_argument('--ssim_scaling_full', type=float, default=0.0)
-    model_group.add_argument('--ssim_scaling_inverse', type=float, default=0.0)
+    model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)
+    model_group.add_argument('--image_scaling_lam_full', type=float, default=0.0)
+    model_group.add_argument('--image_scaling_full_inv', type=float, default=0.0)
     model_group.add_argument('--ssim_scaling_delta', type=float, default=0.0)
     model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
     model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])

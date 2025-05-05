@@ -14,8 +14,9 @@ def temp_h5_file():
 
     # Open the file in write mode and create the dataset
     with h5py.File(temp_file_path, 'w') as f:
-        real = np.random.rand(16, 10, 256, 256)
-        imag = np.random.rand(16, 10, 256, 256)
+        # dimension of batch channel height widht
+        real = np.random.rand(4, 10, 128, 200, dtype=np.float32)
+        imag = np.random.rand(4, 10, 128, 200, dtype=np.float32)
         f.create_dataset('kspace', data= real + 1j * imag)
 
     # Yield the file path for use in tests

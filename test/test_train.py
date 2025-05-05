@@ -1,33 +1,40 @@
 import subprocess
+import torch
 import os
 import pytest
+from pathlib import Path
 
 # Directory where the config files are located
-CONFIG_DIR = "./configs/train_learn_ssl_"
+CONFIG_DIR = Path("./configs/")
 
-# List of YAML config files
-config_files = [
-    "pass_all_3.yaml",
-    "pass_full.yaml",
-    "pass_inverse.yaml",
-    "pass_learn_ssl.yaml"
+CONFIG_FILES = [
+    os.path.join(CONFIG_DIR, f)
+    for f in os.listdir(CONFIG_DIR) 
+    if f.endswith(".yaml") 
 ]
+
 
 # Function to run the script with a given config file
 def run_train_learn_ssl(config_file):
-    config_path = CONFIG_DIR + config_file
-    print(os.listdir('./configs'))
+    print(os.listdir('.'))
     
     # Run the Python script with the given config file
     result = subprocess.run(
-        ["python", "train_learn_ssl_sampling.py", "--config", config_path],
+        [
+            "python", "train.py", 
+            "--config", config_file, 
+            "--chans", "10", 
+            "--fast_dev_run"
+        ],
         capture_output=True, text=True
     )
     
     return result
 
+
 # Integration test for each config file
-@pytest.mark.parametrize("config_file", config_files)
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
+@pytest.mark.parametrize("config_file", CONFIG_FILES)
 def test_run_train_learn_ssl_with_config(config_file):
     print(f"Running test with config: {config_file}")
     

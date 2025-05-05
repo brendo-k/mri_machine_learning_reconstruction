@@ -1,14 +1,13 @@
-import torch.nn as nn
-import torch
 from typing import Tuple, Literal
 from functools import partial
+from dataclasses import dataclass
+
+import torch.nn as nn
+import torch
 
 from ml_recon.models import Unet
-from ml_recon.models.XNet import XNet
-from functools import partial
 from ml_recon.models import SensetivityModel_mc
 from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_to_real, real_to_complex
-from dataclasses import dataclass
 
 @dataclass
 class VarnetConfig:
@@ -27,19 +26,16 @@ class MultiContrastVarNet(nn.Module):
     def __init__(self, config: VarnetConfig):
         super().__init__()
         contrasts = len(config.contrast_order)
-        if config.model == 'unet':
-            model_backbone = partial(
-                Unet, 
-                in_chan=contrasts*2, 
-                out_chan=contrasts*2, 
-                chans=config.channels, 
-                drop_prob=config.dropout, 
-                depth=config.depth, 
-                upsample_method=config.upsample_method,
-                conv_after_upsample=config.conv_after_upsample
-            )
-        else:
-            model_backbone = partial(XNet, contrast_order=config.contrast_order, channels=config.channels)
+        model_backbone = partial(
+            Unet, 
+            in_chan=contrasts*2, 
+            out_chan=contrasts*2, 
+            chans=config.channels, 
+            drop_prob=config.dropout, 
+            depth=config.depth, 
+            upsample_method=config.upsample_method,
+            conv_after_upsample=config.conv_after_upsample
+        )
 
         # module cascades
         self.cascades = nn.ModuleList(
@@ -54,19 +50,19 @@ class MultiContrastVarNet(nn.Module):
     # k-space sent in [B, C, H, W]
     def forward(self, reference_k, mask):
         # get sensetivity maps
-        assert not torch.isnan(reference_k).any()
-        assert not torch.isnan(mask).any()
+        assert not torch.isnan(reference_k).any(), reference_k
+        assert not torch.isnan(mask).any(), mask
         sense_maps = self.sens_model(reference_k, mask)
 
-        assert not torch.isnan(sense_maps).any()
-
+        assert not torch.isnan(sense_maps).any(), sense_maps
+        
         # current k_space 
         current_k = reference_k.clone()
         for i, cascade in enumerate(self.cascades):
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
-            assert not torch.isnan(reference_k).any()
-            assert not torch.isnan(refined_k).any()
+            assert not torch.isnan(reference_k).any(), reference_k
+            assert not torch.isnan(refined_k).any(), refined_k
 
             data_consistency = mask * (current_k - reference_k)
             # gradient descent step

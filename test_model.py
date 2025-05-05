@@ -1,12 +1,11 @@
-import torch
+import os
+import argparse
+
+from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
+from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
+
 import pytorch_lightning as pl 
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.loggers import CSVLogger
-from ml_recon.utils import root_sum_of_squares, ifft_2d_img
-from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
-import os
-from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
-import argparse
 
 
 def main(args):

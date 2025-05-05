@@ -82,7 +82,7 @@ class LearnPartitioning(nn.Module):
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
         if config.is_warm_start: 
-            if self.config.sampling_method in ['2d', '1d']:
+            if self.config.sampling_method in ['2d', 'pi']:
                 init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
             else: 
                 #init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
