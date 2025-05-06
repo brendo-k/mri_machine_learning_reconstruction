@@ -67,8 +67,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.transforms = self.setup_data_normalization(norm_method)
 
 
-
-
     def setup(self, stage):
         super().setup(stage)
 
@@ -113,12 +111,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         )
 
 
-        # if fastmri, no ground truth so just convert fully sampled k-space to img
-        if self.dataset_class == FastMRIDataset:
-            test_transforms = convert_k_to_img()
-        else:
-            test_transforms = None
-
         # undersampled validation dataset
         noisy_val_dataset_undersampled = UndersampleDecorator(
             self.dataset_class(
@@ -138,7 +130,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.val_dataset = TestDataset(
             noisy_val_dataset_undersampled,
             gt_val_dataset, 
-            transforms=test_transforms
+            transforms=None
         )
 
         # noisy test dataset
@@ -160,7 +152,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.test_dataset = TestDataset(
             noisy_test_dataset_undersampled,
             gt_test_dataset, 
-            transforms=test_transforms
+            transforms=None
         )
 
 
@@ -197,7 +189,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             test_data_key = 'ground_truth'
         elif dataset_name == 'fastmri':
             dataset_class = FastMRIDataset
-            test_data_key = 'kspace'
+            test_data_key = 'reconstruction_rss'
         elif dataset_name == 'm4raw':
             dataset_class = M4Raw
             test_data_key = 'reconstruction_rss'
