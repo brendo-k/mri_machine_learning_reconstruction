@@ -98,7 +98,7 @@ class FastMRIDataset(Dataset):
 
         return k_space
 
-    def resample_or_pad(self, k_space, reduce_fov=True):
+    def resample_or_pad(self, k_space, reduce_fov=False):
         """Takes k-space data and resamples data to desired height and width. If 
         the image is larger, we crop. If the image is smaller, we pad with zeros
 

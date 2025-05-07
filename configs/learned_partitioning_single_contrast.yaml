@@ -33,7 +33,6 @@ model_parameters:
   image_loss: l1_grad
   all_data_no_grad: true 
   inverse_data_no_grad: false 
-  pass_through_size: 10
   sampling_method: 1d
   norm_method: 'image_mean'
   warm_start: False

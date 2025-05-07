@@ -156,7 +156,7 @@ class plReconModel(pl.LightningModule):
         # get noise
         noise = ground_truth_image[..., :20, :20]
         # take the max value and scale up a bit
-        mask_threshold = noise.amax((-1, -2)) * 1.2
+        mask_threshold = noise.amax((-1, -2)) * 1.05
 
         # same shape as image
         mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)

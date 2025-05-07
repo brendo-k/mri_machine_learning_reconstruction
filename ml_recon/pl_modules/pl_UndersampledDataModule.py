@@ -1,6 +1,7 @@
 # import standard lib modules
 from typing import Optional, Union, Literal
 from pathlib import Path
+import os
 
 # import DL modules
 import pytorch_lightning as pl
@@ -15,6 +16,7 @@ from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.test_dataset import TestDataset
 
 
+ACS_LINES = int(os.getenv('ACS_LINES')) if os.getenv('ACS_LINES') else 10
 
 class UndersampledDataModule(pl.LightningDataModule):
     def __init__(
@@ -33,7 +35,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self_supervsied: bool = False,
         sampling_method: str = '2d',
         ssdu_partioning: bool = False,
-        acs_lines: int = 10, 
         limit_volumes: Optional[Union[int, float]] = None,
         same_mask_every_epoch: bool = False,
     ):
@@ -49,7 +50,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.test_dir = Path(test_dir)
         self.contrasts = contrasts
         self.num_contrasts = len(contrasts)
-        self.acs_lines = acs_lines
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.resolution = resolution
@@ -94,7 +94,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             'R_hat': self.R_hat,
             'sampling_method': self.sampling_method,
             'self_supervised': self.self_supervised,
-            'acs_lines' : self.acs_lines, 
+            'acs_lines' : ACS_LINES, 
             'poly_order': self.poly_order,
             'original_ssdu_partioning': self.ssdu_partioning,
             'same_mask_every_epoch': self.same_mask_every_epoch

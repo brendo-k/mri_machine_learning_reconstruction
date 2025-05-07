@@ -2,6 +2,7 @@ from typing import Literal, Union
 import dataclasses
 
 import numpy as np
+import os
 import torch
 from pytorch_lightning.loggers import WandbLogger
 
@@ -292,7 +293,7 @@ class LearnedSSLLightning(plReconModel):
         self.calculate_k_nmse(batch)
 
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        if batch_idx > 4 or self.current_epoch % 1 != 0:
+        if batch_idx > 4 or self.current_epoch % 10 != 0:
             plot_images = False
         else:
             plot_images = True
@@ -316,8 +317,8 @@ class LearnedSSLLightning(plReconModel):
         ground_truth_image_masked = ground_truth_image * background_mask
         fully_sampled_image_masked = fully_sampled_image * background_mask
 
-        diff_est_full_plot = (estimate_image - fully_sampled_image).abs() * 10
-        gt_diff = (estimate_image - ground_truth_image).abs() * 10
+        diff_masked = (estimate_image_masked - fully_sampled_image_masked).abs() * 10
+        diff_unmasked = (estimate_image - fully_sampled_image).abs() * 10
 
         # log images
         if plot_images and isinstance(self.logger, WandbLogger):
@@ -328,12 +329,12 @@ class LearnedSSLLightning(plReconModel):
                 self.split_along_contrasts(images_to_plot.clip(0, 1)),
             )
             wandb_logger.log_image(
-                f"val_images_diff/diff_fs{batch_idx}",
-                self.split_along_contrasts(diff_est_full_plot.clip(0, 1)[0]),
+                f"val_images_diff/diff_masked{batch_idx}",
+                self.split_along_contrasts(diff_masked.clip(0, 1)[0]),
             )
             wandb_logger.log_image(
-                f"val_images_diff/diff_gt{batch_idx}",
-                self.split_along_contrasts(gt_diff.clip(0, 1)[0]),
+                f"val_images_diff/diff_unmasked{batch_idx}",
+                self.split_along_contrasts(diff_unmasked.clip(0, 1)[0]),
             )
 
             # plot ground truths at the first epoch
@@ -650,7 +651,7 @@ class LearnedSSLLightning(plReconModel):
             target_img = k_to_img(fully_sampled, coil_dim=2)
             lambda_img = k_to_img(lambda_k, coil_dim=2)
             ssim_val = ssim(
-                target_img, lambda_img, data_range=(0, target_img.max().item())
+                target_img, lambda_img, data_range=(target_img.min().item(), target_img.max().item())
             )
             assert isinstance(ssim_val, torch.Tensor)
             loss_dict["image_loss"] = 1 - ssim_val
@@ -710,8 +711,9 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def get_image_space_scaling_factors(self):
-        if self.enable_warmup_training and self.current_epoch < 10:
-            scaling_factor = self.current_epoch / 10
+        warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 10
+        if self.enable_warmup_training and self.current_epoch < warmup_epochs:
+            scaling_factor = 0 #self.current_epoch / warmup_epochs
         else:
             scaling_factor = 1
 
