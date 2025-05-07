@@ -78,6 +78,7 @@ class VarnetBlock(nn.Module):
 
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, k_space, sensetivities):
+        assert not torch.isnan(k_space).any(), k_space
         # Reduce
         images = ifft_2d_img(k_space, axes=[-1, -2])
 
@@ -87,8 +88,11 @@ class VarnetBlock(nn.Module):
         # Images now [B, contrast * 2, h, w] (real)
         images = complex_to_real(images)
         images, mean, std = self.norm(images)
+        assert not torch.isnan(images).any(), images
         images = self.model(images)
+        assert not torch.isnan(images).any(), images
         images = self.unnorm(images, mean, std)
+        assert not torch.isnan(images).any(), images
         images = real_to_complex(images)
 
         # Expand
