@@ -21,12 +21,13 @@ def main(args):
     
     return test(checkpoint_path=checkpoint_path, data_dir=data_dir, test_dir=test_dir, logger=logger)
 
-def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_testing=True, mask_threshold=None):
+def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_testing=True, mask_threshold=None, batch_size=1):
     # Load model and data module
+    args = {}
     model = LearnedSSLLightning.load_from_checkpoint(
         checkpoint_path,
         is_mask_testing = is_mask_testing,
-        mask_theshold = mask_threshold
+        mask_theshold = mask_threshold,
         )
 
     data_module_kwargs = {}
@@ -35,7 +36,7 @@ def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_tes
     if data_dir:
         data_module_kwargs['data_dir'] = data_dir
 
-    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, batch_size=10, **data_module_kwargs)
+    datamodule = UndersampledDataModule.load_from_checkpoint(checkpoint_path, batch_size=batch_size, **data_module_kwargs)
 
     # Test model
     trainer = pl.Trainer(logger=logger, accelerator='cuda')

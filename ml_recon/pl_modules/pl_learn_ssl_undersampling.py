@@ -422,18 +422,18 @@ class LearnedSSLLightning(plReconModel):
             fs_k, coil_dim=2
         )  # noisy, fully sampled ground truth
 
-        gt_metrics = self.my_test_step(
-            (estimate_k, ground_truth_image), 
-            batch_index, 
-            "gt"
-        )
+        #gt_metrics = self.my_test_step(
+        #    (estimate_k, ground_truth_image), 
+        #    batch_index, 
+        #    "gt"
+        #)
         fs_metrics = self.my_test_step(
             (estimate_k, fully_sampled_image), 
             batch_index, 
             "fs"
         )
 
-        return {"gt_metrics": gt_metrics, "fs_metrics": fs_metrics}
+        return {"fs_metrics": fs_metrics}
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
         ground_truth_image = batch[1]

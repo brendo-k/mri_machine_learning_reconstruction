@@ -40,69 +40,126 @@ class plReconModel(pl.LightningModule):
         estimated_image /= scaling_factor
         ground_truth_image = ground_truth_image / scaling_factor
 
-        estimated_image = estimated_image * background_mask
-        ground_truth_image = ground_truth_image * background_mask
+        estimated_image_masked = estimated_image * background_mask
+        ground_truth_image_masked = ground_truth_image * background_mask
 
+        average_ssim = 0
+        average_ssim_masked = 0
+        average_psnr_masked = 0
+        average_nmse_masked = 0
         average_ssim = 0
         average_psnr = 0
         average_nmse = 0
         for contrast_index in range(len(self.contrast_order)):            
-            contrast_psnr = 0
-            contrast_nmse = 0
-            contrast_ssim = 0
+            contrast_psnr_masked = []
+            contrast_nmse_masked = []
+            contrast_ssim_masked = []
+            contrast_psnr = []
+            contrast_nmse = []
+            contrast_ssim = []
             for i in range(ground_truth_image.shape[0]):
+                # get a slice of a contrast
                 contrast_ground_truth = ground_truth_image[i, contrast_index, :, :]
+                contrast_ground_truth_masked = ground_truth_image_masked[i, contrast_index, :, :]
                 contrast_estimated = estimated_image[i, contrast_index, :, :]
-                contrast_mask = background_mask[i, contrast_index, :, :]
-                contrast_mask = contrast_mask[None, None, :, :]
+                contrast_estimated_masked = estimated_image_masked[i, contrast_index, :, :]
+
+                # reshape to proper shape for metrics
                 contrast_ground_truth = contrast_ground_truth[None, None, :, :]
                 contrast_estimated = contrast_estimated[None, None, :, :]
-
-
+                contrast_ground_truth_masked = contrast_ground_truth_masked[None, None, :, :]
+                contrast_estimated_masked = contrast_estimated_masked[None, None, :, :]
+                
+                # masked metrics
                 nmse_val = nmse(contrast_ground_truth, contrast_estimated)
+                nmse_val_masked = nmse(contrast_ground_truth_masked, contrast_estimated_masked)
+
+                # ssim metrics
+                ssim_val_masked = ssim(
+                    contrast_ground_truth_masked, 
+                    contrast_estimated_masked, 
+                    data_range=(0, contrast_ground_truth_masked.max().item()),
+                    kernel_size=7
+                    )
                 ssim_val  = ssim(
                     contrast_ground_truth, 
                     contrast_estimated, 
                     data_range=(0, contrast_ground_truth.max().item()),
-                    return_full_image=False,
                     kernel_size=7
                     )
+
                 assert isinstance(ssim_val, torch.Tensor)
-                ssim_val = ssim_val.mean()
-                assert isinstance(ssim_val, torch.Tensor)          
+                assert isinstance(ssim_val_masked, torch.Tensor)
+
+                psnr_val_masked = psnr(contrast_ground_truth_masked, contrast_estimated_masked)
                 psnr_val = psnr(contrast_ground_truth, contrast_estimated)
                 
-                contrast_ssim += ssim_val
-                contrast_psnr += psnr_val
-                contrast_nmse += nmse_val
+                contrast_ssim.append(ssim_val)
+                contrast_psnr.append(psnr_val)
+                contrast_nmse.append(nmse_val)
 
-            contrast_ssim /= ground_truth_image.shape[0]
-            contrast_nmse /= ground_truth_image.shape[0]
-            contrast_psnr /= ground_truth_image.shape[0]
-            self.log(f"metrics/{label}nmse_{self.contrast_order[contrast_index]}", contrast_nmse, sync_dist=True, on_step=True)
-            self.log(f"metrics/{label}ssim_{self.contrast_order[contrast_index]}", contrast_ssim, sync_dist=True, on_step=True)
-            self.log(f"metrics/{label}psnr_{self.contrast_order[contrast_index]}", contrast_psnr, sync_dist=True, on_step=True)
+                contrast_ssim_masked.append(ssim_val_masked)
+                contrast_psnr_masked.append(psnr_val_masked)
+                contrast_nmse_masked.append(nmse_val_masked)
 
-            average_ssim += contrast_ssim
-            average_psnr += contrast_psnr
-            average_nmse += contrast_nmse
+            contrast_ssim = np.array(contrast_ssim)
+            contrast_psnr = np.array(contrast_psnr)            
+            contrast_nmse = np.array(contrast_nmse)
+
+            contrast_ssim_masked = np.array(contrast_ssim_masked)
+            contrast_psnr_masked = np.array(contrast_psnr_masked)
+            contrast_nmse_masked = np.array(contrast_nmse_masked)
+
+
+            self.log(f"metrics/nmse_{self.contrast_order[contrast_index]}", contrast_nmse.mean(), sync_dist=True, on_step=True)
+            self.log(f"metrics/ssim_{self.contrast_order[contrast_index]}", contrast_ssim.mean(), sync_dist=True, on_step=True)
+            self.log(f"metrics/psnr_{self.contrast_order[contrast_index]}", contrast_psnr.mean(), sync_dist=True, on_step=True)
+
+            self.log(f"metrics/nmse_std_{self.contrast_order[contrast_index]}", contrast_nmse.std(), sync_dist=True, on_step=True)
+            self.log(f"metrics/ssim_std_{self.contrast_order[contrast_index]}", contrast_ssim.std(), sync_dist=True, on_step=True)
+            self.log(f"metrics/psnr_std_{self.contrast_order[contrast_index]}", contrast_psnr.std(), sync_dist=True, on_step=True)
+
+            self.log(f"metrics/masked_nmse_std_{self.contrast_order[contrast_index]}", contrast_nmse_masked.mean(), sync_dist=True, on_step=True)
+            self.log(f"metrics/masked_ssim_std_{self.contrast_order[contrast_index]}", contrast_ssim_masked.mean(), sync_dist=True, on_step=True)
+            self.log(f"metrics/masked_psnr_std_{self.contrast_order[contrast_index]}", contrast_psnr_masked.mean(), sync_dist=True, on_step=True)
+
+            self.log(f"metrics/masked_nmse_std_{self.contrast_order[contrast_index]}", contrast_nmse_masked.std(), sync_dist=True, on_step=True)
+            self.log(f"metrics/masked_ssim_std_{self.contrast_order[contrast_index]}", contrast_ssim_masked.std(), sync_dist=True, on_step=True)
+            self.log(f"metrics/masked_psnr_std_{self.contrast_order[contrast_index]}", contrast_psnr_masked.std(), sync_dist=True, on_step=True)
+
+            average_ssim += contrast_ssim.mean()
+            average_psnr += contrast_psnr.mean()
+            average_nmse += contrast_nmse.mean()
+
+            average_ssim_masked += contrast_ssim_masked.mean()
+            average_psnr_masked += contrast_psnr_masked.mean()
+            average_nmse_masked += contrast_nmse_masked.mean()
 
         average_nmse /= ground_truth_image.shape[1]
         average_psnr /= ground_truth_image.shape[1]
         average_ssim /= ground_truth_image.shape[1]
-        self.log(f'metrics/{label}mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
-        self.log(f'metrics/{label}mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
-        self.log(f'metrics/{label}mean_nmse', average_nmse, on_epoch=True, sync_dist=True)
+
+        average_nmse_masked /= ground_truth_image.shape[1]
+        average_psnr_masked /= ground_truth_image.shape[1]
+        average_ssim_masked /= ground_truth_image.shape[1]
+
+        self.log('metrics/mean_ssim', average_ssim, on_epoch=True, sync_dist=True)
+        self.log('metrics/mean_psnr', average_psnr, on_epoch=True, sync_dist=True)
+        self.log('metrics/mean_nmse', average_nmse, on_epoch=True, sync_dist=True)
+
+        self.log('metrics/masked_mean_ssim', average_ssim_masked, on_epoch=True, sync_dist=True)
+        self.log('metrics/masked_mean_psnr', average_psnr_masked, on_epoch=True, sync_dist=True)
+        self.log('metrics/masked_mean_nmse', average_nmse_masked, on_epoch=True, sync_dist=True)
         
         return {
-            f'{label}loss': 0,
-            f'{label}estimate_image': estimated_image,
-            f'{label}ground_truth_image': ground_truth_image,
-            f'{label}mask': background_mask
+            'loss': 0,
+            'estimate_image': estimated_image,
+            'ground_truth_image': ground_truth_image,
+            'mask': background_mask
         }
 
 
-    def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0, label=''):
+    def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
         estimate_k, ground_truth_image = batch
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
@@ -112,10 +169,11 @@ class plReconModel(pl.LightningModule):
         estimated_image /= scaling_factor
         ground_truth_image /= scaling_factor
 
-        estimated_image *= image_background_mask
-        ground_truth_image *= image_background_mask
+        estimated_image_masked = estimated_image * image_background_mask
+        ground_truth_image_masked = estimated_image * image_background_mask
 
         difference_image = (ground_truth_image - estimated_image).abs()
+        difference_image_masked = (ground_truth_image_masked - estimated_image_masked).abs()
         
         estimated_image = estimated_image[0].clamp(0, 1)
         ground_truth_image = ground_truth_image[0]
@@ -124,18 +182,22 @@ class plReconModel(pl.LightningModule):
         image_background_mask = image_background_mask[0]
         if isinstance(self.logger, WandbLogger):
             self.plot_test_images(
+                ground_truth_image_masked, 
+                estimated_image_masked, 
+                difference_image_masked,
+                label='masked',
+                )
+            self.plot_test_images(
                 ground_truth_image, 
                 estimated_image, 
-                image_background_mask, 
                 difference_image,
-                label=label,
+                label='unmasked',
                 )
 
     def plot_test_images(
         self, 
         ground_truth_image, 
         estimated_image, 
-        image_background_mask, 
         difference_image,
         label='',
         ):
@@ -145,7 +207,6 @@ class plReconModel(pl.LightningModule):
         wandb_logger.log_image(f'test/{label}_recon', self.convert_image_for_plotting(estimated_image))
         wandb_logger.log_image(f'test/{label}_target', self.convert_image_for_plotting(ground_truth_image))
         wandb_logger.log_image(f'test/{label}_diff', self.convert_image_for_plotting((difference_image)))
-        wandb_logger.log_image(f'test/{label}_test_mask', self.convert_image_for_plotting(image_background_mask))
 
 
     def get_image_background_mask(self, ground_truth_image):
