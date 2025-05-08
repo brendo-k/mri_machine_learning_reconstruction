@@ -5,6 +5,7 @@ from typing import Union, Literal, Optional, Sequence, Any
 
 class L1L2Loss(torch.nn.Module):
     def __init__(self, norm_all_k: bool,):
+        super().__init__()
         self.norm_all_k = norm_all_k
         
     def forward(self, target: torch.Tensor, predicted: torch.Tensor):

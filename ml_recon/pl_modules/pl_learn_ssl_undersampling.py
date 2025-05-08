@@ -699,7 +699,7 @@ class LearnedSSLLightning(plReconModel):
     def get_image_space_scaling_factors(self):
         warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 10
         if self.enable_warmup_training and self.current_epoch < warmup_epochs:
-            scaling_factor = 0 #self.current_epoch / warmup_epochs
+            scaling_factor = self.current_epoch / warmup_epochs
         else:
             scaling_factor = 1
 

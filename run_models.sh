@@ -15,11 +15,11 @@ python train.py \
     --limit_volumes 0.2 \
     --batch_size 1 \
     --image_scaling_lam_full 1.0e-3 \
-    --image_scaling_full_inv 4.0e-4 \
-    --image_scaling_lam_inv 7.0e-4 \
+    --image_scaling_full_inv 1.0e-3 \
+    --image_scaling_lam_inv 1.0e-3 \
     --image_loss l1_grad \
     --warm_start \
     --warmup_training \
-    --lambda_scaling 0.65
+    --lambda_scaling 0.9
 
 
