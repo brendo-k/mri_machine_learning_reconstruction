@@ -59,7 +59,7 @@ All parameters in the config file can be configured through the command line too
 
 Logging is done with wandb. If wandb isn't installed default to tensorboard. 
 
-To setup wandb [https://docs.wandb.ai/quickstart/](go here).
+To setup wandb [go here](https://docs.wandb.ai/quickstart/).
 
 ### Testing
 
