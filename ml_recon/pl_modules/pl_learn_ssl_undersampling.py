@@ -19,9 +19,10 @@ from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, Varne
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
 if os.getenv('REDUCE_LOSS_BY_MASK'):
-    REDUCE_LOSS_BY_MASK = bool(os.getenv('REDUCE_LOSS_BY_MASK'))
+    REDUCE_LOSS_BY_MASK = os.getenv('REDUCE_LOSS_BY_MASK').lower() == 'true'
 else:
     REDUCE_LOSS_BY_MASK = False
+print(REDUCE_LOSS_BY_MASK)
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -588,7 +589,7 @@ class LearnedSSLLightning(plReconModel):
             inverse_k,
             undersampled_k,
             lambda_k_wo_acs,
-            (1 - self.lambda_loss_scaling),
+            self.lambda_loss_scaling,
             "inverse",
         )
         return k_loss_inverse

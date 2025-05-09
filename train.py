@@ -32,9 +32,10 @@ else:
     NORM_METHOD = 'image_mean'
 
 if os.getenv('REDUCE_LOSS_BY_MASK'):
-    REDUCE_LOSS_BY_MASK = os.getenv('REDUCE_LOSS_BY_MASK') 
+    REDUCE_LOSS_BY_MASK = bool(os.getenv('REDUCE_LOSS_BY_MASK'))
 else:
-    REDUCE_LOSS_BY_MASK = 'image_mean'
+    REDUCE_LOSS_BY_MASK = False
+print(os.getenv('REDUCE_LOSS_BY_MASK'), REDUCE_LOSS_BY_MASK)
 
 def main(args):
     file_name = get_unique_file_name(args)
