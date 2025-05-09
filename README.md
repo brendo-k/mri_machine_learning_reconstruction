@@ -1,9 +1,10 @@
 # Publications and Conferences from this Code
-Joint Multi-Contrast Image Reconstruction with Self-Supervised Learning.
-Brenden Kadota, Charles Millard, Mark Chiew, International Conference for Magnetic
-Resonance in Medicine
+Joint Multi-Contrast Image Reconstruction with Self-Supervised Learning.Brenden Kadota, Charles Millard, Mark Chiew, International Conference for Magnetic Resonance in Medicine
+
 B. Kadota, C. Millard, M. Chiew, Learned K-Space Partitioning for Improved Dual-Domain Self-Supervised Image Reconstruction, ISMRM, Hawaii, 2025
+
 B. Kadota, C. Millard, M. Chiew, Learned k-space Partitioning for Optimized self-supervised MRI Reconstruction, Conference in IEEE Engineering in Medicine and Biology, 2025
+
 B. Kadota, C. Millard, M. Chiew, Learned k-space Partitioning for Optimized Multi-Contrast Self-Supervised MRI Reconstruction, IEEE Transactions in Medical Imaging, 2025 (in preparation)
 
 ## Getting Started
