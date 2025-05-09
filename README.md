@@ -1,11 +1,11 @@
 # Publications and Conferences from this Code
-Joint Multi-Contrast Image Reconstruction with Self-Supervised Learning.Brenden Kadota, Charles Millard, Mark Chiew, International Conference for Magnetic Resonance in Medicine
+**Brenden Kadota**, Charles Millard, Mark Chiew. Joint Multi-Contrast Image Reconstruction with Self-Supervised Learning, International Conference for Magnetic Resonance in Medicine, Singapore, 2024 (Conference)
 
-B. Kadota, C. Millard, M. Chiew, Learned K-Space Partitioning for Improved Dual-Domain Self-Supervised Image Reconstruction, ISMRM, Hawaii, 2025
+**B. Kadota**, C. Millard, M. Chiew. Learned K-Space Partitioning for Improved Dual-Domain Self-Supervised Image Reconstruction, International Conference for Magnetic Resonance in Medicine, Hawaii, 2025 (Conference)
 
-B. Kadota, C. Millard, M. Chiew, Learned k-space Partitioning for Optimized self-supervised MRI Reconstruction, Conference in IEEE Engineering in Medicine and Biology, 2025
+**B. Kadota**, C. Millard, M. Chiew. Learned k-space Partitioning for Optimized self-supervised MRI Reconstruction, Conference in IEEE Engineering in Medicine and Biology, 2025 (Conference Paper)
 
-B. Kadota, C. Millard, M. Chiew, Learned k-space Partitioning for Optimized Multi-Contrast Self-Supervised MRI Reconstruction, IEEE Transactions in Medical Imaging, 2025 (in preparation)
+**B. Kadota**, C. Millard, M. Chiew. Learned k-space Partitioning for Optimized Multi-Contrast Self-Supervised MRI Reconstruction,  IEEE Transactions in Medical Imaging, 2025 (in preparation)
 
 ## Getting Started
 Below is how to get started on a simulated BRaTS dataset
