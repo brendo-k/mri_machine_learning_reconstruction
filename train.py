@@ -26,6 +26,11 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint 
 
+if os.getenv('NORM_METHOD') is not None:
+    NORM_METHOD = os.getenv('NORM_METHOD') 
+else:
+    NORM_METHOD = 'image_mean'
+
 def main(args):
     file_name = get_unique_file_name(args)
 
@@ -109,7 +114,8 @@ def setup_model_parameters(args):
         self_supervsied=(not args.supervised), 
         ssdu_partioning=args.ssdu_partitioning,
         limit_volumes=args.limit_volumes,
-        same_mask_every_epoch=args.same_mask_all_epochs
+        same_mask_every_epoch=args.same_mask_all_epochs, 
+        norm_method=NORM_METHOD
     ) 
     data_module.setup('train')
 

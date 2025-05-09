@@ -202,10 +202,10 @@ class UndersampledDataModule(pl.LightningDataModule):
             transforms = normalize_image_max()
         elif norm_method == 'k': 
             transforms = normalize_k_max() 
+        elif norm_method == 'norm_l2':
+            transforms = normalize_l2() 
         elif norm_method == 'image_mean':
             transforms = normalize_image_mean() 
-        elif norm_method == 'image_mean2':
-            transforms = normalize_image_mean2() 
         elif norm_method == 'std':
             transforms = normalize_image_std()
         else:
@@ -214,7 +214,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
 class normalize_image_max(object):
     def __call__(self, data: dict):
-        input = data['undersampled']
+        input = data['fs_k_space']
         img = k_to_img(input, coil_dim=1)
         scaling_factor = img.amax((1, 2), keepdim=True).unsqueeze(1)
 
@@ -233,22 +233,22 @@ class normalize_k_max(object):
         data['scaling_factor'] = scaling_factor
         return data
 
-class normalize_image_mean(object):
+class normalize_l2(object):
     def __call__(self, data):
-        input = data['undersampled']
+        input = data['fs_k_space']
         img = k_to_img(input, coil_dim=1)
-        scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
+        scaling_factor = img.norm(2, (1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
 
-class normalize_image_mean2(object):
+class normalize_image_mean(object):
     def __call__(self, data):
         input = data['undersampled']
         img = k_to_img(input, coil_dim=1)
-        scaling_factor = 2*img.mean((1, 2), keepdim=True).unsqueeze(1)
+        scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
         data['scaling_factor'] = scaling_factor
@@ -266,10 +266,3 @@ class normalize_image_std(object):
         data['fs_k_space'] /= scaling_factor
         return data
 
-class convert_k_to_img(object):
-    def __call__(self, data):
-        input_data, _ = data
-        k_space = input_data['fs_k_space']
-        imgs = k_to_img(k_space, coil_dim=1)
-
-        return input_data, imgs
