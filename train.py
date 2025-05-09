@@ -165,7 +165,13 @@ def setup_model_parameters(args):
 
 def log_weights_to_wandb(wandb_logger, checkpoint_path):
     # only run on the first rank if dataparallel job
-    if os.environ.get('SLURM_LOCALID') is None or os.environ['SLURM_LOCALID'] == 0:
+    print(os.environ.get('SLURM_LOCALID'))
+    if os.environ.get('SLURM_LOCALID'):
+        rank = os.environ.get('SLURM_LOCALID')
+    else:
+        rank = 0
+
+    if rank == 0:
         checkpoint_name = f"model-{wandb_logger.experiment.id}"
 
         # always remove optimizer state when logging to wandb
