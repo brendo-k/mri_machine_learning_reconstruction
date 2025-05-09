@@ -18,6 +18,10 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
+if os.getenv('REDUCE_LOSS_BY_MASK'):
+    REDUCE_LOSS_BY_MASK = bool(os.getenv('REDUCE_LOSS_BY_MASK'))
+else:
+    REDUCE_LOSS_BY_MASK = False
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -529,6 +533,13 @@ class LearnedSSLLightning(plReconModel):
             )
             # reduce mean by the loss mask and not by the number of voxels
 
+            if REDUCE_LOSS_BY_MASK:
+                # multiply by averaging factor
+                k_loss *= loss_mask[:, index, ...].numel()
+                # normalize the loss now by the number of sampled points
+                k_loss /= loss_mask[:, index, ...].sum()
+                
+
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling
 
         return k_losses
@@ -642,13 +653,17 @@ class LearnedSSLLightning(plReconModel):
             assert isinstance(ssim_val, torch.Tensor)
             loss_dict["image_loss"] = 1 - ssim_val
 
-        # plot each loss individually
+        # calculate the loss of the lambda estimation
         k_losses = self.calculate_k_loss(
-            lambda_k, fully_sampled, dc_mask, self.lambda_loss_scaling, "lambda"
+            lambda_k, 
+            fully_sampled, 
+            dc_mask, 
+            1, 
+            "lambda"
         )
 
-        for key, value in k_losses.items():
-            self.log(f"{label}/{key}", value)
+        for contrast, value in k_losses.items():
+            self.log(f"{label}/{contrast}", value)
 
         loss_dict["k_loss"] = sum([values for values in k_losses.values()]) / len(k_losses)
 

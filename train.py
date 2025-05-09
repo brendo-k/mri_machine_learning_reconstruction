@@ -26,10 +26,15 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint 
 
-if os.getenv('NORM_METHOD') is not None:
+if os.getenv('NORM_METHOD'):
     NORM_METHOD = os.getenv('NORM_METHOD') 
 else:
     NORM_METHOD = 'image_mean'
+
+if os.getenv('REDUCE_LOSS_BY_MASK'):
+    REDUCE_LOSS_BY_MASK = os.getenv('REDUCE_LOSS_BY_MASK') 
+else:
+    REDUCE_LOSS_BY_MASK = 'image_mean'
 
 def main(args):
     file_name = get_unique_file_name(args)
