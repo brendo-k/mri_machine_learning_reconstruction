@@ -14,9 +14,10 @@ class L1L2Loss(torch.nn.Module):
         target = torch.view_as_complex(target)
         predicted = torch.view_as_complex(predicted)
 
-        norm_dims = (3, 4)
+        print(target.shape)
+        norm_dims = (2, 3)
         if self.norm_all_k:
-            norm_dims = (2,) + norm_dims
+            norm_dims = (1,) + norm_dims
 
         l2_component = torch.linalg.vector_norm(target - predicted, 2, dim=norm_dims)
         l1_component = torch.linalg.vector_norm(target - predicted, 1, dim=norm_dims)
