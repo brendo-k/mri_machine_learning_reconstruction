@@ -148,7 +148,8 @@ def setup_model_parameters(args):
         inverse_no_grad=args.inverse_data_no_grad,
         original_no_grad=args.all_data_no_grad,
         pass_all_lines=args.pass_all_lines,
-        pass_through_size=args.pass_through_size
+        pass_through_size=args.pass_through_size,
+        seperate_models=args.seperate_model
     )
 
     model = LearnedSSLLightning(
@@ -273,6 +274,7 @@ if __name__ == '__main__':
     model_group.add_argument('--sigmoid_slope1', type=float, default=5)
     model_group.add_argument('--pass_through_size', type=int, default=10)
     model_group.add_argument('--pass_all_lines', action='store_true')
+    model_group.add_argument('--seperate_model', action='store_true')
 
     # loss function parameters
     model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)

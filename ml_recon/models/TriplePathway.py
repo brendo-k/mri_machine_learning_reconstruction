@@ -12,6 +12,7 @@ class DualDomainConifg:
     original_no_grad: bool = False
     pass_all_lines: bool = False
     pass_through_size: int = 10
+    seperate_models: int = False
 
 class TriplePathway(nn.Module):
     """
@@ -25,6 +26,9 @@ class TriplePathway(nn.Module):
         self.dual_domain_config = dual_domain_config
         # same model used for each pathway
         self.recon_model = MultiContrastVarNet(varnet_config)
+
+        if dual_domain_config.seperate_models: 
+            self.inverse_model = MultiContrastVarNet(varnet_config)
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
@@ -45,9 +49,9 @@ class TriplePathway(nn.Module):
         if self.dual_domain_config.is_pass_original or return_all:
             if self.dual_domain_config.original_no_grad:
                 with torch.no_grad():
-                    estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
+                    estimate_full = self.pass_through_model(self.recon_model, undersampled_k, input_set + target_set, fully_sampled_k)
             else:
-                estimate_full = self.pass_through_model(undersampled_k, input_set + target_set, fully_sampled_k)
+                estimate_full = self.pass_through_model(self.recon_model, undersampled_k, input_set + target_set, fully_sampled_k)
 
 
         return {
@@ -57,12 +61,12 @@ class TriplePathway(nn.Module):
         }
     
     
-    def pass_through_model(self, undersampled, mask, fully_sampled):
+    def pass_through_model(self, model, undersampled, mask, fully_sampled):
         # save some memory by not saving full image
         zero_pad_mask = fully_sampled[:, :, 0, :, :] != 0
         zero_pad_mask = zero_pad_mask.unsqueeze(2)
 
-        estimate = self.recon_model(undersampled*mask, mask)
+        estimate = model(undersampled*mask, mask)
         estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate * zero_pad_mask
 
@@ -78,13 +82,17 @@ class TriplePathway(nn.Module):
             self.dual_domain_config.pass_through_size, 
             self.dual_domain_config.pass_all_lines
         )
-
-        estimate_inverse = self.pass_through_model(undersampled*mask_inverse_w_acs, mask_inverse_w_acs, fs_k_space)
+        
+        if self.dual_domain_config.seperate_models:
+            model = self.inverse_model
+        else:
+            model = self.recon_model
+        estimate_inverse = self.pass_through_model(model, undersampled*mask_inverse_w_acs, mask_inverse_w_acs, fs_k_space)
             
         return estimate_inverse
 
     def pass_through_lambda_path(self, undersampled, fs_k_space, input_set):
-        estimate_lambda = self.pass_through_model(undersampled * input_set, input_set, fs_k_space)
+        estimate_lambda = self.pass_through_model(self.recon_model, undersampled * input_set, input_set, fs_k_space)
 
         return estimate_lambda
 

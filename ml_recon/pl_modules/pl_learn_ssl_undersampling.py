@@ -102,7 +102,7 @@ class LearnedSSLLightning(plReconModel):
 
     def forward(self, k_space, mask, fs_k_space):
         estimate_k = self.recon_model.pass_through_model(
-            k_space * mask, mask, fs_k_space
+            self.recon_model.recon_model, k_space * mask, mask, fs_k_space
         )
         return estimate_k
 
@@ -468,7 +468,7 @@ class LearnedSSLLightning(plReconModel):
 
         # pass inital data through model
         estimate_k = self.recon_model.pass_through_model(
-            undersampled, mask, fully_sampled_k
+            self.recon_model.recon_model, undersampled, mask, fully_sampled_k
         )
 
         # rescale based on scaling factor
@@ -527,9 +527,7 @@ class LearnedSSLLightning(plReconModel):
         k_losses = {}
         for contrast, index in zip(self.contrast_order, range(estimate.shape[1])):
             k_loss = self.k_space_loss(
-                torch.view_as_real(
-                    undersampled[:, index, ...] * loss_mask[:, index, ...]
-                ),
+                torch.view_as_real(undersampled[:, index, ...] * loss_mask[:, index, ...]),
                 torch.view_as_real(estimate[:, index, ...] * loss_mask[:, index, ...]),
             )
             # reduce mean by the loss mask and not by the number of voxels
