@@ -121,7 +121,8 @@ def setup_model_parameters(args):
         ssdu_partioning=args.ssdu_partitioning,
         limit_volumes=args.limit_volumes,
         same_mask_every_epoch=args.same_mask_all_epochs, 
-        norm_method=NORM_METHOD
+        norm_method=NORM_METHOD,
+        seed=8
     ) 
     data_module.setup('train')
 

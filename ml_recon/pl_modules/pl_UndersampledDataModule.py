@@ -37,6 +37,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         ssdu_partioning: bool = False,
         limit_volumes: Optional[Union[int, float]] = None,
         same_mask_every_epoch: bool = False,
+        seed: int = 8,
     ):
         """
             dataset_name:
@@ -62,6 +63,7 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.norm_method = norm_method
         self.limit_volumes = limit_volumes
         self.same_mask_every_epoch = same_mask_every_epoch
+        self.seed=seed
 
         self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
         self.transforms = self.setup_data_normalization(norm_method)
@@ -97,7 +99,8 @@ class UndersampledDataModule(pl.LightningDataModule):
             'acs_lines' : ACS_LINES, 
             'poly_order': self.poly_order,
             'original_ssdu_partioning': self.ssdu_partioning,
-            'same_mask_every_epoch': self.same_mask_every_epoch
+            'same_mask_every_epoch': self.same_mask_every_epoch, #same mask every epoch
+            'seed': self.seed
         }
 
         # undersampled training dataset
@@ -140,7 +143,7 @@ class UndersampledDataModule(pl.LightningDataModule):
                 **dataset_keyword_args
             ),
             **undersample_keyword_args,
-            transforms=self.transforms
+            transforms=self.transforms,
         )
         # ground truth test dataset
         gt_test_dataset = self.dataset_class(

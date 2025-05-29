@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 import torch
+import os
 import math
 from torch.utils.data import Dataset
 
@@ -11,6 +12,14 @@ from ml_recon.utils.undersample_tools import (
     gen_pdf_bern, 
     ssdu_gaussian_selection
 )
+
+def get_unique_filename(base_name, extension=".png"):
+    counter = 0
+    filename = f"{base_name}{counter}{extension}"
+    while os.path.exists(filename):
+        counter += 1
+        filename = f"{base_name}{counter}{extension}"
+    return filename
 
 
 class UndersampleDecorator(Dataset):
@@ -50,8 +59,7 @@ class UndersampleDecorator(Dataset):
 
         # setting seeds for random masks
         rng = np.random.default_rng(seed)
-        self.lambda_seeds = rng.integers(0, high=2**23, size=(len(dataset), 1))
-        self.omega_seed_offset = rng.integers(0, 2**23)
+        self.omega_seed_offset = seed
 
 
         if self.sampling_type in ['2d', 'pi']:
@@ -76,11 +84,6 @@ class UndersampleDecorator(Dataset):
     # Therefore, if I use the same np.random_default_rng(seed) it will repeat itself.
     def set_epoch(self, epoch):
         self.epoch = epoch
-
-        if not self.same_mask_every_epoch:
-            # generate new seed array for every epoch
-            seed = (self.omega_seed_offset + self.epoch) % 2**23 
-            self.lambda_seeds = np.random.default_rng(seed).integers(0, 2**23, size=(len(self.dataset), 1))
 
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
@@ -122,6 +125,7 @@ class UndersampleDecorator(Dataset):
         if self.transforms: 
             output = self.transforms(output)
 
+
         return output
 
     def create_self_supervised_masks(self, under, mask_omega, index):
@@ -129,9 +133,9 @@ class UndersampleDecorator(Dataset):
             input_mask, loss_mask = ssdu_gaussian_selection(mask_omega)
 
         else:
-            seed = self.lambda_seeds[index].item()
+            #seed = self.lambda_seeds[index].item()
 
-            _, mask_lambda = apply_undersampling_from_dist(seed, self.lambda_prob, under)
+            _, mask_lambda = apply_undersampling_from_dist(None, self.lambda_prob, under)
 
             # loss mask is the disjoint set of the input mask
             input_mask = mask_omega * mask_lambda
