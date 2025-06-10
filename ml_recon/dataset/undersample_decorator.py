@@ -41,7 +41,7 @@ class UndersampleDecorator(Dataset):
         original_ssdu_partioning: bool = False,
         sampling_method: str = '2d', 
         same_mask_every_epoch: bool = False,
-        seed: Union[int, None] = None
+        seed: Union[int, None] = 8,
     ):
         super().__init__()
 
@@ -59,7 +59,6 @@ class UndersampleDecorator(Dataset):
 
         # setting seeds for random masks
         rng = np.random.default_rng(seed)
-        self.omega_seed_offset = seed
 
 
         if self.sampling_type in ['2d', 'pi']:
@@ -74,16 +73,16 @@ class UndersampleDecorator(Dataset):
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
         self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
 
+        if self.same_mask_every_epoch:
+            self.lambda_seeds = np.random.default_rng(seed).integers(0, 2**32 - 1, size=len(dataset))
+        else:
+            self.lambda_seeds = None
+
         self.transforms = transforms
 
 
     def __len__(self):
         return len(self.dataset)
-
-    # this is needed because for some reason, every epoch the dataloaders are reset to the same state. 
-    # Therefore, if I use the same np.random_default_rng(seed) it will repeat itself.
-    def set_epoch(self, epoch):
-        self.epoch = epoch
 
     def __getitem__(self, index):
         k_space:NDArray = self.dataset[index] #[con, chan, h, w] 
@@ -134,8 +133,11 @@ class UndersampleDecorator(Dataset):
 
         else:
             #seed = self.lambda_seeds[index].item()
-
-            _, mask_lambda = apply_undersampling_from_dist(None, self.lambda_prob, under)
+            if self.lambda_seeds:
+                # determenistic masks (same mask every epoch)
+                _, mask_lambda = apply_undersampling_from_dist(self.lambda_seeds[index].item(), self.lambda_prob, under)
+            else:
+                _, mask_lambda = apply_undersampling_from_dist(None, self.lambda_prob, under)
 
             # loss mask is the disjoint set of the input mask
             input_mask = mask_omega * mask_lambda
@@ -147,7 +149,7 @@ class UndersampleDecorator(Dataset):
         # same mask every time since the random seed is the index value
         if self.sampling_type in ['2d', '1d']: 
             under, mask_omega  = apply_undersampling_from_dist(
-                index + self.omega_seed_offset,
+                index + self.seed,
                 self.omega_prob,
                 k_space, 
             )

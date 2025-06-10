@@ -4,7 +4,7 @@ from typing import Tuple, Union
 
 
 def apply_undersampling_from_dist(
-        seed: int,  # index is neeed here to have determenistic (seed for rng)
+        seed: Union[int, None], # seed of rng
         prob_map, 
         k_space, 
 ) -> Tuple[NDArray[np.complex64], NDArray[np.bool_]]:

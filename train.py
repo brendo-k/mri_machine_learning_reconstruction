@@ -167,6 +167,7 @@ def setup_model_parameters(args):
         enable_learn_partitioning=args.learn_sampling, 
         use_supervised_image_loss=args.supervised_image,
         enable_warmup_training=args.warmup_training,
+        image_loss_grad_scaling=args.image_loss_grad_scaling
     )
 
     return model, data_module

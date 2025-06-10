@@ -48,7 +48,7 @@ class MultiContrastVarNet(nn.Module):
         self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k, mask):
+    def forward(self, reference_k, mask, zf_mask):
         # get sensetivity maps
         assert not torch.isnan(reference_k).any(), reference_k
         assert not torch.isnan(mask).any(), mask
@@ -59,6 +59,7 @@ class MultiContrastVarNet(nn.Module):
         # current k_space 
         current_k = reference_k.clone()
         for i, cascade in enumerate(self.cascades):
+            current_k = current_k * zf_mask
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
             assert not torch.isnan(reference_k).any(), reference_k

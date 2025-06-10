@@ -36,6 +36,7 @@ class LearnedSSLLightning(plReconModel):
         image_loss_scaling_lam_inv: float = 1e-4,
         image_loss_scaling_lam_full: float = 1e-4,
         image_loss_scaling_full_inv: float = 1e-4,
+        image_loss_grad_scaling: float = 0.5,
         lambda_scaling: float = 1,
         image_loss_function: str = "ssim",
         k_space_loss_function: Literal["l1l2", "l1", "l2"] = "l1l2",
@@ -56,6 +57,8 @@ class LearnedSSLLightning(plReconModel):
         'loss_mask': Other partition of k-space. If supervised, loss_mask is all ones. 
         """
 
+        self.automatic_optimization=False
+
         # since we convert to dicts for uploading to wandb, we need to convert back to dataclasses
         # Needed when loading checkpoints
         if isinstance(learn_partitioning_config, dict):
@@ -74,6 +77,8 @@ class LearnedSSLLightning(plReconModel):
 
         if enable_learn_partitioning:
             self.partition_model = LearnPartitioning(learn_partitioning_config)
+        else:
+            self.partition_model = None
 
         self.recon_model = TriplePathway(dual_domain_config, varnet_config)
 
@@ -96,7 +101,7 @@ class LearnedSSLLightning(plReconModel):
 
         
         # loss function init
-        self._setup_image_space_loss(image_loss_function)
+        self._setup_image_space_loss(image_loss_function, image_loss_grad_scaling)
         self._setup_k_space_loss(k_space_loss_function)
         self.save_hyperparameters()
 
@@ -270,6 +275,12 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image(
                 "probability", self.split_along_contrasts(probability), self.global_step
             )
+
+    #def on_train_epoch_end(self):
+    #    if self.partition_model:
+    #        pdf = self.partition_model.get_probability_distribution()
+    #        torch.save(pdf, f'probability/{self.trainer.current_epoch}')
+
 
     def validation_step(self, batch, _):
         noisy_data = batch[0]
@@ -448,12 +459,6 @@ class LearnedSSLLightning(plReconModel):
             dataloader_idx,
         )
 
-    def on_train_epoch_start(self):
-        # set epoch in train dataloader for updating new lambda masks
-        if self.trainer.train_dataloader:
-            self.trainer.train_dataloader.dataset.set_epoch(self.current_epoch)
-            self.trainer.val_dataloaders.dataset.undersampled_dataset.set_epoch(self.current_epoch)  # type: ignore
-        return
 
     def infer_k_space(self, batch):
         k_space = batch[0]
@@ -470,6 +475,8 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model.pass_through_model(
             self.recon_model.recon_model, undersampled, mask, fully_sampled_k
         )
+
+        estimate_k = self.recon_model.final_dc_step(undersampled, estimate_k, mask)
 
         # rescale based on scaling factor
         estimate_k *= scaling_factor
@@ -498,13 +505,13 @@ class LearnedSSLLightning(plReconModel):
         l2_norm = fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
         self.log_scalar("val_nmse/k-space_nmse", (mse_value/l2_norm).mean())
 
-    def _setup_image_space_loss(self, image_loss_function):
+    def _setup_image_space_loss(self, image_loss_function, image_loss_grad_scaling):
         if image_loss_function == "ssim":
             image_loss = SSIM_Loss(kernel_size=7, data_range=(0.0, 1.0))
         elif image_loss_function == "l1":
             image_loss = torch.nn.L1Loss()
         elif image_loss_function == "l1_grad":
-            image_loss = L1ImageGradLoss(grad_scaling=0.5)
+            image_loss = L1ImageGradLoss(grad_scaling=image_loss_grad_scaling)
         else:
             raise ValueError(f"unsuported image loss function: {image_loss_function}")
         self.image_loss_func = image_loss
@@ -522,12 +529,12 @@ class LearnedSSLLightning(plReconModel):
         return image_loss
 
     def calculate_k_loss(
-        self, estimate, undersampled, loss_mask, loss_scaling, loss_name=""
+        self, estimate, fully_sampled, loss_mask, loss_scaling, loss_name=""
     ):
         k_losses = {}
         for contrast, index in zip(self.contrast_order, range(estimate.shape[1])):
             k_loss = self.k_space_loss(
-                torch.view_as_real(undersampled[:, index, ...] * loss_mask[:, index, ...]),
+                torch.view_as_real(fully_sampled[:, index, ...] * loss_mask[:, index, ...]),
                 torch.view_as_real(estimate[:, index, ...] * loss_mask[:, index, ...]),
             )
             # reduce mean by the loss mask and not by the number of voxels
@@ -586,7 +593,7 @@ class LearnedSSLLightning(plReconModel):
         k_loss_inverse = self.calculate_k_loss(
             inverse_k,
             undersampled_k,
-            lambda_k_wo_acs,
+            undersampled_k != 0,
             self.lambda_loss_scaling,
             "inverse",
         )
@@ -594,7 +601,7 @@ class LearnedSSLLightning(plReconModel):
 
     def partition_k_space(self, batch):
         # compute either learned or heuristic partioning masks
-        if self.enable_learn_partitioning:
+        if self.enable_learn_partitioning and self.partition_model:
             assert (batch["mask"] * batch["loss_mask"] == 0).all()
             initial_mask = batch["mask"] + batch["loss_mask"]
             input_mask, loss_mask = self.partition_model(initial_mask)
@@ -656,7 +663,7 @@ class LearnedSSLLightning(plReconModel):
         k_losses = self.calculate_k_loss(
             lambda_k, 
             fully_sampled, 
-            dc_mask, 
+            undersampled_k != 0, 
             1, 
             "lambda"
         )
@@ -668,6 +675,16 @@ class LearnedSSLLightning(plReconModel):
 
         # calculate full lambda image loss pathway
         if full_k is not None:
+            k_losses_full = self.calculate_k_loss(
+                full_k, 
+                undersampled_k, 
+                undersampled_k != 0, 
+                1,
+                "full"
+            )
+            loss_dict["k_loss_full"] = sum([values for values in k_losses.values()]) / len(k_losses_full)
+
+
             loss_dict["image_loss_full_lambda"] = self.compute_image_loss(
                 full_k,
                 lambda_k,
@@ -687,6 +704,7 @@ class LearnedSSLLightning(plReconModel):
             for key, value in inverse_k_losses.items():
                 self.log(f"{label}/{key}", value)
             loss_dict["k_loss_inverse"] = sum([values for values in inverse_k_losses.values()]) / len(inverse_k_losses) # image space loss
+
             loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
                 lambda_k,
                 inverse_k,
@@ -711,7 +729,7 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def get_image_space_scaling_factors(self):
-        warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 10
+        warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 50
         if self.enable_warmup_training and self.current_epoch < warmup_epochs:
             scaling_factor = self.current_epoch / warmup_epochs
         else:

@@ -31,7 +31,7 @@ model_parameters:
   pass_all_data: true
   learn_sampling: true 
   image_loss: l1_grad
-  all_data_no_grad: true 
+  all_data_no_grad: false 
   inverse_data_no_grad: false 
   sampling_method: 1d
   norm_method: 'image_mean'

@@ -46,15 +46,15 @@ class LearnPartitioning(nn.Module):
 
     def get_mask(self, batch_size):
         # Calculate probability and normalize
-        norm_probability = self.get_probability_distribution()
+        partitioning_probability = self.get_probability_distribution()
         
         # make sure nothing is nan 
-        assert not torch.isnan(norm_probability).any()
+        assert not torch.isnan(partitioning_probability).any()
 
         # get random noise same size as the probability distribution for each item in the batch
-        random_01_noise = torch.rand((batch_size,) + norm_probability.shape, device=norm_probability.device)
+        random_01_noise = torch.rand((batch_size,) + partitioning_probability.shape, device=partitioning_probability.device)
 
-        activation = norm_probability - random_01_noise 
+        activation = partitioning_probability - random_01_noise 
         # get sampling using softamx relaxation
         sampling_mask = self.kMaxSampling(activation, self.config.sigmoid_slope_sampling)
         
@@ -68,20 +68,23 @@ class LearnPartitioning(nn.Module):
     
     
     def get_probability_distribution(self):
+        # unconstrained weights
         sampling_weights = self.sampling_weights
+        # 0-1 bounding
         probability = torch.sigmoid(sampling_weights * self.config.sigmoid_slope_probability)
-        # If this was LOUPE there would be a pdf normalization step here. We decide to omit this
 
-        # set 10x10 box to always be sampled. Need to clone because of inplace opeartion
-        c, h, w = sampling_weights.shape
+        # If this was LOUPE there would be a pdf normalization step here. We decide to omit this so LOUPE learns the R value
+
+        # set 10x10 box to always be sampled. Need to clone tensor because of inplace opeartion
+        _, h, w = sampling_weights.shape
         acs_prob = probability.clone()
         acs_prob[:, h//2-5:h//2+5,w//2-5:w//2+5] = 1
-
        
         return acs_prob
     
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
         if config.is_warm_start: 
+            # initalize starting probability distribution
             if self.config.sampling_method in ['2d', 'pi']:
                 init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
             else: 
@@ -90,9 +93,13 @@ class LearnPartitioning(nn.Module):
             init_prob = torch.from_numpy(np.tile(init_prob[np.newaxis, :, :], (config.image_size[0], 1, 1)))
             init_prob = init_prob/(init_prob.max() + 2e-4) + 1e-4
         else:
+            # init probability is all 0.5 (equal probability) 
             init_prob = torch.zeros(config.image_size) + 0.5
             h, w = init_prob.shape[1], init_prob.shape[2]
+            # set center distribution to be very high
             init_prob[:, h//2 - config.k_center_region//2:h//2 + config.k_center_region//2, w//2 - config.k_center_region//2:w//2 + config.k_center_region//2] = 0.99
+        
+        # convert probability to sampling weights (inverse of sigmoid)
         self.sampling_weights = nn.Parameter(-torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability)
 
     def get_R(self) -> torch.Tensor:

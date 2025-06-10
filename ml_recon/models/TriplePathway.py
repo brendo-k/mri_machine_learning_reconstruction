@@ -29,6 +29,7 @@ class TriplePathway(nn.Module):
 
         if dual_domain_config.seperate_models: 
             self.inverse_model = MultiContrastVarNet(varnet_config)
+            #self.full_model = MultiContrastVarNet(varnet_config)
 
     # undersampling mask can be: original undersampling mask or lambda set
     # loss mask can be all ones in the supervised case or the mask representing the inverse set
@@ -66,7 +67,7 @@ class TriplePathway(nn.Module):
         zero_pad_mask = fully_sampled[:, :, 0, :, :] != 0
         zero_pad_mask = zero_pad_mask.unsqueeze(2)
 
-        estimate = model(undersampled*mask, mask)
+        estimate = model(undersampled*mask, mask, zero_pad_mask) # set zero regions to 1 in the mask
         estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate * zero_pad_mask
 
