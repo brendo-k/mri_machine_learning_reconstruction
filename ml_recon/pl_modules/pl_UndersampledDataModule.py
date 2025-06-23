@@ -23,7 +23,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self, 
         dataset_name: Literal['fastmri', 'm4raw', 'brats'],
         data_dir: str, 
-        test_dir: str,
         batch_size: int, 
         R: float = 6,
         R_hat: float = 2.0,
@@ -48,7 +47,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
         self.data_dir = Path(data_dir)
-        self.test_dir = Path(test_dir)
         self.contrasts = contrasts
         self.num_contrasts = len(contrasts)
         self.num_workers = num_workers

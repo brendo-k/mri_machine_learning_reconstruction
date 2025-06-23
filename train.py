@@ -74,7 +74,7 @@ def process_checkpoint(args, callbacks, wandb_logger):
 
 def setup_model_and_dataloaders(args, callbacks):
     if args.checkpoint: 
-        model, data_module = load_checkpoint(args, args.data_dir, args.test_dir)
+        model, data_module = load_checkpoint(args, args.data_dir)
         callbacks.append(restore_optimizer(args.checkpoint))
     else:
         model, data_module = setup_model_parameters(args)
@@ -110,7 +110,6 @@ def setup_model_parameters(args):
     data_module = UndersampledDataModule(
         args.dataset, 
         args.data_dir, 
-        args.test_dir,
         batch_size=args.batch_size, 
         resolution=(args.ny, args.nx),
         num_workers=args.num_workers,
@@ -141,7 +140,8 @@ def setup_model_parameters(args):
         sigmoid_slope_sampling = args.sigmoid_slope2,
         is_warm_start = args.warm_start,
         sampling_method = args.sampling_method,
-        is_learn_R = args.learn_R
+        is_learn_R = args.learn_R,
+        line_constrained=args.line_constrained
 
     )
 
@@ -169,7 +169,7 @@ def setup_model_parameters(args):
         enable_learn_partitioning=args.learn_sampling, 
         use_supervised_image_loss=args.supervised_image,
         enable_warmup_training=args.warmup_training,
-        image_loss_grad_scaling=args.image_loss_grad_scaling
+        image_loss_grad_scaling=args.image_loss_grad_scaling,
     )
 
     return model, data_module
@@ -204,14 +204,14 @@ def remove_optimizer_state(checkpoint_path, ):
     torch.save(checkpoint, checkpoint_path)
 
 
-def load_checkpoint(args, data_dir, test_dir):
+def load_checkpoint(args, data_dir):
     print("Loading Checkpoint!")
     if os.environ.get('SLURM_LOCALID') is not None:
         device = f"cuda:{int(os.environ['SLURM_LOCALID'])}"
     else:
         device = 'cpu' if torch.cuda.is_available() else 'cuda:0'
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr, map_location=device)
-    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, test_dir=test_dir, map_location=device)
+    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, data_dir=data_dir, map_location=device)
     data_module.setup('train')
     return model, data_module
 
@@ -259,7 +259,6 @@ if __name__ == '__main__':
     dataset_group.add_argument('--dataset', type=str, default='m4raw')
     dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
     dataset_group.add_argument('--data_dir', type=str)
-    dataset_group.add_argument('--test_dir', type=str)
     dataset_group.add_argument('--nx', type=int, default=256)
     dataset_group.add_argument('--ny', type=int, default=256)
     dataset_group.add_argument('--limit_volumes', type=float, default=1.0)
@@ -290,6 +289,7 @@ if __name__ == '__main__':
     model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
     model_group.add_argument('--image_loss_grad_scaling', type=float, default=1.)
     model_group.add_argument('--lambda_scaling', type=float, default=1)
+    model_group.add_argument('--line_constrained', action='store_true')
 
     model_group.add_argument('--use_schedulers', action='store_true')
     model_group.add_argument('--norm_loss_by_mask', action='store_true')
