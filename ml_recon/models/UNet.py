@@ -178,7 +178,6 @@ class up(nn.Module):
             nn.InstanceNorm2d(out_chan, affine=False),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             )
-            torch.nn.init.constant_(self.layers[0].weight, 1)
             final_chans = out_chan
         else: 
             raise ValueError(f'{upsample_method} is not valid argument')

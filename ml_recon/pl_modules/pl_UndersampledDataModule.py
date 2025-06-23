@@ -16,7 +16,7 @@ from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
 from ml_recon.dataset.test_dataset import TestDataset
 
 
-ACS_LINES = int(os.getenv('ACS_LINES')) if os.getenv('ACS_LINES') else 10
+ACS_LINES = int(os.getenv('ACS_LINES') or 10)
 
 class UndersampledDataModule(pl.LightningDataModule):
     def __init__(
