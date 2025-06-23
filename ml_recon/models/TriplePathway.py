@@ -16,6 +16,7 @@ class DualDomainConifg:
     pass_through_size: int = 10
     seperate_models: int = False
 
+FINAL_DC_STEP = bool(os.environ.get("FINAL_DC_STEP", "False").lower() in ["true", "1", "yes", "y"])
 class TriplePathway(nn.Module):
     """
     Dual domain self-supervised learning module. Handles passing inverse, lambda, and original
@@ -70,7 +71,8 @@ class TriplePathway(nn.Module):
         zero_pad_mask = zero_pad_mask.unsqueeze(2)
 
         estimate = model(undersampled*mask, mask, zero_pad_mask) # set zero regions to 1 in the mask
-        estimate = self.final_dc_step(undersampled, estimate, mask)
+        if FINAL_DC_STEP:
+            estimate = self.final_dc_step(undersampled, estimate, mask)
         return estimate * zero_pad_mask
 
     # replace estimated points with aquired points

@@ -19,6 +19,7 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
+FINAL_DC_STEP_INFER = bool(os.environ.get("FINAL_DC_STEP_INFER", "False").lower() in ["true", "1", "yes", "y"])
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -408,8 +409,8 @@ class LearnedSSLLightning(plReconModel):
         estimate_k = self.recon_model.pass_through_model(
             self.recon_model.recon_model, undersampled, mask, fully_sampled_k
         )
-
-        #estimate_k = self.recon_model.final_dc_step(undersampled, estimate_k, mask)
+        if FINAL_DC_STEP_INFER:
+            estimate_k = self.recon_model.final_dc_step(undersampled, estimate_k, mask)
 
         # rescale based on scaling factor
         estimate_k *= scaling_factor
@@ -495,6 +496,9 @@ class LearnedSSLLightning(plReconModel):
 
         The R value is obtained from the partition model and logged for each contrast.
         """
+        if self.partition_model is None:
+            return
+
         R_value = self.partition_model.get_R()
         for i, contrast in enumerate(self.contrast_order):
             self.log(f"sampling_metrics/R_{contrast}", R_value[i])
@@ -659,9 +663,9 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def get_image_space_scaling_factors(self):
-        warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 50
-        if self.enable_warmup_training and self.current_epoch < warmup_epochs:
-            scaling_factor = self.current_epoch / warmup_epochs
+        #warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 50
+        if self.enable_warmup_training and self.current_epoch < 50:
+            scaling_factor = self.current_epoch / 50
         else:
             scaling_factor = 1
 
