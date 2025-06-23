@@ -140,7 +140,9 @@ def setup_model_parameters(args):
         sigmoid_slope_probability = args.sigmoid_slope1,
         sigmoid_slope_sampling = args.sigmoid_slope2,
         is_warm_start = args.warm_start,
-        sampling_method = args.sampling_method
+        sampling_method = args.sampling_method,
+        is_learn_R = args.learn_R
+
     )
 
     tripple_pathway_config = DualDomainConifg(
@@ -277,6 +279,7 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_through_size', type=int, default=10)
     model_group.add_argument('--pass_all_lines', action='store_true')
     model_group.add_argument('--seperate_model', action='store_true')
+    model_group.add_argument('--learn_R', action='store_true')
 
     # loss function parameters
     model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)

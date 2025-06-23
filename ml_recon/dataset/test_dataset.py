@@ -17,14 +17,12 @@ class TestDataset(Dataset):
     def __init__(
             self,
             undersampled_dataset, 
-            ground_truth_dataset,
             transforms
             ):
 
         # call super constructor
         super().__init__()
         self.undersampled_dataset = undersampled_dataset
-        self.ground_truth_dataset = ground_truth_dataset
         self.transforms = transforms
 
     def __len__(self):
@@ -32,8 +30,7 @@ class TestDataset(Dataset):
 
     def __getitem__(self, index):
         k_space = self.undersampled_dataset[index]
-        image = torch.from_numpy(self.ground_truth_dataset[index])
         if self.transforms: 
-            k_space, image = self.transforms((k_space, image))
-        return k_space, image
+            k_space = self.transforms(k_space)
+        return k_space
 

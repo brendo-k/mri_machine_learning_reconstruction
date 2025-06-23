@@ -1,8 +1,10 @@
 # ssl_model.py
 import torch.nn as nn
+import os 
 from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
 from dataclasses import dataclass
 import torch
+
 
 @dataclass
 class DualDomainConifg:

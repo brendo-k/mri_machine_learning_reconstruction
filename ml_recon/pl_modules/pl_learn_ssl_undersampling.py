@@ -204,7 +204,7 @@ class LearnedSSLLightning(plReconModel):
             return
 
         #log first batch of every 1st epoch
-        if batch_idx != 0 or self.current_epoch % 1 != 0:
+        if batch_idx != 0 or self.current_epoch % 10 != 0:
            return
 
         wandb_logger = self.logger
@@ -220,39 +220,13 @@ class LearnedSSLLightning(plReconModel):
         # plot images (first of the batch)
         image_scaling = k_to_img(fully_sampled).amax((-1, -2), keepdim=True)
 
-        # convert to images and scale based on fully sampled (plotting needs [0-1])
-        fully_sampled_images = self.k_to_img_scaled_clipped(
-            fully_sampled, image_scaling
-        )
-
         # plot estimated images from each path and their metrics compared to fully sampled
         for pathway, estimate in estimates.items():
             estimate_images = self.k_to_img_scaled_clipped(estimate, image_scaling)
-            ssim_values = evaluate_over_contrasts(
-                ssim, fully_sampled_images, estimate_images
-            )
-            nmse_values = evaluate_over_contrasts(
-                nmse, fully_sampled_images, estimate_images
-            )
 
             wandb_logger.log_image(
                 f"train/estimate_{pathway}",
                 self.split_along_contrasts(estimate_images[0]),
-            )
-            self.log(
-                f"train_metrics/ssim_{pathway}", sum(ssim_values) / len(ssim_values)
-            )
-            self.log(
-                f"train_metrics/nmse_{pathway}", sum(nmse_values) / len(nmse_values)
-            )
-            _, ssim_images = ssim(
-                fully_sampled_images[0].unsqueeze(1),
-                estimate_images[0].unsqueeze(1),
-                data_range=(0, 1),
-                return_full_image=True,
-            )
-            wandb_logger.log_image(
-                f"train/ssim_image_{pathway}", self.split_along_contrasts(ssim_images)
             )
 
         # plot masks (first of the batch)
@@ -270,24 +244,18 @@ class LearnedSSLLightning(plReconModel):
         )
 
         # plot probability if learn partitioning
-        if self.enable_learn_partitioning:
+        if self.enable_learn_partitioning and self.partition_model:
             probability = self.partition_model.get_probability_distribution()
             wandb_logger.log_image(
                 "probability", self.split_along_contrasts(probability), self.global_step
             )
 
-    #def on_train_epoch_end(self):
-    #    if self.partition_model:
-    #        pdf = self.partition_model.get_probability_distribution()
-    #        torch.save(pdf, f'probability/{self.trainer.current_epoch}')
-
 
     def validation_step(self, batch, _):
-        noisy_data = batch[0]
-        undersampled_k = noisy_data["undersampled"]
-        fully_sampled = noisy_data["fs_k_space"]
+        undersampled_k = batch["undersampled"]
+        fully_sampled = batch["fs_k_space"]
 
-        input_mask, loss_mask = self.partition_k_space(noisy_data)
+        input_mask, loss_mask = self.partition_k_space(batch)
         estimates = self.recon_model.forward(
             undersampled_k,
             fully_sampled,
@@ -319,18 +287,15 @@ class LearnedSSLLightning(plReconModel):
         # get images
         estimate_image = k_to_img(estimate_k, coil_dim=2)
         fully_sampled_image = k_to_img(fully_sampled_k, coil_dim=2)
-        ground_truth_image = batch[1]
 
         background_mask = self.get_image_background_mask(fully_sampled_image)
 
         scaling_factor = fully_sampled_image.amax((-1, -2), keepdim=True)
 
         estimate_image /= scaling_factor
-        ground_truth_image /= scaling_factor
         fully_sampled_image /= scaling_factor
 
         estimate_image_masked = estimate_image * background_mask
-        ground_truth_image_masked = ground_truth_image * background_mask
         fully_sampled_image_masked = fully_sampled_image * background_mask
 
         diff_masked = (estimate_image_masked - fully_sampled_image_masked).abs() * 10
@@ -363,17 +328,10 @@ class LearnedSSLLightning(plReconModel):
                 )
 
         # log image space metrics
-        self.log_image_space_metrics(
-            estimate_image, fully_sampled_image, ground_truth_image, label=""
-        )
-        self.log_image_space_metrics(
-            estimate_image_masked,
-            fully_sampled_image_masked,
-            ground_truth_image_masked,
-            label="masked",
-        )
+        self.log_image_space_metrics(estimate_image, fully_sampled_image, label="")
+        self.log_image_space_metrics(estimate_image_masked, fully_sampled_image_masked, label="masked")
 
-    def log_image_space_metrics(self, estimate_image, fully_sampled_image, ground_truth_image, label):
+    def log_image_space_metrics(self, estimate_image, fully_sampled_image, label):
         ssim_full = evaluate_over_contrasts(ssim, fully_sampled_image, estimate_image)
         nmse_full = evaluate_over_contrasts(nmse, fully_sampled_image, estimate_image)
         for i, contrast in enumerate(self.contrast_order):
@@ -402,51 +360,16 @@ class LearnedSSLLightning(plReconModel):
             sync_dist=True,
         )
 
-        # log gt metrics
-        ssim_full = evaluate_over_contrasts(ssim, ground_truth_image, estimate_image)
-        nmse_full = evaluate_over_contrasts(nmse, ground_truth_image, estimate_image)
-        for i, contrast in enumerate(self.contrast_order):
-            self.log(
-                f"GT_val_ssim/{label}ssim_full_{contrast}",
-                ssim_full[i],
-                on_epoch=True,
-                sync_dist=True,
-            )
-            self.log(
-                f"GT_val_nmse/{label}nmse_full_{contrast}",
-                nmse_full[i],
-                on_epoch=True,
-                sync_dist=True,
-            )
-        self.log(
-            f"val/{label}GT_mean_nmse_full",
-            sum(nmse_full) / len(nmse_full),
-            on_epoch=True,
-            sync_dist=True,
-        )
-        self.log(
-            f"val/{label}GT_mean_ssim_full",
-            sum(ssim_full) / len(nmse_full),
-            on_epoch=True,
-            sync_dist=True,
-        )
 
     def test_step(self, batch, batch_index):
-        estimate_k, fs_k = self.infer_k_space(batch)
-        ground_truth_image = batch[1]  # averaged or denoised ground truth
-        fully_sampled_image = k_to_img(
-            fs_k, coil_dim=2
-        )  # noisy, fully sampled ground truth
+        estimate_k, fully_sampled_k = self.infer_k_space(batch)
+        fully_sampled_image = k_to_img(fully_sampled_k, coil_dim=2)  # fully sampled ground truth
 
-        fs_metrics = self.my_test_step(
-            (estimate_k, fully_sampled_image), 
-            batch_index, 
-        )
+        fs_metrics = self.my_test_step((estimate_k, fully_sampled_image), batch_index)
 
         return {"fs_metrics": fs_metrics}
 
     def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):
-        ground_truth_image = batch[1]
         estimate_k, fully_sampled = self.infer_k_space(batch)
         fully_sampled_image = k_to_img(
             fully_sampled, coil_dim=2
@@ -454,15 +377,15 @@ class LearnedSSLLightning(plReconModel):
 
         self.my_test_batch_end(
             outputs,
-            (estimate_k, ground_truth_image),
+            (estimate_k, fully_sampled_image),
             batch_idx,
             dataloader_idx,
         )
 
 
     def infer_k_space(self, batch):
-        k_space = batch[0]
-        scaling_factor = batch[0]["scaling_factor"]
+        k_space = batch
+        scaling_factor = batch["scaling_factor"]
         fully_sampled_k = k_space["fs_k_space"].clone()
         undersampled = k_space["undersampled"].clone()
         mask = k_space["mask"].clone()
@@ -641,18 +564,20 @@ class LearnedSSLLightning(plReconModel):
                 - 'image_loss: Image loss for the lambda path vs fully sampled.'
         """
         # estimated k-space from different paths
-        lambda_k = estimates["lambda_path"]
-        full_k = estimates["full_path"]
-        inverse_k = estimates["inverse_path"]
+        lambda_esitimate = estimates["lambda_path"]
+        full_estimate = estimates["full_path"]
+        inverse_estimate = estimates["inverse_path"]
 
         lam_full_scaling, lam_inv_scaling, inv_full_scaling = (
             self.get_image_space_scaling_factors()
         )
 
         loss_dict = {}
+
+
         if self.use_superviesd_image_loss:
             target_img = k_to_img(fully_sampled, coil_dim=2)
-            lambda_img = k_to_img(lambda_k, coil_dim=2)
+            lambda_img = k_to_img(lambda_esitimate, coil_dim=2)
             ssim_val = ssim(
                 target_img, lambda_img, data_range=(target_img.min().item(), target_img.max().item())
             )
@@ -661,9 +586,9 @@ class LearnedSSLLightning(plReconModel):
 
         # calculate the loss of the lambda estimation
         k_losses = self.calculate_k_loss(
-            lambda_k, 
+            lambda_esitimate, 
             fully_sampled, 
-            undersampled_k != 0, 
+            fully_sampled * dc_mask, 
             1, 
             "lambda"
         )
@@ -674,20 +599,20 @@ class LearnedSSLLightning(plReconModel):
         loss_dict["k_loss"] = sum([values for values in k_losses.values()]) / len(k_losses)
 
         # calculate full lambda image loss pathway
-        if full_k is not None:
+        if full_estimate is not None:
             k_losses_full = self.calculate_k_loss(
-                full_k, 
+                full_estimate, 
                 undersampled_k, 
                 undersampled_k != 0, 
                 1,
                 "full"
             )
-            loss_dict["k_loss_full"] = sum([values for values in k_losses.values()]) / len(k_losses_full)
+            loss_dict["k_loss_full"] = sum([values for values in k_losses_full.values()]) / len(k_losses_full)
 
 
             loss_dict["image_loss_full_lambda"] = self.compute_image_loss(
-                full_k,
-                lambda_k,
+                full_estimate,
+                lambda_esitimate,
                 undersampled_k,
             )
             self.log(
@@ -696,29 +621,30 @@ class LearnedSSLLightning(plReconModel):
             loss_dict["image_loss_full_lambda"] *= lam_full_scaling
 
         # calculate inverse lambda image and k-space loss pathway
-        if inverse_k is not None:
+        if inverse_estimate is not None:
             # k space loss
             inverse_k_losses = self.calculate_inverse_k_loss(
-                input_mask, dc_mask, inverse_k, undersampled_k
+                input_mask, dc_mask, inverse_estimate, undersampled_k
             )
             for key, value in inverse_k_losses.items():
                 self.log(f"{label}/{key}", value)
             loss_dict["k_loss_inverse"] = sum([values for values in inverse_k_losses.values()]) / len(inverse_k_losses) # image space loss
 
             loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
-                lambda_k,
-                inverse_k,
+                lambda_esitimate,
+                inverse_estimate,
                 undersampled_k,
             )
             self.log(
                 "train/unscaled_inverse_lambda", loss_dict["image_loss_inverse_lambda"]
             )
             loss_dict["image_loss_inverse_lambda"] *= lam_inv_scaling
-        # calculate inverse full loss image pathway
-        if (inverse_k is not None) and (full_k is not None):
+
+        # calculate inverse full_inverse image pathway
+        if (inverse_estimate is not None) and (full_estimate is not None):
             loss_dict["image_loss_inverse_full"] = self.compute_image_loss(
-                full_k,
-                inverse_k,
+                full_estimate,
+                inverse_estimate,
                 undersampled_k,
             )
             self.log(

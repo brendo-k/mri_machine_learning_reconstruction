@@ -78,9 +78,6 @@ class UndersampledDataModule(pl.LightningDataModule):
         val_dir = self.data_dir / 'val'
         test_dir = self.data_dir / 'test'
 
-        # ground truth denoised directories
-        val_gt_dir = self.test_dir / 'val'
-        test_gt_dir = self.test_dir / 'test'
 
         # keywords to control dataset data
         dataset_keyword_args = {
@@ -115,7 +112,7 @@ class UndersampledDataModule(pl.LightningDataModule):
 
 
         # undersampled validation dataset
-        noisy_val_dataset_undersampled = UndersampleDecorator(
+        self.val_dataset = UndersampleDecorator(
             self.dataset_class(
                 val_dir, 
                 **dataset_keyword_args
@@ -123,21 +120,9 @@ class UndersampledDataModule(pl.LightningDataModule):
             transforms=self.transforms,
             **undersample_keyword_args
         )
-        # denoised val dataset
-        gt_val_dataset = self.dataset_class(
-            val_gt_dir, 
-            data_key=self.test_data_key, 
-            **dataset_keyword_args
-        )
-        # both noisy and ground truth val dataset
-        self.val_dataset = TestDataset(
-            noisy_val_dataset_undersampled,
-            gt_val_dataset, 
-            transforms=None
-        )
 
-        # noisy test dataset
-        noisy_test_dataset_undersampled = UndersampleDecorator(
+        # undersampled test dataset
+        self.test_dataset = UndersampleDecorator(
             self.dataset_class(
                 test_dir, 
                 **dataset_keyword_args
@@ -145,19 +130,6 @@ class UndersampledDataModule(pl.LightningDataModule):
             **undersample_keyword_args,
             transforms=self.transforms,
         )
-        # ground truth test dataset
-        gt_test_dataset = self.dataset_class(
-            test_gt_dir, 
-            data_key=self.test_data_key, 
-            **dataset_keyword_args
-        )
-        # both datasets combined
-        self.test_dataset = TestDataset(
-            noisy_test_dataset_undersampled,
-            gt_test_dataset, 
-            transforms=None
-        )
-
 
         self.contrast_order = self.train_dataset.contrast_order
 
@@ -185,6 +157,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=True
         )
+        
     def setup_dataset_type(self, dataset_name):
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
