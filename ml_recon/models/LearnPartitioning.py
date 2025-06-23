@@ -59,6 +59,9 @@ class LearnPartitioning(nn.Module):
         activation = partitioning_probability - random_01_noise 
         # get sampling using softamx relaxation
         sampling_mask = self.kMaxSampling(activation, self.config.sigmoid_slope_sampling)
+
+        if self.config.line_constrained:
+            sampling_mask = torch.tile(sampling_mask, (1, self.config.image_size[0], 1))
         
         #ensure sampling mask has no nans
         # Ensure sampling mask values are within [0, 1]
@@ -89,9 +92,11 @@ class LearnPartitioning(nn.Module):
     def norm_prob(self, probability, center_region=10):
         image_shape = probability[0].shape
         cur_R = self.get_R()
-
-        # if not learn probability, no need to norm
-        probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
+        
+        if self.config.line_constrained:
+            probability = self.norm_1d_probability(probability, cur_R, center_region, image_shape)
+        else:
+            probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
 
         # testing function to ensure probabilities are close to the set R value
@@ -147,6 +152,57 @@ class LearnPartitioning(nn.Module):
            
         return probability
 
+    def norm_1d_probability(self, probability, cur_R, center_region, image_shape):
+        device = probability[0].device
+
+        # get center box
+        center = [image_shape[1]//2]
+        center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
+            
+        # total probability sum
+        probability_sum = torch.zeros((len(probability), 1), device=device)
+
+        # create acs mask of zeros for acs box and zeros elsewhere
+        center_mask = torch.ones((1, image_shape[1]), device=device)
+        center_mask[:, center_bb_x] = 0
+        
+        # mask out center lines
+        for i in range(len(probability)):
+            probability[i] = probability[i] * center_mask
+            probability_sum[i] = probability[i].sum(dim=[-1, -2])
+            
+        for i in range(len(probability)):
+            # get average probability for each voxel
+            probability_total = ( image_shape[1] ) / cur_R[i] #each voxel should be a probability of 1/R to get R
+            probability_total -= center_region # assume cnter will be one
+
+            # we need to find cur_R * scaling_factor = R
+            # scaling down the values of 1
+            if probability_sum[i] > probability_total:
+                scaling_factor = probability_total / probability_sum[i]
+                assert scaling_factor <= 1 and scaling_factor >= 0
+
+                probability[i] = (probability[i] * scaling_factor)
+
+            # scaling down the complement probability (scaling down 0)
+            else:
+                inverse_total = image_shape[1]*(1 - 1/cur_R[i])
+                inverse_sum = (image_shape[1]) - probability_sum[i] 
+                inverse_sum -= center_region
+                inverse_total = torch.maximum(inverse_total, torch.zeros_like(inverse_sum))
+                scaling_factor = inverse_total / inverse_sum
+                assert scaling_factor <= 1 and scaling_factor >= 0
+
+                inv_prob = (1 - probability[i])*scaling_factor
+                probability[i] = 1 - inv_prob
+                    
+        # acs box is now ones and everything else is zeros
+        for i in range(len(probability)):
+            probability[i][:, center_bb_x] = 1
+           
+        return probability
+
+
 
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
         cur_R = self.get_R()
@@ -167,7 +223,9 @@ class LearnPartitioning(nn.Module):
             h, w = init_prob.shape[0], init_prob.shape[1]
             # set center distribution to be very high
             init_prob[h//2 - config.k_center_region//2:h//2 + config.k_center_region//2, w//2 - config.k_center_region//2:w//2 + config.k_center_region//2] = 0.99
-        
+    
+        if self.config.line_constrained:
+            init_prob = init_prob[[config.image_size[2]//2], :]
         init_prob = torch.from_numpy(init_prob)
         # convert probability to sampling weights (inverse of sigmoid)
         sampling_weights = -torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability
@@ -176,7 +234,11 @@ class LearnPartitioning(nn.Module):
         self.sampling_weights = nn.ParameterList([sampling_weights for _ in range(config.image_size[0])])
 
     def get_R(self):
-        cur_R = self.learned_R_value
+        if self.config.is_learn_R:
+            # if we are learning R, return the learned R value
+            cur_R = 1 + torch.exp(self.learned_R_value)
+        else:
+            cur_R = self.learned_R_value
         return cur_R
 
 
@@ -185,6 +247,6 @@ class LearnPartitioning(nn.Module):
 
     def _setup_R_values(self, config: LearnPartitionConfig):
         if config.is_learn_R: 
-            self.learned_R_value = nn.Parameter(torch.full((config.image_size[0],), float(config.inital_R_value)))
+            self.learned_R_value = nn.Parameter(torch.log(torch.full((config.image_size[0],), float(config.inital_R_value - 1))))
         else: 
             self.learned_R_value = torch.full((config.image_size[0],), float(config.inital_R_value))

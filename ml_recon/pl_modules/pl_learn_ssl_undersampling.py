@@ -10,6 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
+
 from ml_recon.losses import L1L2Loss, SSIM_Loss, L1ImageGradLoss
 from ml_recon.pl_modules.pl_ReconModel import plReconModel
 from ml_recon.utils.evaluation_functions import nmse
@@ -18,11 +19,6 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
-if os.getenv('REDUCE_LOSS_BY_MASK'):
-    REDUCE_LOSS_BY_MASK = os.getenv('REDUCE_LOSS_BY_MASK').lower() == 'true'
-else:
-    REDUCE_LOSS_BY_MASK = False
-print(REDUCE_LOSS_BY_MASK)
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -204,7 +200,7 @@ class LearnedSSLLightning(plReconModel):
             return
 
         #log first batch of every 1st epoch
-        if batch_idx != 0 or self.current_epoch % 10 != 0:
+        if batch_idx != 0 or self.current_epoch % 1 != 0:
            return
 
         wandb_logger = self.logger
@@ -220,7 +216,7 @@ class LearnedSSLLightning(plReconModel):
         # plot images (first of the batch)
         image_scaling = k_to_img(fully_sampled).amax((-1, -2), keepdim=True)
 
-        # plot estimated images from each path and their metrics compared to fully sampled
+        # plot estimated images from each path 
         for pathway, estimate in estimates.items():
             estimate_images = self.k_to_img_scaled_clipped(estimate, image_scaling)
 
@@ -232,12 +228,24 @@ class LearnedSSLLightning(plReconModel):
         # plot masks (first of the batch)
         initial_mask = (undersampled_k != 0)[0, :, 0, :, :]
         lambda_set_plot = input_mask[0, :, 0, :, :]
-        loss_mask = loss_mask[0, :, 0, :, :]
+        loss_mask_plot = loss_mask[0, :, 0, :, :]
+        loss_mask_wo_acs, lambda_k_wo_acs = TriplePathway.create_inverted_masks(
+            input_mask,
+            loss_mask,
+            self.recon_model.dual_domain_config.pass_through_size,
+            self.recon_model.dual_domain_config.pass_all_lines,
+        )
         wandb_logger.log_image(
             "train_masks/lambda_set", self.split_along_contrasts(lambda_set_plot)
         )
         wandb_logger.log_image(
-            "train_masks/loss_set", self.split_along_contrasts(loss_mask)
+            "train_masks/loss_set", self.split_along_contrasts(loss_mask_plot)
+        )
+        wandb_logger.log_image(
+            "train_masks/lambda_set_inverse", self.split_along_contrasts(lambda_k_wo_acs[0, :, 0, :, :])
+        )
+        wandb_logger.log_image(
+            "train_masks/loss_set_inverse", self.split_along_contrasts(loss_mask_wo_acs[0, :, 0, :, :])
         )
         wandb_logger.log_image(
             "train_masks/initial_mask", self.split_along_contrasts(initial_mask)
@@ -246,6 +254,8 @@ class LearnedSSLLightning(plReconModel):
         # plot probability if learn partitioning
         if self.enable_learn_partitioning and self.partition_model:
             probability = self.partition_model.get_probability_distribution()
+            if probability.shape[1] == 1: 
+                probability = probability.tile((1, probability.shape[2], 1))
             wandb_logger.log_image(
                 "probability", self.split_along_contrasts(probability), self.global_step
             )
@@ -399,7 +409,7 @@ class LearnedSSLLightning(plReconModel):
             self.recon_model.recon_model, undersampled, mask, fully_sampled_k
         )
 
-        estimate_k = self.recon_model.final_dc_step(undersampled, estimate_k, mask)
+        #estimate_k = self.recon_model.final_dc_step(undersampled, estimate_k, mask)
 
         # rescale based on scaling factor
         estimate_k *= scaling_factor
@@ -462,12 +472,6 @@ class LearnedSSLLightning(plReconModel):
             )
             # reduce mean by the loss mask and not by the number of voxels
 
-            if REDUCE_LOSS_BY_MASK:
-                # multiply by averaging factor
-                k_loss *= loss_mask[:, index, ...].numel()
-                # normalize the loss now by the number of sampled points
-                k_loss /= loss_mask[:, index, ...].sum()
-                
 
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling
 
@@ -505,11 +509,11 @@ class LearnedSSLLightning(plReconModel):
             )
 
     def calculate_inverse_k_loss(
-        self, input_mask, loss_mask, inverse_k, undersampled_k
+        self, lambda_mask, inverse_mask, inverse_k, undersampled_k
     ):
         _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(
-            input_mask,
-            loss_mask,
+            lambda_mask,
+            inverse_mask,
             self.recon_model.dual_domain_config.pass_through_size,
             self.recon_model.dual_domain_config.pass_all_lines,
         )
@@ -588,7 +592,7 @@ class LearnedSSLLightning(plReconModel):
         k_losses = self.calculate_k_loss(
             lambda_esitimate, 
             fully_sampled, 
-            fully_sampled * dc_mask, 
+            undersampled_k != 0, 
             1, 
             "lambda"
         )
