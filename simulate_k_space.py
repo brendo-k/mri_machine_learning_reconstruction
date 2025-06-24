@@ -9,7 +9,7 @@ from itertools import repeat
 import sys
 import gc
 
-IMAGE_SIZE = (256, 256)
+IMAGE_SIZE = (240, 240)
 
 # Define a function to process a single file
 def process_file(file, out_path, seed, noise, coil_file, num_coils):
@@ -40,7 +40,7 @@ def process_file(file, out_path, seed, noise, coil_file, num_coils):
             cur_images = images[..., i]
 
             cur_images = np.transpose(cur_images, (0, 2, 1))
-            cur_images = resample(cur_images, 256, 256, 'linear')
+            #cur_images = resample(cur_images, 256, 256, 'linear')
             sim_k_space, gt = simulate_k_space(
                                         cur_images, 
                                         seed+i,
