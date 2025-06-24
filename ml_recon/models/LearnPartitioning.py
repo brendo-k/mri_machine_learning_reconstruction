@@ -175,7 +175,7 @@ class LearnPartitioning(nn.Module):
             # if we are learning R, return the learned R value
             cur_R = 1 / torch.sigmoid(self.acceleration_rate)
         else:
-            cur_R = self.acceleration_rate
+            cur_R = 1 / self.acceleration_rate
         return cur_R
 
 
@@ -185,6 +185,6 @@ class LearnPartitioning(nn.Module):
     def _setup_R_values(self, config: LearnPartitionConfig):
         # Initalize the acceleration rate ( 1/R)
         if config.is_learn_R: 
-            self.acceleration_rate = nn.Parameter(torch.log(torch.full((config.image_size[0],), float(1/config.inital_R_value))))
+            self.acceleration_rate = nn.Parameter(torch.logit(torch.full((config.image_size[0],), float(1/config.inital_R_value))))
         else: 
             self.acceleration_rate = torch.full((config.image_size[0],), float(1/config.inital_R_value))
