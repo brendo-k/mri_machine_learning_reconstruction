@@ -1,4 +1,5 @@
 from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space, resample
+from ml_recon.utils import k_to_img
 import numpy as np
 import nibabel as nib
 import torch
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     num_coils = maps.shape[0]
 
     # Create a pool of worker processes
-    num_processes = 4
+    num_processes = 10
     print(num_processes)
     pool = multiprocessing.Pool(processes=num_processes)
 

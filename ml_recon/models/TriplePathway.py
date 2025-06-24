@@ -16,8 +16,10 @@ class DualDomainConifg:
     pass_through_size: int = 10
     seperate_models: int = False
 
-FINAL_DC_STEP = bool(os.environ.get("FINAL_DC_STEP", "False").lower() in ["true", "1", "yes", "y"])
-print("Final DC Step", FINAL_DC_STEP)
+print('FINAL_DC_STEP', os.getenv("FINAL_DC_STEP"))
+FINAL_DC_STEP = bool(os.getenv("FINAL_DC_STEP", "False").lower() in ["true", "1", "yes", "y"])
+print('FINAL_DC_STEP', FINAL_DC_STEP)
+
 class TriplePathway(nn.Module):
     """
     Dual domain self-supervised learning module. Handles passing inverse, lambda, and original
