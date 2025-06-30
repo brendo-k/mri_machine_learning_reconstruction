@@ -11,7 +11,6 @@ from pytorch_lightning.loggers import WandbLogger
 def main(args):
     pl.seed_everything(8)
     data_dir = args.data_dir
-    test_dir = args.test_dir
     checkpoint_path = args.checkpoint
     logger = WandbLogger(project=args.project, name=args.run_name)
     if args.wandb_artifact:
@@ -19,9 +18,9 @@ def main(args):
         artifact_dir = artifact.download()
         checkpoint_path = os.path.join(artifact_dir, 'model.ckpt')
     
-    return test(checkpoint_path=checkpoint_path, data_dir=data_dir, test_dir=test_dir, logger=logger)
+    return test(checkpoint_path=checkpoint_path, data_dir=data_dir, logger=logger)
 
-def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_testing=True, mask_threshold=None, batch_size=1):
+def test(checkpoint_path, data_dir=None, logger=None, is_mask_testing=True, mask_threshold=None, batch_size=1):
     # Load model and data module
     args = {}
     model = LearnedSSLLightning.load_from_checkpoint(
@@ -31,8 +30,6 @@ def test(checkpoint_path, data_dir=None, test_dir=None, logger=None, is_mask_tes
         )
 
     data_module_kwargs = {}
-    if test_dir: 
-        data_module_kwargs['test_dir'] = test_dir
     if data_dir:
         data_module_kwargs['data_dir'] = data_dir
 
