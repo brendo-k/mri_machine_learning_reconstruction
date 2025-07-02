@@ -211,7 +211,7 @@ class plReconModel(pl.LightningModule):
         mask =  self.dialate_mask(image_background_mask)
 
         # If there are any masks that are all zero, set to all 1s
-        all_zero_masks_indecies = ~mask.all(dim=-1).all(dim=-1)
+        all_zero_masks_indecies = (~mask).all(dim=-1).all(dim=-1)
         # check if there are zero mask indexes
         if all_zero_masks_indecies.any():
             mask[all_zero_masks_indecies, :, :] = True

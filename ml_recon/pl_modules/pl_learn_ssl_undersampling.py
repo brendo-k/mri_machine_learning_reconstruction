@@ -19,9 +19,7 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
-print(os.getenv("FINAL_DC_STEP_INFER"))
 FINAL_DC_STEP_INFER = bool(os.getenv("FINAL_DC_STEP_INFER", "False").lower() in ["true", "1", "yes", "y"])
-print("Final Dc Step INfer", FINAL_DC_STEP_INFER)
 REDUCE_BY_MASK = bool(os.getenv("REDUCE_BY_MASK", "False").lower() in ["true", "1", "yes", "y"])
 
 class LearnedSSLLightning(plReconModel):
@@ -263,6 +261,11 @@ class LearnedSSLLightning(plReconModel):
             wandb_logger.log_image(
                 "probability", self.split_along_contrasts(probability), self.global_step
             )
+    
+    
+    def on_train_epoch_end(self):
+        if self.partition_model:
+            torch.save(self.partition_model.get_probability_distribution(), f"probabilities/{self.current_epoch}")
 
 
     def validation_step(self, batch, _):
@@ -478,7 +481,7 @@ class LearnedSSLLightning(plReconModel):
             # reduce mean by the loss mask and not by the number of voxels
             if REDUCE_BY_MASK:
                 k_loss = k_loss * fully_sampled[:, index, ...].numel()
-                k_loss = k_loss * loss_mask[:, index, ...].sum()
+                k_loss = k_loss / loss_mask[:, index, ...].sum()
 
 
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling
@@ -532,7 +535,7 @@ class LearnedSSLLightning(plReconModel):
             inverse_k,
             undersampled_k,
             undersampled_k != 0,
-            self.lambda_loss_scaling,
+            1 - self.lambda_loss_scaling,
             "inverse",
         )
         return k_loss_inverse
@@ -579,7 +582,7 @@ class LearnedSSLLightning(plReconModel):
                 - 'image_loss: Image loss for the lambda path vs fully sampled.'
         """
         # estimated k-space from different paths
-        lambda_esitimate = estimates["lambda_path"]
+        lambda_esitmate = estimates["lambda_path"]
         full_estimate = estimates["full_path"]
         inverse_estimate = estimates["inverse_path"]
 
@@ -589,12 +592,13 @@ class LearnedSSLLightning(plReconModel):
 
         loss_dict = {}
 
-
         if self.use_superviesd_image_loss:
             target_img = k_to_img(fully_sampled, coil_dim=2)
-            lambda_img = k_to_img(lambda_esitimate, coil_dim=2)
+            lambda_img = k_to_img(lambda_esitmate, coil_dim=2)
             ssim_val = ssim(
-                target_img, lambda_img, data_range=(target_img.min().item(), target_img.max().item())
+                target_img, 
+                lambda_img, 
+                data_range=(target_img.min().item(), target_img.max().item()),
             )
             assert isinstance(ssim_val, torch.Tensor)
             loss_dict["image_loss"] = 1 - ssim_val
@@ -603,12 +607,12 @@ class LearnedSSLLightning(plReconModel):
         if (dc_mask == 1).all():
             loss_mask = dc_mask
         else:
-            loss_mask = undersampled_k != 0, 
+            loss_mask = undersampled_k != 0
         k_losses = self.calculate_k_loss(
-            lambda_esitimate, 
+            lambda_esitmate, 
             fully_sampled, 
             loss_mask,
-            1, 
+            self.lambda_loss_scaling, 
             "lambda"
         )
 
@@ -631,7 +635,7 @@ class LearnedSSLLightning(plReconModel):
 
             loss_dict["image_loss_full_lambda"] = self.compute_image_loss(
                 full_estimate,
-                lambda_esitimate,
+                lambda_esitmate,
                 undersampled_k,
             )
             self.log(
@@ -650,7 +654,7 @@ class LearnedSSLLightning(plReconModel):
             loss_dict["k_loss_inverse"] = sum([values for values in inverse_k_losses.values()]) / len(inverse_k_losses) # image space loss
 
             loss_dict["image_loss_inverse_lambda"] = self.compute_image_loss(
-                lambda_esitimate,
+                lambda_esitmate,
                 inverse_estimate,
                 undersampled_k,
             )

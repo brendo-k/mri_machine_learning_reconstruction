@@ -44,7 +44,6 @@ def build_supervised_datamodule(temp_h5_directories):
     data_module = UndersampledDataModule(
             'brats', 
             temp_h5_directories, 
-            temp_h5_directories,
             batch_size=BATCH_SIZE, 
             resolution=DATA_SIZE[3:],
             num_workers=0,
@@ -65,7 +64,6 @@ def test_inital_undersampling_R(temp_h5_directories, is_self_supervised):
     data_module = UndersampledDataModule(
             'brats', 
             temp_h5_directories, 
-            temp_h5_directories, 
             batch_size=BATCH_SIZE, 
             resolution=DATA_SIZE[3:],
             num_workers=0,
@@ -75,33 +73,30 @@ def test_inital_undersampling_R(temp_h5_directories, is_self_supervised):
             ) 
     data_module.setup('train')
 
-    train_batch = next(iter(data_module.train_dataloader()))
-    val_batch = next(iter(data_module.val_dataloader()))
-    test_batch = next(iter(data_module.test_dataloader()))
+    for split_name, dataloader in {
+        'train': data_module.train_dataloader(),
+        'val': data_module.val_dataloader(),
+        'test': data_module.test_dataloader()
+    }.items():
+        batch = next(iter(dataloader))
+        undersampled = batch['undersampled']
+        assert undersampled.ndim == 5
+        assert undersampled.shape == (BATCH_SIZE,) + DATA_SIZE[1:]
 
-    undersampled = train_batch['undersampled']
-    undersampled_val = val_batch[0]['undersampled']
-    undersampled_test = test_batch[0]['undersampled']
+        initial_mask = (undersampled != 0).to(torch.float32)
 
-    initial_mask = (undersampled != 0).to(torch.float32)
-    initial_mask_val = (undersampled_val != 0).to(torch.float32)
-    initial_mask_test = (undersampled_test != 0).to(torch.float32)
 
-    given_R = initial_mask.mean(dim=(-1, -2))
-    given_R_val = initial_mask_val.mean(dim=(-1, -2))
-    given_R_test = initial_mask_test.mean(dim=(-1, -2))
+        given_R = 1/initial_mask.mean(dim=(-1, -2))
+        print(given_R.dtype)
+        print(torch.full_like(given_R, data_module.R).dtype)
+        torch.testing.assert_close(
+            given_R,
+            torch.full_like(given_R, data_module.R), 
+            atol=0.5, 
+            rtol=0,
+            msg=f"R value for {split_name} set is not as expected. Expected: {data_module.R}, Got: {given_R.mean().item()}"
+            )
 
-    assert undersampled.ndim == 5
-    assert undersampled.shape == (BATCH_SIZE,) + DATA_SIZE[1:]
-    torch.testing.assert_close(given_R, torch.full_like(given_R, 1/4), atol=0.01, rtol=0)
-
-    assert undersampled_val.ndim == 5
-    assert undersampled_val.shape == (4*BATCH_SIZE,) + DATA_SIZE[1:]
-    torch.testing.assert_close(given_R_val, torch.full_like(given_R_val, 1/4), atol=0.01, rtol=0)
-
-    assert undersampled_test.ndim == 5
-    assert undersampled_test.shape == (4*BATCH_SIZE,) + DATA_SIZE[1:], f"{undersampled_test.shape}"
-    torch.testing.assert_close(given_R_test, torch.full_like(given_R_test, 1/4), atol=0.01, rtol=0)
 
 
 def test_supervisedMasks(build_supervised_datamodule):

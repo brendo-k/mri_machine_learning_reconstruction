@@ -75,8 +75,8 @@ class LearnPartitioning(nn.Module):
         # 0-1 bounding
         probability = [torch.sigmoid(weight * self.config.sigmoid_slope_probability) for weight in sampling_weights]
 
-        # If this was LOUPE there would be a pdf normalization step here. We decide to omit this so LOUPE learns the R value
-        probability = self.norm_prob(probability)
+        if self.config.is_learn_R:
+            probability = self.norm_prob(probability)
 
         return torch.stack(probability)
     
@@ -85,7 +85,6 @@ class LearnPartitioning(nn.Module):
         image_shape = probability[0].shape
         cur_R = self.get_R()
 
-        # if not learn probability, no need to norm
         probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
 
@@ -144,14 +143,14 @@ class LearnPartitioning(nn.Module):
 
 
     def _setup_sampling_weights(self, config: LearnPartitionConfig):
-        cur_R = self.get_R()
+        cur_R = config.inital_R_value
         if config.is_warm_start: 
             # initalize starting probability distribution
             if self.config.sampling_method in ['2d', 'pi']:
-                init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/cur_R[0], 8, config.k_center_region).astype(np.float32)
+                init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/cur_R, 8, config.k_center_region).astype(np.float32)
             else: 
                 #init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
-                init_prob = gen_pdf_columns(config.image_size[1], config.image_size[2], 1/cur_R[0], 8, config.k_center_region).astype(np.float32)
+                init_prob = gen_pdf_columns(config.image_size[1], config.image_size[2], 1/cur_R, 8, config.k_center_region).astype(np.float32)
 
             # add contrast dims
             # ensure bounded by [1e-4 1-1e-4] to ensure no sigmoid inf
@@ -175,7 +174,7 @@ class LearnPartitioning(nn.Module):
             # if we are learning R, return the learned R value
             cur_R = 1 / torch.sigmoid(self.acceleration_rate)
         else:
-            cur_R = 1 / self.acceleration_rate
+            cur_R = self.get_probability_distribution().mean((-1, -2))
         return cur_R
 
 
@@ -186,5 +185,3 @@ class LearnPartitioning(nn.Module):
         # Initalize the acceleration rate ( 1/R)
         if config.is_learn_R: 
             self.acceleration_rate = nn.Parameter(torch.logit(torch.full((config.image_size[0],), float(1/config.inital_R_value))))
-        else: 
-            self.acceleration_rate = torch.full((config.image_size[0],), float(1/config.inital_R_value))

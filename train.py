@@ -38,6 +38,7 @@ else:
 print(os.getenv('REDUCE_LOSS_BY_MASK'), REDUCE_LOSS_BY_MASK)
 
 def main(args):
+    pl.seed_everything(8, workers=True)
     file_name = get_unique_file_name(args)
 
     # build some callbacks for pytorch lightning
@@ -97,8 +98,6 @@ def setup_wandb_logger(args, model):
         print(model.hparams)
         wandb_experiment = wandb.init(config=model.hparams, project=args.project, name=args.run_name, dir=args.logger_dir)
         logger = WandbLogger(experiment=wandb_experiment)
-        wandb.define_metric("trainer/global_step")
-        wandb.define_metric("*", step_metric="trainer/global_step")
     else: 
         logger = DummyLogger()
     return logger
