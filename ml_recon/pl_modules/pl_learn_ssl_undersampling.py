@@ -534,7 +534,7 @@ class LearnedSSLLightning(plReconModel):
         k_loss_inverse = self.calculate_k_loss(
             inverse_k,
             undersampled_k,
-            undersampled_k != 0,
+            lambda_k_wo_acs,
             1 - self.lambda_loss_scaling,
             "inverse",
         )
@@ -607,7 +607,7 @@ class LearnedSSLLightning(plReconModel):
         if (dc_mask == 1).all():
             loss_mask = dc_mask
         else:
-            loss_mask = undersampled_k != 0
+            loss_mask = dc_mask
         k_losses = self.calculate_k_loss(
             lambda_esitmate, 
             fully_sampled, 

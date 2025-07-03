@@ -174,7 +174,7 @@ class LearnPartitioning(nn.Module):
             # if we are learning R, return the learned R value
             cur_R = 1 / torch.sigmoid(self.acceleration_rate)
         else:
-            cur_R = self.get_probability_distribution().mean((-1, -2))
+            cur_R = 1 / self.get_probability_distribution().mean((-1, -2))
         return cur_R
 
 

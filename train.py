@@ -59,11 +59,7 @@ def main(args):
     # use tensor cores
     torch.set_float32_matmul_precision('medium')
 
-    try:
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
-    except AssertionError as error: 
-        print(error.args)
-        raise error
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
     trainer.test(model, datamodule=data_module)
 
     process_checkpoint(args, callbacks, wandb_logger)
@@ -85,7 +81,6 @@ def build_callbacks(args, file_name):
     callbacks = []
     callbacks.append(build_checkpoint_callbacks(file_name, args.checkpoint_dir))
     callbacks.append(LearningRateMonitor(logging_interval='step'))
-    #callbacks.append(SpikeDetection())
     return callbacks
 
 def restore_optimizer_state(model):
@@ -230,9 +225,11 @@ def build_checkpoint_callbacks(file_name, checkpoint_dir):
 def get_unique_file_name(args):
     unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
     file_name = unique_id
-    if args.run_name: 
+    if args.run_name and not args.checkpoint: 
         contrasts = ','.join(args.contrasts)
         file_name = f'{args.run_name}_{args.R}_{args.supervised}_{contrasts}_{unique_id}'
+    if args.checkpoint: 
+        file_name = f'{args.run_name}_{unique_id}'
     return file_name
 
 
