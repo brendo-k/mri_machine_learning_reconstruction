@@ -523,7 +523,7 @@ class LearnedSSLLightning(plReconModel):
             )
 
     def calculate_inverse_k_loss(
-        self, lambda_mask, inverse_mask, inverse_k, undersampled_k
+        self, lambda_mask, inverse_mask, inverse_estimate, undersampled_k
     ):
         _, lambda_k_wo_acs = TriplePathway.create_inverted_masks(
             lambda_mask,
@@ -532,7 +532,7 @@ class LearnedSSLLightning(plReconModel):
             self.recon_model.dual_domain_config.pass_all_lines,
         )
         k_loss_inverse = self.calculate_k_loss(
-            inverse_k,
+            inverse_estimate,
             undersampled_k,
             lambda_k_wo_acs,
             1 - self.lambda_loss_scaling,

@@ -136,7 +136,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self.train_dataset, 
             batch_size=self.batch_size, 
             num_workers=self.num_workers,
-            shuffle=True,
+            shuffle=False,
             pin_memory=True
         )
 

@@ -113,13 +113,13 @@ class plReconModel(pl.LightningModule):
         }
 
     def on_test_end(self):
-        for contrast, contrast_label in enumerate(self.contrast_order):
-            psnr_array = np.array(self.contrast_psnr[contrast])
-            ssim_array = np.array(self.contrast_ssim[contrast])
-            nmse_array = np.array(self.contrast_nmse[contrast])
-            nmse_masked_array = np.array(self.contrast_nmse_masked[contrast])
-            ssim_masked_array = np.array(self.contrast_ssim_masked[contrast])
-            psnr_masked_array = np.array(self.contrast_psnr_masked[contrast])
+        for contrast_index, contrast_label in enumerate(self.contrast_order):
+            psnr_array = np.array(self.contrast_psnr[contrast_index])
+            ssim_array = np.array(self.contrast_ssim[contrast_index])
+            nmse_array = np.array(self.contrast_nmse[contrast_index])
+            nmse_masked_array = np.array(self.contrast_nmse_masked[contrast_index])
+            ssim_masked_array = np.array(self.contrast_ssim_masked[contrast_index])
+            psnr_masked_array = np.array(self.contrast_psnr_masked[contrast_index])
             print(f"metrics_mine/nmse_{contrast_label}", nmse_array.mean())
             print(f"metrics_mine/ssim_{contrast_label}", ssim_array.mean())
             print(f"metrics_mine/psnr_{contrast_label}", psnr_array.mean())
@@ -135,6 +135,13 @@ class plReconModel(pl.LightningModule):
             print(f"metrics_mine/masked_nmse_std_{contrast_label}", nmse_masked_array.std())
             print(f"metrics_mine/masked_ssim_std_{contrast_label}", ssim_masked_array.std())
             print(f"metrics_mine/masked_psnr_std_{contrast_label}", psnr_masked_array.std())
+
+            self.logger.experiment.log({f"metrics/nmse_{contrast_label}_std": nmse_array.std()})
+            self.logger.experiment.log({f"metrics/ssim_{contrast_label}_std": ssim_array.std()})
+            self.logger.experiment.log({f"metrics/psnr_{contrast_label}_std": psnr_array.std()})
+            self.logger.experiment.log({f"metrics/nmse_masked_{contrast_label}_std": nmse_masked_array.std()})
+            self.logger.experiment.log({f"metrics/ssim_masked_{contrast_label}_std": ssim_masked_array.std()})
+            self.logger.experiment.log({f"metrics/psnr_masked_{contrast_label}_std": psnr_masked_array.std()})
 
 
     def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):

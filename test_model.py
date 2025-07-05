@@ -43,7 +43,6 @@ def test(checkpoint_path, data_dir=None, logger=None, is_mask_testing=True, mask
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_dir', type=str)
     parser.add_argument('--data_dir', type=str)
     parser.add_argument('--checkpoint', type=str)
     parser.add_argument('--wandb_artifact', type=str)

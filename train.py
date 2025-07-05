@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from tempfile import TemporaryDirectory
 import os 
+import re
 
 # deep learning modules
 import torch
@@ -210,6 +211,10 @@ def load_checkpoint(args, data_dir):
     return model, data_module
 
 def build_checkpoint_callbacks(file_name, checkpoint_dir):
+    if args.checkpoint: 
+        file_name = Path(args.checkpoint).name
+        file_name = re.sub(r'last-epoch=\d+\.ckpt$', '', file_name)
+        checkpoint_dir = Path(args.checkpoint).parent
     # Checkpoint for the last model (including optimizer state for resubmittions)
     last_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
@@ -284,7 +289,7 @@ if __name__ == '__main__':
     model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
     model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
     model_group.add_argument('--image_loss_grad_scaling', type=float, default=1.)
-    model_group.add_argument('--lambda_scaling', type=float, default=1)
+    model_group.add_argument('--lambda_scaling', type=float, default=0.65)
     model_group.add_argument('--line_constrained', action='store_true')
 
     model_group.add_argument('--use_schedulers', action='store_true')
