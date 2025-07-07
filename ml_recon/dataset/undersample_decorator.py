@@ -22,6 +22,7 @@ def get_unique_filename(base_name, extension=".png"):
     return filename
 
 
+PROBABILITY_DIST = os.environ.get('PROBABILITY_DIST', '')
 class UndersampleDecorator(Dataset):
     """Decorator class that can be used on all datasets present in the dataset folder.
     The decorator wraps the original dataset and undersamples it based on parameters
@@ -69,9 +70,13 @@ class UndersampleDecorator(Dataset):
             raise ValueError(f'Wrong sampling type! {self.sampling_type}')
 
         self.omega_prob = pdf_generator(dataset.nx, dataset.ny, 1/R, poly_order, acs_lines) 
-        self.lambda_prob = pdf_generator(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) 
         self.omega_prob = np.tile(self.omega_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
-        self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+        
+        if PROBABILITY_DIST == '':
+            self.lambda_prob = pdf_generator(dataset.nx, dataset.ny, 1/R_hat, poly_order, acs_lines) 
+            self.lambda_prob = np.tile(self.lambda_prob[np.newaxis, :, :], (self.contrasts, 1, 1))
+        else:
+            self.lambda_prob = torch.load(PROBABILITY_DIST)
 
         if self.same_mask_every_epoch:
             self.lambda_seeds = np.random.default_rng(seed).integers(0, 2**32 - 1, size=len(dataset))
