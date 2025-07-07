@@ -17,7 +17,7 @@ class DualDomainConifg:
     seperate_models: int = False
 
 print('FINAL_DC_STEP', os.getenv("FINAL_DC_STEP"))
-FINAL_DC_STEP = bool(os.getenv("FINAL_DC_STEP", "False").lower() in ["true", "1", "yes", "y"])
+FINAL_DC_STEP = bool(os.getenv("FINAL_DC_STEP", "True").lower() in ["true", "1", "yes", "y"])
 print('FINAL_DC_STEP', FINAL_DC_STEP)
 
 class TriplePathway(nn.Module):

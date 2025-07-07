@@ -19,7 +19,7 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
-FINAL_DC_STEP_INFER = bool(os.getenv("FINAL_DC_STEP_INFER", "False").lower() in ["true", "1", "yes", "y"])
+FINAL_DC_STEP_INFER = bool(os.getenv("FINAL_DC_STEP_INFER", "True").lower() in ["true", "1", "yes", "y"])
 REDUCE_BY_MASK = bool(os.getenv("REDUCE_BY_MASK", "False").lower() in ["true", "1", "yes", "y"])
 
 class LearnedSSLLightning(plReconModel):
