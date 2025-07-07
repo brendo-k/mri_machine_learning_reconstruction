@@ -59,6 +59,9 @@ class LearnPartitioning(nn.Module):
         activation = partitioning_probability - random_01_noise 
         # get sampling using softamx relaxation
         sampling_mask = self.kMaxSampling(activation, self.config.sigmoid_slope_sampling)
+
+        if self.config.line_constrained:
+            sampling_mask = torch.tile(sampling_mask, (1, self.config.image_size[0], 1))
         
         #ensure sampling mask has no nans
         # Ensure sampling mask values are within [0, 1]
@@ -84,8 +87,11 @@ class LearnPartitioning(nn.Module):
     def norm_prob(self, probability, center_region=10):
         image_shape = probability[0].shape
         cur_R = self.get_R()
-
-        probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
+        
+        if self.config.line_constrained:
+            probability = self.norm_1d_probability(probability, cur_R, center_region, image_shape)
+        else:
+            probability = self.norm_2d_probability(probability, cur_R, center_region, image_shape)
 
 
         # testing function to ensure probabilities are close to the set R value
@@ -161,7 +167,9 @@ class LearnPartitioning(nn.Module):
             h, w = init_prob.shape[0], init_prob.shape[1]
             # set center distribution to be very high
             init_prob[h//2 - config.k_center_region//2:h//2 + config.k_center_region//2, w//2 - config.k_center_region//2:w//2 + config.k_center_region//2] = 0.99
-        
+       
+        if self.config.line_constrained:
+            init_prob = init_prob[[config.image_size[2]//2], :]
         init_prob = torch.from_numpy(init_prob)
         # convert probability to sampling weights (inverse of sigmoid)
         sampling_weights = -torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability

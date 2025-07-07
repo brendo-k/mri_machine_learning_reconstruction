@@ -20,7 +20,7 @@ from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, Varne
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
 FINAL_DC_STEP_INFER = bool(os.getenv("FINAL_DC_STEP_INFER", "True").lower() in ["true", "1", "yes", "y"])
-REDUCE_BY_MASK = bool(os.getenv("REDUCE_BY_MASK", "False").lower() in ["true", "1", "yes", "y"])
+LOSS_OVER_FULL_SET = bool(os.getenv("LOSS_OVER_FULL_SET", "False").lower() in ["true", "1", "yes", "y"])
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -263,10 +263,6 @@ class LearnedSSLLightning(plReconModel):
             )
     
     
-    def on_train_epoch_end(self):
-        if self.partition_model:
-            torch.save(self.partition_model.get_probability_distribution(), f"probabilities/{self.current_epoch}")
-
 
     def validation_step(self, batch, _):
         undersampled_k = batch["undersampled"]
@@ -478,11 +474,6 @@ class LearnedSSLLightning(plReconModel):
                 torch.view_as_real(estimate[:, index, ...] * loss_mask[:, index, ...]),
             )
 
-            # reduce mean by the loss mask and not by the number of voxels
-            if REDUCE_BY_MASK:
-                k_loss = k_loss * fully_sampled[:, index, ...].numel()
-                k_loss = k_loss / loss_mask[:, index, ...].sum()
-
 
             k_losses[f"k_loss_{loss_name}_{contrast}"] = k_loss * loss_scaling
 
@@ -531,6 +522,10 @@ class LearnedSSLLightning(plReconModel):
             self.recon_model.dual_domain_config.pass_through_size,
             self.recon_model.dual_domain_config.pass_all_lines,
         )
+
+        if LOSS_OVER_FULL_SET:
+            lambda_k_wo_acs = undersampled_k != 0 
+
         k_loss_inverse = self.calculate_k_loss(
             inverse_estimate,
             undersampled_k,
@@ -604,10 +599,11 @@ class LearnedSSLLightning(plReconModel):
             loss_dict["image_loss"] = 1 - ssim_val
 
         # calculate the loss of the lambda estimation
-        if (dc_mask == 1).all():
-            loss_mask = dc_mask
+        if LOSS_OVER_FULL_SET:
+            loss_mask = undersampled_k != 0
         else:
             loss_mask = dc_mask
+
         k_losses = self.calculate_k_loss(
             lambda_esitmate, 
             fully_sampled, 

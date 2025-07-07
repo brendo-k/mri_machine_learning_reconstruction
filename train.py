@@ -155,9 +155,9 @@ def setup_model_parameters(args):
         learn_partitioning_config = partitioning_config, 
         dual_domain_config = tripple_pathway_config,
         lr = args.lr,
-        image_loss_scaling_lam_full=args.image_scaling_lam_full + args.ssim_scaling_delta,
-        image_loss_scaling_lam_inv=args.image_scaling_lam_inv + args.ssim_scaling_delta,
-        image_loss_scaling_full_inv=args.image_scaling_full_inv + args.ssim_scaling_delta,
+        image_loss_scaling_lam_full=args.image_scaling_lam_full,
+        image_loss_scaling_lam_inv=args.image_scaling_lam_inv,
+        image_loss_scaling_full_inv=args.image_scaling_full_inv,
         lambda_scaling=args.lambda_scaling, 
         image_loss_function=args.image_loss,
         k_space_loss_function=args.k_loss,
@@ -285,8 +285,7 @@ if __name__ == '__main__':
     model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)
     model_group.add_argument('--image_scaling_lam_full', type=float, default=0.0)
     model_group.add_argument('--image_scaling_full_inv', type=float, default=0.0)
-    model_group.add_argument('--ssim_scaling_delta', type=float, default=0.0)
-    model_group.add_argument('--k_loss', type=str, default='l1l2', choices=['l1', 'l2', 'l1l2'])
+    model_group.add_argument('--k_loss', type=str, default='l1', choices=['l1', 'l2', 'l1l2'])
     model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
     model_group.add_argument('--image_loss_grad_scaling', type=float, default=1.)
     model_group.add_argument('--lambda_scaling', type=float, default=0.65)
