@@ -48,7 +48,7 @@ def build_supervised_datamodule(temp_h5_directories):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=False,
+            self_supervised=False,
             R=4
             ) 
     data_module.setup('train')
@@ -68,7 +68,7 @@ def test_inital_undersampling_R(temp_h5_directories, is_self_supervised):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=is_self_supervised,
+            self_supervised=is_self_supervised,
             R=4
             ) 
     data_module.setup('train')
@@ -144,7 +144,7 @@ def test_scaling(temp_h5_directories, is_self_supervised):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=is_self_supervised,
+            self_supervised=is_self_supervised,
             R=4
             ) 
     data_module.setup('train')
@@ -189,7 +189,7 @@ def test_ssduSets(temp_h5_directories, set_name):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=True,
+            self_supervised=True,
             R=4
             ) 
     data_module.setup(set_name)
@@ -224,7 +224,7 @@ def test_ssduDetermenistic(temp_h5_directories, set_name):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=True,
+            self_supervised=True,
             R=4
             ) 
     data_module.setup(set_name)
@@ -260,9 +260,9 @@ def test_ssduNonDetermenistic(temp_h5_directories, set_name):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=True,
+            self_supervised=True,
             R=4,
-            ssdu_partioning=True
+            ssdu_partitioning=True
             ) 
     data_module.setup(set_name)
 
@@ -310,7 +310,7 @@ def test_mask_type(temp_h5_directories, set_name, is_self_supervised):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=is_self_supervised,
+            self_supervised=is_self_supervised,
             R=4
             ) 
     data_module.setup(set_name)
@@ -346,7 +346,7 @@ def test_ssl_non_determenistic(temp_h5_directories, set_name):
             resolution=DATA_SIZE[3:],
             num_workers=0,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=True,
+            self_supervised=True,
             R=4
             ) 
     data_module.setup(set_name)
@@ -400,7 +400,7 @@ def test_ssl_non_determenistic_dataloaders(temp_h5_directories, set_name):
             resolution=DATA_SIZE[3:],
             num_workers=2,
             contrasts=['t1', 't2', 't1ce', 'flair'],
-            self_supervsied=True,
+            self_supervised=True,
             R=4
             ) 
     data_module.setup(set_name)
@@ -455,7 +455,7 @@ def test_same_partitioning_mask(temp_h5_directories):
         resolution=DATA_SIZE[3:],
         num_workers=2,
         contrasts=['t1', 't2', 't1ce', 'flair'],
-        self_supervsied=True,
+        self_supervised=True,
         R=4,
         same_mask_every_epoch=True
     ) 

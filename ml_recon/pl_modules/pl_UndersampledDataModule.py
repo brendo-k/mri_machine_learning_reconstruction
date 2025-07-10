@@ -31,9 +31,9 @@ class UndersampledDataModule(pl.LightningDataModule):
         num_workers: int = 0,
         poly_order: int = 8,
         norm_method: Union[Literal['k', 'img', 'image_mean', 'image_mean2', 'std'], None] = 'image_mean',
-        self_supervsied: bool = False,
+        self_supervised: bool = False,
         sampling_method: str = '2d',
-        ssdu_partioning: bool = False,
+        ssdu_partitioning: bool = False,
         limit_volumes: Optional[Union[int, float]] = None,
         same_mask_every_epoch: bool = False,
         seed: int = 8,
@@ -55,8 +55,8 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.R = R
         self.R_hat = R_hat
         self.poly_order = poly_order
-        self.self_supervised = self_supervsied
-        self.ssdu_partioning = ssdu_partioning
+        self.self_supervised = self_supervised
+        self.ssdu_partioning = ssdu_partitioning
         self.sampling_method = sampling_method
         self.norm_method = norm_method
         self.limit_volumes = limit_volumes
