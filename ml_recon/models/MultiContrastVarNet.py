@@ -43,7 +43,13 @@ class MultiContrastVarNet(nn.Module):
         )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel_mc(2, 2, chans=config.sense_chans, upsample_method=config.upsample_method, conv_after_upsample=config.conv_after_upsample)
+        self.sens_model = SensetivityModel_mc(
+            2, 
+            2, 
+            chans=config.sense_chans, 
+            upsample_method=config.upsample_method, 
+            conv_after_upsample=config.conv_after_upsample
+            )
         # regularizer weight
         self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
 

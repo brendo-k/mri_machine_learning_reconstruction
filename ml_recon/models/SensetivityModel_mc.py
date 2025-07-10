@@ -29,7 +29,13 @@ class SensetivityModel_mc(nn.Module):
             upsample_method (str): upsampling method for U-Net ('bilinear', 'max', 'conv')
         """
         super().__init__()
-        self.model = Unet(in_chans, out_chans, chans=chans, conv_after_upsample=conv_after_upsample, upsample_method=upsample_method)
+        self.model = Unet(
+            in_chans, 
+            out_chans, 
+            chans=chans, 
+            conv_after_upsample=conv_after_upsample, 
+            upsample_method=upsample_method
+            )
 
     # recieve coil maps as [B, contrast, channels, H, W]
     def forward(self, images, mask):
