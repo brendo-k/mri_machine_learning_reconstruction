@@ -80,8 +80,19 @@ class LearnPartitioning(nn.Module):
 
         if self.config.is_learn_R:
             probability = self.norm_prob(probability)
+            probability_final = torch.stack(probability)
+        else:
+            probability = torch.stack(probability)
 
-        return torch.stack(probability)
+            probability_final = probability.clone()
+            # acs box is now ones and everything else is zeros
+            center = [probability[0].shape[0]//2, probability[0].shape[1]//2]
+            center_box_x = slice(center[0]-self.config.k_center_region//2,center[0]+self.config.k_center_region//2)
+            center_box_y = slice(center[1]-self.config.k_center_region//2,center[1]+self.config.k_center_region//2)
+
+            probability_final[:, center_box_y, center_box_x] = 1
+
+        return probability_final
     
 
     def norm_prob(self, probability, center_region=10):
@@ -104,14 +115,14 @@ class LearnPartitioning(nn.Module):
     def norm_2d_probability(self, probability, cur_R, center_region, image_shape):
         center = [image_shape[0]//2, image_shape[1]//2]
 
-        center_bb_x = slice(center[0]-center_region//2,center[0]+center_region//2)
-        center_bb_y = slice(center[1]-center_region//2,center[1]+center_region//2)
+        center_box_x = slice(center[0]-center_region//2,center[0]+center_region//2)
+        center_box_y = slice(center[1]-center_region//2,center[1]+center_region//2)
             
         probability_sum = torch.zeros((len(probability), 1), device=probability[0].device)
 
         # create acs mask of zeros for acs box and zeros elsewhere
         center_mask = torch.ones(image_shape, device=probability[0].device)
-        center_mask[center_bb_y, center_bb_x] = 0
+        center_mask[center_box_y, center_box_x] = 0
 
         for i in range(len(probability)):
             probability[i] = probability[i] * center_mask
@@ -143,7 +154,7 @@ class LearnPartitioning(nn.Module):
                     
         # acs box is now ones and everything else is zeros
         for i in range(len(probability)):
-            probability[i][center_bb_y, center_bb_x] = 1
+            probability[i][center_box_y, center_box_x] = 1
            
         return probability
     def norm_1d_probability(self, probability, cur_R, center_region, image_shape):
