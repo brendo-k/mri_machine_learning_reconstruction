@@ -136,12 +136,13 @@ class plReconModel(pl.LightningModule):
             print(f"metrics_mine/masked_ssim_std_{contrast_label}", ssim_masked_array.std())
             print(f"metrics_mine/masked_psnr_std_{contrast_label}", psnr_masked_array.std())
 
-            self.logger.experiment.log({f"metrics/nmse_{contrast_label}_std": nmse_array.std()})
-            self.logger.experiment.log({f"metrics/ssim_{contrast_label}_std": ssim_array.std()})
-            self.logger.experiment.log({f"metrics/psnr_{contrast_label}_std": psnr_array.std()})
-            self.logger.experiment.log({f"metrics/nmse_masked_{contrast_label}_std": nmse_masked_array.std()})
-            self.logger.experiment.log({f"metrics/ssim_masked_{contrast_label}_std": ssim_masked_array.std()})
-            self.logger.experiment.log({f"metrics/psnr_masked_{contrast_label}_std": psnr_masked_array.std()})
+            if self.logger:
+                self.logger.experiment.log({f"metrics/nmse_{contrast_label}_std": nmse_array.std()})
+                self.logger.experiment.log({f"metrics/ssim_{contrast_label}_std": ssim_array.std()})
+                self.logger.experiment.log({f"metrics/psnr_{contrast_label}_std": psnr_array.std()})
+                self.logger.experiment.log({f"metrics/nmse_masked_{contrast_label}_std": nmse_masked_array.std()})
+                self.logger.experiment.log({f"metrics/ssim_masked_{contrast_label}_std": ssim_masked_array.std()})
+                self.logger.experiment.log({f"metrics/psnr_masked_{contrast_label}_std": psnr_masked_array.std()})
 
 
     def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
@@ -201,16 +202,17 @@ class plReconModel(pl.LightningModule):
         if not self.is_mask_testing:
             return torch.ones_like(ground_truth_image)
 
-        # get noise
-        noise = ground_truth_image[..., :20, :20]
-        # take the max value and scale up a bit
-        mask_threshold = noise.amax((-1, -2)) * 1.05
-
-        # same shape as image
-        mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
 
         # gaussian blur image for better masking (blurring improves SNR)
         ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=31, sigma=25.0) # type: ignore
+
+        # get noise
+        noise = ground_truth_blurred[..., :20, :20]
+        # take the max value and scale up a bit
+        mask_threshold = noise.amax((-1, -2)) * 1.01
+
+        # same shape as image
+        mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
 
         # get mask
         image_background_mask = ground_truth_blurred > mask_threshold 
