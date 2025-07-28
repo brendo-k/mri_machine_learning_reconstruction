@@ -98,8 +98,7 @@ class M4Raw(Dataset):
         return k_space
     
     def get_data_from_file(self, index):
-        volume_index = np.sum(self.slice_cumulative_sum <= index)
-        slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
+        volume_index, slice_index = self.get_file_indecies(index)
         cur_file = self.file_names[volume_index]
         
         
@@ -111,6 +110,11 @@ class M4Raw(Dataset):
                 k_space = self.fill_missing_k_space(k_space) 
                 
         return k_space 
+
+    def get_file_indecies(self, index):
+        volume_index = np.sum(self.slice_cumulative_sum <= index)
+        slice_index = index if volume_index == 0 else index - self.slice_cumulative_sum[volume_index - 1]
+        return volume_index,slice_index
 
    
     def resample_or_pad(self, k_space):

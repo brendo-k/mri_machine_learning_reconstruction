@@ -19,8 +19,6 @@ from ml_recon.models.LearnPartitioning import LearnPartitioning, LearnPartitionC
 from ml_recon.models.TriplePathway import TriplePathway, DualDomainConifg, VarnetConfig
 from ml_recon.utils.evaluate_over_contrasts import evaluate_over_contrasts
 
-FINAL_DC_STEP_INFER = bool(os.getenv("FINAL_DC_STEP_INFER", "True").lower() in ["true", "1", "yes", "y"])
-LOSS_OVER_FULL_SET = bool(os.getenv("LOSS_OVER_FULL_SET", "False").lower() in ["true", "1", "yes", "y"])
 
 class LearnedSSLLightning(plReconModel):
     def __init__(
@@ -532,8 +530,6 @@ class LearnedSSLLightning(plReconModel):
             self.recon_model.dual_domain_config.pass_all_lines,
         )
 
-        if LOSS_OVER_FULL_SET:
-            lambda_k_wo_acs = undersampled_k != 0 
 
         k_loss_inverse = self.calculate_k_loss(
             inverse_estimate,
@@ -608,15 +604,11 @@ class LearnedSSLLightning(plReconModel):
             loss_dict["image_loss"] = 1 - ssim_val
 
         # calculate the loss of the lambda estimation
-        if LOSS_OVER_FULL_SET:
-            loss_mask = undersampled_k != 0
-        else:
-            loss_mask = dc_mask
 
         k_losses = self.calculate_k_loss(
             lambda_esitmate, 
             fully_sampled, 
-            loss_mask,
+            dc_mask,
             self.lambda_loss_scaling, 
             "lambda"
         )

@@ -27,17 +27,6 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.loggers.logger import DummyLogger
 from pytorch_lightning.callbacks import ModelCheckpoint 
 
-if os.getenv('NORM_METHOD'):
-    NORM_METHOD = os.getenv('NORM_METHOD') 
-else:
-    NORM_METHOD = 'image_mean'
-
-if os.getenv('REDUCE_LOSS_BY_MASK'):
-    REDUCE_LOSS_BY_MASK = bool(os.getenv('REDUCE_LOSS_BY_MASK'))
-else:
-    REDUCE_LOSS_BY_MASK = False
-print(os.getenv('REDUCE_LOSS_BY_MASK'), REDUCE_LOSS_BY_MASK)
-
 def main(args):
     pl.seed_everything(8, workers=True)
     file_name = get_unique_file_name(args)
@@ -115,7 +104,7 @@ def setup_model_parameters(args):
         ssdu_partitioning=args.ssdu_partitioning,
         limit_volumes=args.limit_volumes,
         same_mask_every_epoch=args.same_mask_all_epochs, 
-        norm_method=NORM_METHOD,
+        norm_method=args.norm_method,
         seed=8
     ) 
     data_module.setup('train')
@@ -270,6 +259,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
     dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
+    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max'])
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')
