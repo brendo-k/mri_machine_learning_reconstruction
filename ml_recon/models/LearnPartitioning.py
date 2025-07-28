@@ -17,7 +17,7 @@ class LearnPartitionConfig:
     sigmoid_slope_sampling: float = 200.0
     is_warm_start: bool = True
     sampling_method: Literal['2d', '1d', 'pi'] = '2d'
-    is_learn_R: bool = True
+    is_learn_R: bool = False
     line_constrained: bool = False
 
 

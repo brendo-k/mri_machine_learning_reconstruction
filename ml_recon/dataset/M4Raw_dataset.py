@@ -112,29 +112,7 @@ class M4Raw(Dataset):
                 
         return k_space 
 
-    def center_k_space(self, contrast_k):
-        """
-        Centers the k-space data for each contrast image in the input array.
-
-        This function finds the maximum value in each 2D k-space slice of the input
-        array `contrast_k` and shifts the k-space data such that the maximum value
-        is centered. The centering is done by rolling the array along the last two
-        axes.
-
-        Parameters:
-        contrast_k (numpy.ndarray): A 3D numpy array of k-space data with shape
-                                    (num_contrasts, height, width).
-
-        Returns:
-        numpy.ndarray: The centered k-space data with the same shape as the input.
-        """
-        for i in range(contrast_k.shape[0]):
-            _, h_center, w_center = np.unravel_index(np.argmax(contrast_k[i]), contrast_k[i].shape)
-            diff_h = h_center - contrast_k[i].shape[-2]//2
-            diff_w = w_center - contrast_k[i].shape[-1]//2
-            contrast_k[i] = np.roll(contrast_k[i], (-diff_h, -diff_w), axis=(-2, -1))
-        return contrast_k
-
+   
     def resample_or_pad(self, k_space):
         """Takes k-space data and resamples data to desired height and width. If 
         the image is larger, we crop. If the image is smaller, we pad with zeros
@@ -153,7 +131,9 @@ class M4Raw(Dataset):
     
     @staticmethod
     def fill_missing_k_space(k_space):
-        # if there is missing data on one of the coils, we replace it with the average of the other coils
+        # if there is missing data on one of the coils, we replace it with very samll number.
+        # for some reason there are zero values in k-space. We replace it with small numbers to 
+        # help facilitate masking 
         
         contrast, coils, h, w = k_space.shape
         zero_fill_mask = np.ones_like(k_space) 
@@ -161,7 +141,7 @@ class M4Raw(Dataset):
         zero_fill_mask[:, :, :, -29:] = 0
     
         
-        k_space[k_space == 0] = 1e-3
+        k_space[k_space == 0] = 1e-6
         k_space = k_space * zero_fill_mask
 
         return k_space
