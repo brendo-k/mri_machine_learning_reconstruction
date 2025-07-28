@@ -136,7 +136,7 @@ class plReconModel(pl.LightningModule):
             print(f"metrics_mine/masked_ssim_std_{contrast_label}", ssim_masked_array.std())
             print(f"metrics_mine/masked_psnr_std_{contrast_label}", psnr_masked_array.std())
 
-            if self.logger:
+            if isinstance(self.logger, WandbLogger):
                 self.logger.experiment.log({f"metrics/nmse_{contrast_label}_std": nmse_array.std()})
                 self.logger.experiment.log({f"metrics/ssim_{contrast_label}_std": ssim_array.std()})
                 self.logger.experiment.log({f"metrics/psnr_{contrast_label}_std": psnr_array.std()})
@@ -146,7 +146,7 @@ class plReconModel(pl.LightningModule):
 
 
     def my_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
-        estimate_k, ground_truth_image = batch
+        estimate_k, ground_truth_image, mask = batch
         estimated_image = root_sum_of_squares(ifft_2d_img(estimate_k), coil_dim=2)
 
         scaling_factor = ground_truth_image.amax((-1, -2), keepdim=True)
@@ -181,6 +181,7 @@ class plReconModel(pl.LightningModule):
                 difference_image,
                 label='unmasked',
                 )
+            self.logger.log_image(f'test/undersampling_mask', self.convert_image_for_plotting(mask[0, :, 0]))
 
     def plot_test_images(
         self, 
@@ -194,7 +195,7 @@ class plReconModel(pl.LightningModule):
 
         wandb_logger.log_image(f'test/{label}_recon', self.convert_image_for_plotting(estimated_image))
         wandb_logger.log_image(f'test/{label}_target', self.convert_image_for_plotting(ground_truth_image))
-        wandb_logger.log_image(f'test/{label}_diff', self.convert_image_for_plotting((difference_image)))
+        wandb_logger.log_image(f'test/{label}_diff', self.convert_image_for_plotting(difference_image))
 
 
     def get_image_background_mask(self, ground_truth_image):
@@ -204,12 +205,12 @@ class plReconModel(pl.LightningModule):
 
 
         # gaussian blur image for better masking (blurring improves SNR)
-        ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=31, sigma=25.0) # type: ignore
+        ground_truth_blurred = gaussian_blur(ground_truth_image, kernel_size=15, sigma=10.0) # type: ignore
 
         # get noise
         noise = ground_truth_blurred[..., :20, :20]
         # take the max value and scale up a bit
-        mask_threshold = noise.amax((-1, -2)) * 1.01
+        mask_threshold = noise.amax((-1, -2)) * 1.20
 
         # same shape as image
         mask_threshold = mask_threshold.unsqueeze(-1).unsqueeze(-1)
@@ -229,7 +230,7 @@ class plReconModel(pl.LightningModule):
 
 
 
-    def dialate_mask(self, mask, kernel_size=5):
+    def dialate_mask(self, mask, kernel_size=3):
 
         b, contrast, h, w = mask.shape
         mask = mask.view(b*contrast, h, w)
