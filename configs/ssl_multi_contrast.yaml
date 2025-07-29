@@ -1,7 +1,7 @@
 # Self supervised multi-contrast file config file for train.py
 dataset_params:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
   dataset: 'brats'
   nx: 256
   ny: 256
@@ -10,14 +10,16 @@ dataset_params:
   contrasts:
     - 't1'
     - 't2'
-  limit_volumes: 1
+    - 'flair'
+    - 't1ce'
+  limit_volumes: 0.2
   R: 8.0
   sampling_method: '1d'
   mask_threshold_t1: 0.1
 
 training_params:
   max_epochs: 50
-  batch_size: 4
+  batch_size: 1
   lr: 0.001
   supervised: false
   k_loss: 'l1'
@@ -25,6 +27,6 @@ training_params:
   project: 'MRI Reconstruction'
 
 model_parameters:
-  chans: 64
   depth: 4
-  cascades: 12
+  chans: 32
+  cascades: 4

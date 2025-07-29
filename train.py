@@ -259,7 +259,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
     dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
-    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max'])
+    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max'], default='image_mean')
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')

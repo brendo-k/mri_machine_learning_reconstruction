@@ -14,11 +14,11 @@ dataset_parameters:
   limit_volumes: 1
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  test_dir: '/home/brenden/Documents/Coding/data/sim_subset'
-  chans: 64
-  cascades: 12
-  image_scaling_lam_full: 8.0e-5
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
+  test_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
+  chans: 10
+  cascades: 6
+  image_scaling_lam_full: 1.0e-4
   image_scaling_full_inv: 1.0e-5
   image_scaling_lam_inv: 1.0e-5
   lambda_scaling: 0.65
@@ -28,16 +28,16 @@ model_parameters:
   pass_inverse_data: true
   pass_all_data: true
   learn_sampling: false 
-  image_loss: ssim
+  seperate_model: false
+  image_loss: l1_grad
   all_data_no_grad: true 
   pass_through_size: 10
   sampling_method: 1d
-  mask_threshold_t2: 0.11
-  mask_threshold_t1: 0.11
-  mask_threshold_flair: 0.11
+
   warmup_training: False
   norm_method: 'image_mean'
   warm_start: true
+  line_constrained: true
 
 
 logging_parameters:
