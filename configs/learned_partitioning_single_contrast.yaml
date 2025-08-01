@@ -1,44 +1,48 @@
 training_parameters:
   num_workers: 2
-  max_epochs: 200
+  max_epochs: 50
   batch_size: 4
   lr: 0.001
 
 dataset_parameters:
-  R: 6.0
+  R: 7.0
   dataset: brats 
   contrasts:
     - t1
 
-  nx: 256
-  ny: 256
-  limit_volumes: 0.2
+  nx: 128 
+  ny: 128
+  limit_volumes: 1
 
 model_parameters:
-  data_dir: '/home/brenden/Documents/Coding/data/M4Raw_first_repetition/'
-  test_dir: '/home/brenden/Documents/Coding/data/M4Raw_Averaged/'
-  chans: 10
-  cascades: 6
-  depth: 4
-  image_scaling_lam_full: 1.0e-3
-  image_scaling_full_inv: 4.0e-4
-  image_scaling_lam_inv: 7.0e-4
-  lambda_scaling: 0.65
+  data_dir: '/home/brenden/Documents/Coding/data/sim_subset_1e-2_4chan'
+  chans: 18
+  cascades: 3
+  depth: 3
+  image_scaling_lam_full: 1.0e-2
+  image_scaling_full_inv: 1.0e-2
+  image_scaling_lam_inv: 1.0e-3
+  lambda_scaling: 0.55
   sigmoid_slope2: 200
   sigmoid_slope1: 5
   k_loss: 'l1'
   pass_inverse_data: true
   pass_all_data: true
   learn_sampling: true 
+  pass_all_lines: true
+  seperate_model: true
   image_loss: l1_grad
-  all_data_no_grad: false 
+  image_loss_grad_scaling: 0.5
+  all_data_no_grad: true 
   inverse_data_no_grad: false 
   sampling_method: 1d
   norm_method: 'image_mean'
-  warm_start: False
+  warm_start: True
   norm_loss_by_mask: False
-  warmup_adam: False
+  warmup_training: False
+  line_constrained: True
 
 
 logging_parameters:
   project: "MRI Reconstruction"
+  run_name: "Learned Part"
