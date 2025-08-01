@@ -160,7 +160,8 @@ class UndersampleDecorator(Dataset):
             )
         elif self.sampling_type == 'pi':
             mask_omega = np.zeros_like(k_space, dtype=bool)
-            mask_omega[..., ::int(self.R)] = 1
+            for i in range(mask_omega.shape[0]):
+                mask_omega[i, ..., i::int(self.R)] = 1
             w = mask_omega.shape[-1]
             mask_omega[..., w//2-self.acs_lines//2:w//2+self.acs_lines//2] = 1
             under = k_space * mask_omega

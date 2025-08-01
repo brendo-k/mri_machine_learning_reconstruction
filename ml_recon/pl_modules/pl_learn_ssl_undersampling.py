@@ -7,7 +7,7 @@ import torch
 from pytorch_lightning.loggers import WandbLogger
 
 
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, LinearLR
 from torchmetrics.functional.image import structural_similarity_index_measure as ssim
 
 
@@ -39,6 +39,7 @@ class LearnedSSLLightning(plReconModel):
         enable_warmup_training: bool = False,
         use_supervised_image_loss: bool = False,
         is_mask_testing: bool = True,
+        warmup_adam: bool = True,
     ):
         """
         This function trains all MRI reconstruction models
@@ -92,6 +93,7 @@ class LearnedSSLLightning(plReconModel):
         self.enable_learn_partitioning = enable_learn_partitioning
         self.use_superviesd_image_loss = use_supervised_image_loss
         self.test_metrics = is_mask_testing
+        self.warmup_adam = warmup_adam
 
         
         # loss function init
@@ -429,11 +431,21 @@ class LearnedSSLLightning(plReconModel):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         schedulers = []
+
+        if self.warmup_adam:
+            warmup_scheduler = LinearLR(
+                optimizer, start_factor=0.1, end_factor=1, total_iters=10
+            )
+            schedulers.append(
+                {
+                    "scheduler": warmup_scheduler,
+                    "interval": "epoch",
+                }
+            )
         if self.lr_scheduler:
             scheduler = CosineAnnealingWarmRestarts(
                 optimizer, T_0=2000, T_mult=2, eta_min=1e-4
             )
-            # step_lr = StepLR(optimizer, step_size=50, gamma=0.1)
             schedulers.append(
                 {
                     "scheduler": scheduler,
@@ -675,7 +687,6 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def get_image_space_scaling_factors(self):
-        #warmup_epochs = int(os.getenv('WARMUP_EPOCHS')) if os.getenv('WARMUP_EPOCHS') else 50
         if self.enable_warmup_training and self.current_epoch < 10:
             scaling_factor = 0
         else:
