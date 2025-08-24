@@ -12,7 +12,7 @@ def main(args):
     pl.seed_everything(8)
     data_dir = args.data_dir
     checkpoint_path = args.checkpoint
-    logger = WandbLogger(project=args.project, name=args.run_name, save_dir='.')
+    logger = WandbLogger(project=args.project, name=args.run_name, save_dir=args.logger_dir)
     if args.wandb_artifact:
         artifact = logger.use_artifact(args.wandb_artifact)
         artifact_dir = artifact.download()
@@ -53,6 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_artifact', type=str)
     parser.add_argument('--project', type=str)
     parser.add_argument('--run_name', type=str)
+    parser.add_argument('--logger_dir', type=str, default='.')
 
     
     args = parser.parse_args()    
