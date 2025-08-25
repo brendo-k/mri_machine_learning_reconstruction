@@ -242,6 +242,7 @@ if __name__ == '__main__':
     training_group.add_argument('--lr', type=float, default=1e-3)
     training_group.add_argument('--lr_scheduler', action='store_true') 
     training_group.add_argument('--warmup_adam', action='store_true') 
+    training_group.add_argument('--weight_decay', type=float, default=0) 
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
     training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")

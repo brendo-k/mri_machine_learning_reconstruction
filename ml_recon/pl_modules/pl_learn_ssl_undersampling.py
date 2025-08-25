@@ -40,6 +40,7 @@ class LearnedSSLLightning(plReconModel):
         use_supervised_image_loss: bool = False,
         is_mask_testing: bool = True,
         warmup_adam: bool = True,
+        weight_decay: bool = True,
     ):
         """
         This function trains all MRI reconstruction models
@@ -94,6 +95,7 @@ class LearnedSSLLightning(plReconModel):
         self.use_superviesd_image_loss = use_supervised_image_loss
         self.test_metrics = is_mask_testing
         self.warmup_adam = warmup_adam
+        self.weight_decay = weight_decay
 
         
         # loss function init
@@ -429,7 +431,7 @@ class LearnedSSLLightning(plReconModel):
         return estimate_k, fully_sampled_k, mask
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         schedulers = []
 
         if self.warmup_adam:
