@@ -154,7 +154,8 @@ def setup_model_parameters(args):
         use_supervised_image_loss=args.supervised_image,
         enable_warmup_training=args.warmup_training,
         image_loss_grad_scaling=args.image_loss_grad_scaling,
-        warmup_adam=args.warmup_adam
+        warmup_adam=args.warmup_adam,
+        weight_decay=args.weight_decay
     )
 
     return model, data_module

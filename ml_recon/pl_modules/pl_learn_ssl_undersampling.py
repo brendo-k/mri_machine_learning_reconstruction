@@ -40,7 +40,7 @@ class LearnedSSLLightning(plReconModel):
         use_supervised_image_loss: bool = False,
         is_mask_testing: bool = True,
         warmup_adam: bool = True,
-        weight_decay: bool = True,
+        weight_decay: float = 0.0,
     ):
         """
         This function trains all MRI reconstruction models
