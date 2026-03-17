@@ -28,5 +28,5 @@ training_params:
 
 model_parameters:
   depth: 4
-  chans: 32
-  cascades: 4
+  chans: 64
+  cascades: 12

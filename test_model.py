@@ -4,8 +4,8 @@ import argparse
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import LearnedSSLLightning
 
-import pytorch_lightning as pl 
-from pytorch_lightning.loggers import WandbLogger
+import lightning.pytorch as pl 
+from lightning.pytorch.loggers import WandbLogger
 
 
 def main(args):

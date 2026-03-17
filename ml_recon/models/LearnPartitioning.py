@@ -214,7 +214,7 @@ class LearnPartitioning(nn.Module):
         cur_R = config.inital_R_value
         if config.is_warm_start: 
             # initalize starting probability distribution
-            if self.config.sampling_method in ['2d', 'pi']:
+            if self.config.sampling_method in ['2d']:
                 init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/cur_R, 8, config.k_center_region).astype(np.float32)
             else: 
                 #init_prob = gen_pdf_bern(config.image_size[1], config.image_size[2], 1/config.inital_R_value, 8, config.k_center_region).astype(np.float32)
@@ -237,7 +237,7 @@ class LearnPartitioning(nn.Module):
         sampling_weights = -torch.log((1/init_prob) - 1) / config.sigmoid_slope_probability
 
         # one sampling weight dist per contrast
-        self.sampling_weights = nn.ParameterList([sampling_weights for _ in range(config.image_size[0])])
+        self.sampling_weights = nn.ParameterList([sampling_weights.clone().detach() for _ in range(config.image_size[0])])
 
     def get_R(self):
         if self.config.is_learn_R:

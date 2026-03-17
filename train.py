@@ -9,7 +9,7 @@ import re
 # deep learning modules
 import torch
 import wandb
-from pytorch_lightning.callbacks import LearningRateMonitor
+from lightning.pytorch.callbacks import LearningRateMonitor
 
 # my modules
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
@@ -22,10 +22,10 @@ from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     )
 
 # pytorch lightning tools and trainers
-import pytorch_lightning as pl
-from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.loggers.logger import DummyLogger
-from pytorch_lightning.callbacks import ModelCheckpoint 
+import lightning.pytorch as pl
+from lightning.pytorch.loggers.wandb import WandbLogger
+from lightning.pytorch.loggers.logger import DummyLogger
+from lightning.pytorch.callbacks import ModelCheckpoint 
 
 def main(args):
     pl.seed_everything(8, workers=True)
@@ -223,7 +223,7 @@ def build_checkpoint_callbacks(file_name, checkpoint_dir):
     return last_checkpoint_callback
 
 def get_unique_file_name(args):
-    unique_id = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    unique_id = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
     file_name = unique_id
     if args.run_name and not args.checkpoint: 
         contrasts = ','.join(args.contrasts)
@@ -262,7 +262,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
     dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
-    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max'], default='image_mean')
+    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max', 'std'], default='image_mean')
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')

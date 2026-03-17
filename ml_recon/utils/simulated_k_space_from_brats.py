@@ -5,7 +5,13 @@ from scipy.ndimage import gaussian_filter
 
 from ml_recon.utils import fft_2d_img, ifft_2d_img, root_sum_of_squares
 
-def simulate_k_space(image, seed, noise_std=0.001, coil_file='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy'):
+def simulate_k_space(
+    image,
+    seed,
+    noise_std=0.001,
+    coil_file='/home/kadotab/projects/def-mchiew/kadotab/Datasets/Brats_2021/brats/coil_compressed_10.npy',
+    phase_mode='variable',
+):
     #simulate some random motion
     rng = np.random.default_rng(seed)
     x_shift, y_shift = rng.integers(-5, 5), rng.integers(-5, 5)
@@ -13,7 +19,7 @@ def simulate_k_space(image, seed, noise_std=0.001, coil_file='/home/kadotab/proj
     image = np.roll(np.roll(image, x_shift, axis=-1), y_shift, axis=-2)
     #image_w_sense [Contrast coil height width]
     image_w_sense = apply_sensetivities(image, coil_file)
-    image_w_phase = generate_and_apply_phase(image_w_sense, seed)
+    image_w_phase = generate_and_apply_phase(image_w_sense, seed, phase_mode=phase_mode)
 
     gt_img = root_sum_of_squares(image_w_phase, coil_dim=1)
     k_space = fft_2d_img(image_w_phase)
@@ -33,15 +39,13 @@ def apply_sensetivities(image, coil_file):
     return image_sense      
 
 
-def generate_and_apply_phase(data, seed):
-    nc = data.shape[0]
-    phase = build_phase_from_same_dist(data, seed)
-    #phase = build_phase(center_region, data.shape[-2], data.shape[-1], nc, seed)
+def generate_and_apply_phase(data, seed, phase_mode='variable'):
+    phase = build_phase_from_same_dist(data, seed, mode=phase_mode)
     phase_data = apply_phase_map(data, phase)
     return phase_data
 
 
-def build_phase_from_same_dist(data, seed): 
+def build_phase_from_same_dist(data, seed, mode='variable'):
     rng = np.random.default_rng(seed=seed)
     temp = np.copy(data)
     smoothed_base = gaussian_filter(temp.mean(0, keepdims=True), 10, axes=(-1, -2))
@@ -50,10 +54,10 @@ def build_phase_from_same_dist(data, seed):
     base_phase_image = np.abs(fft_2d_img(np.abs(k_base) * coeffs))
     # center on zero
     base_phase_image -= base_phase_image.min()
-    # [0, 2]
-    base_phase_image/= (np.max(base_phase_image) / 2)
+    # [0, 1]
+    base_phase_image/= (np.max(base_phase_image))
     # [-1, 1]
-    base_phase_image-= -1
+    base_phase_image-= 0.5
     #scale between -2pi and 2pi
     base_phase_image *= (np.pi)
 
@@ -65,14 +69,24 @@ def build_phase_from_same_dist(data, seed):
     
     # center on zero
     phase_images -= phase_images.min()
-    # [0, 2]
-    phase_images /= (np.max(phase_images) / 2)
+    # [0, 1]
+    phase_images /= (np.max(phase_images))
     # [-1, 1]
-    phase_images -= -1
+    phase_images -= 0.5
     #scale between -2pi and 2pi
     phase_images *= (np.pi)
 
-    return base_phase_image * 0.9 + phase_images * 0.1
+    base_phase_image = np.asarray(base_phase_image, dtype=np.float32)
+    phase_images = np.asarray(phase_images, dtype=np.float32)
+
+    if mode == 'variable':
+        return base_phase_image * 0.9 + phase_images * 0.1
+    if mode == 'shared':
+        return np.repeat(base_phase_image, data.shape[0], axis=0)
+    if mode == 'none':
+        return np.zeros((data.shape[0], data.shape[2], data.shape[3]), dtype=np.float32)
+
+    raise ValueError(f'Unsupported phase mode: {mode}')
 
 
 

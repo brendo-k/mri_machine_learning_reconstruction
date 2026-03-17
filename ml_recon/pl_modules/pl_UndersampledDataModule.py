@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 
 # import DL modules
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
 # import my modules
@@ -13,7 +13,6 @@ from ml_recon.utils import k_to_img
 from ml_recon.dataset.BraTS_dataset import BratsDataset
 from ml_recon.dataset.M4Raw_dataset import M4Raw
 from ml_recon.dataset.FastMRI_dataset import FastMRIDataset
-from ml_recon.dataset.test_dataset import TestDataset
 
 
 ACS_LINES = int(os.getenv('ACS_LINES') or 10)
@@ -63,19 +62,22 @@ class UndersampledDataModule(pl.LightningDataModule):
         self.same_mask_every_epoch = same_mask_every_epoch
         self.seed=seed
 
-        self.dataset_class, self.test_data_key = self.setup_dataset_type(dataset_name)
+        self.dataset_class= self.setup_dataset_type(dataset_name)
         self.transforms = self.setup_data_normalization(norm_method)
 
 
     def setup(self, stage):
-        super().setup(stage)
+        """Set up train, test, val dataloaders
 
+        Args:
+            stage (str): current split (ie. train, test, val)
+        """
+        super().setup(stage)
 
         # get directories for different split folders
         train_dir = self.data_dir / 'train'
         val_dir = self.data_dir / 'val'
         test_dir = self.data_dir / 'test'
-
 
         # keywords to control dataset data
         dataset_keyword_args = {
@@ -137,6 +139,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             batch_size=self.batch_size, 
             num_workers=self.num_workers,
             shuffle=True,
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -145,6 +148,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self.val_dataset, 
             batch_size=self.batch_size, 
             num_workers=self.num_workers,
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -153,6 +157,7 @@ class UndersampledDataModule(pl.LightningDataModule):
             self.test_dataset, 
             batch_size=1, 
             num_workers=self.num_workers,
+            persistent_workers=True,
             pin_memory=True
         )
         
@@ -160,16 +165,13 @@ class UndersampledDataModule(pl.LightningDataModule):
         dataset_name = str.lower(dataset_name)
         if dataset_name == 'brats': 
             dataset_class = BratsDataset
-            test_data_key = 'ground_truth'
         elif dataset_name == 'fastmri':
             dataset_class = FastMRIDataset
-            test_data_key = 'reconstruction_rss'
         elif dataset_name == 'm4raw':
             dataset_class = M4Raw
-            test_data_key = 'reconstruction_rss'
         else: 
             raise ValueError(f'{dataset_name} is not a valid dataset name')
-        return dataset_class, test_data_key
+        return dataset_class
 
     def setup_data_normalization(self, norm_method):
         if norm_method == 'img':
@@ -239,4 +241,3 @@ class normalize_image_std(object):
         data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
         return data
-

@@ -90,7 +90,7 @@ class BratsDataset(Dataset):
     def __len__(self):
         return self.length
 
-    def __getitem__(self, index) -> torch.Tensor:
+    def __getitem__(self, index) -> np.ndarray:
         volume_index, slice_index = self.get_vol_slice_index(index)
         data = self.get_data_from_indecies(volume_index, slice_index)
 
@@ -113,7 +113,7 @@ class BratsDataset(Dataset):
         
         return volume_index, slice_index 
     
-    def get_data_from_indecies(self, volume_index, slice_index) -> torch.Tensor:
+    def get_data_from_indecies(self, volume_index, slice_index) -> np.ndarray:
         file = self.file_list[volume_index]
         with h5py.File(file, 'r') as fr:
             dataset = fr[self.data_key]

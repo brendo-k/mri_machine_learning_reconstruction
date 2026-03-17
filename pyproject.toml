@@ -1,16 +1,14 @@
 [project]
-name = "ml_recon"
-version = "0.0.1"
-authors = [
-  { name="Brenden Kadota", email="brenden.kadota@gmail.com" },
-]
-description = "MRI tools for visualization"
+name = "ml"
+version = "0.1.0"
+description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.7"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+requires-python = ">=3.14"
+dependencies = [
+    "einops>=0.8.2",
+    "h5py>=3.16.0",
+    "matplotlib>=3.10.8",
+    "nibabel>=5.4.0",
+    "scikit-image>=0.26.0",
+    "wandb>=0.25.1",
 ]
-[tool.setuptools.packages.find]
-include = ["ml_recon*"]

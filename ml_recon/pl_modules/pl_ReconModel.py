@@ -2,9 +2,9 @@ import torch
 import numpy as np
 from typing import Union 
 
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.loggers.wandb import WandbLogger
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.loggers.wandb import WandbLogger
 
 import torch.nn.functional as F 
 import torch

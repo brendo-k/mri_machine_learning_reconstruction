@@ -4,7 +4,7 @@ import dataclasses
 import numpy as np
 import os
 import torch
-from pytorch_lightning.loggers import WandbLogger
+from lightning.pytorch.loggers import WandbLogger
 
 
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, LinearLR

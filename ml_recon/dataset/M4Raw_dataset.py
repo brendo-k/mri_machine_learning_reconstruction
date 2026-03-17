@@ -89,6 +89,8 @@ class M4Raw(Dataset):
 
     def __getitem__(self, index):
         k_space = self.get_data_from_file(index)
+        k_space = M4Raw.phase_to_center(k_space)
+        k_space = M4Raw.fill_missing_k_space(k_space)
         k_space = self.resample_or_pad(k_space)
 
 
@@ -149,4 +151,30 @@ class M4Raw(Dataset):
         k_space = k_space * zero_fill_mask
 
         return k_space
+
+    @staticmethod
+    def phase_to_center(k_space):
+        # rephase the center of k-space to the center of k-space.
+        center_locs_x = np.linalg.norm(k_space, axis=(1, 2)).squeeze()
+        center_locs_y = np.linalg.norm(k_space, axis=(1, 3)).squeeze()
+        x = np.argmax(center_locs_x, axis=-1)
+        y = np.argmax(center_locs_y, axis=-1)
+        center_x = k_space.shape[3] // 2
+        center_y = k_space.shape[2] // 2
+        shift_x = center_x - x
+        shift_y = center_y - y
+        for c in range(k_space.shape[0]):
+            k_space[c] = np.roll(k_space[c], shift_x[c], axis=2)
+            k_space[c] = np.roll(k_space[c], shift_y[c], axis=1)
+
+        return k_space
+
+if __name__ == "__main__":
+    data_dir = r"C:/Users/brend/Documents/Coding/data/M4Raw_first_repetition/train"
+    dataset = M4Raw(data_dir)
+    print(f"Dataset length: {len(dataset)}")
+    sample = dataset[0]
+    print(f"Sample shape: {sample.shape}")
+    print(f"Sample dtype: {sample.dtype}")
+
 

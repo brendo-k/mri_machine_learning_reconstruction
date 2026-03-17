@@ -1,4 +1,4 @@
-from pytorch_lightning.callbacks import Callback
+from lightning.pytorch.callbacks import Callback
 import torch
 from torch.optim import Optimizer
 class restore_optimizer(Callback):
