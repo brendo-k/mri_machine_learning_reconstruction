@@ -1,7 +1,7 @@
 from ml_recon.utils.simulated_k_space_from_brats import simulate_k_space, resample
 from ml_recon.utils import k_to_img
 import numpy as np
-import nibabel as nib
+from nibabel import nifti1
 import torch
 import h5py
 import os
@@ -31,7 +31,7 @@ def process_file(file, out_path, seed, noise, phase_mode, coil_file, num_coils):
     for modality in modality_files:
         if 'nii' in modality and 'seg' not in modality:
             modality_name.append(modality.split('_')[-1].split('.')[0])
-            contrast_image = nib.nifti1.load(os.path.join(file, modality)).get_fdata()
+            contrast_image = nifti1.load(os.path.join(file, modality)).get_fdata()
             images.append(contrast_image)
         
     images = np.stack(images, axis=0)
