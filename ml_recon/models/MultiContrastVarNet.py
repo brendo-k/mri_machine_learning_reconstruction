@@ -20,11 +20,14 @@ class VarnetConfig:
     depth: int = 4
     upsample_method: Literal['conv', 'bilinear', 'max'] = 'conv'
     conv_after_upsample: bool = False
+    is_final_dc: bool = True
+    is_zf_mask: bool = False
 
 
 class MultiContrastVarNet(nn.Module):
     def __init__(self, config: VarnetConfig):
         super().__init__()
+        self.config = config
         contrasts = len(config.contrast_order)
         model_backbone = partial(
             Unet, 
@@ -54,28 +57,40 @@ class MultiContrastVarNet(nn.Module):
         self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k, mask, zf_mask):
+    def forward(self, input_k, mask, fully_sampled_k):
+        zero_filled_mask = fully_sampled_k[:, :, [0], :, :] != 0 
+
         # get sensetivity maps
-        assert not torch.isnan(reference_k).any(), reference_k
+        assert not torch.isnan(input_k).any(), input_k
         assert not torch.isnan(mask).any(), mask
-        sense_maps = self.sens_model(reference_k, mask)
+        sense_maps = self.sens_model(input_k, mask)
 
         assert not torch.isnan(sense_maps).any(), sense_maps
         
         # current k_space 
-        current_k = reference_k.clone()
+        current_k = input_k.clone()
         for i, cascade in enumerate(self.cascades):
-            current_k = current_k * zf_mask
+            if self.config.is_zf_mask:
+                current_k = current_k * zero_filled_mask
             # go through ith model cascade
             refined_k = cascade(current_k, sense_maps)
-            assert not torch.isnan(reference_k).any(), reference_k
+            assert not torch.isnan(input_k).any(), input_k
             assert not torch.isnan(refined_k).any(), refined_k
 
-            data_consistency = mask * (current_k - reference_k)
+            data_consistency = mask * (current_k - input_k)
             # gradient descent step
             current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
+
+        if self.config.is_final_dc:
+            current_k = self.final_dc_step(input_k, current_k, mask)
+        
+        if self.config.is_zf_mask:
+            current_k = current_k * zero_filled_mask
         return current_k
 
+    # replace estimated points with aquired points
+    def final_dc_step(self, undersampled, estimated, mask):
+        return estimated * (1 - mask) + undersampled * mask
 
 class VarnetBlock(nn.Module):
     def __init__(self, model: nn.Module) -> None:
@@ -106,7 +121,10 @@ class VarnetBlock(nn.Module):
         images = sensetivities * images.unsqueeze(2)
         images = fft_2d_img(images, axes=[-1, -2])
 
+
         return images
+        
+
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
