@@ -206,6 +206,7 @@ class normalize_k_max(object):
 
         data['undersampled'] /= scaling_factor
         data['fs_k_space'] /= scaling_factor
+
         data['scaling_factor'] = scaling_factor
         return data
 
@@ -216,8 +217,9 @@ class normalize_l2(object):
         scaling_factor = img.norm(2, (1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
-        data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
+
+        data['scaling_factor'] = scaling_factor
         return data
 
 class normalize_image_mean(object):
@@ -227,8 +229,9 @@ class normalize_image_mean(object):
         scaling_factor = img.mean((1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
-        data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
+
+        data['scaling_factor'] = scaling_factor
         return data
 
 class normalize_image_std(object):
@@ -238,6 +241,7 @@ class normalize_image_std(object):
         scaling_factor = img.std((1, 2), keepdim=True).unsqueeze(1)
 
         data['undersampled'] /= scaling_factor
-        data['scaling_factor'] = scaling_factor
         data['fs_k_space'] /= scaling_factor
+        
+        data['scaling_factor'] = scaling_factor
         return data
