@@ -21,7 +21,7 @@ class VarnetConfig:
     upsample_method: Literal['conv', 'bilinear', 'max'] = 'conv'
     conv_after_upsample: bool = False
     is_final_dc: bool = True
-    is_zf_mask: bool = False
+    is_zf_mask: bool = True
 
 
 class MultiContrastVarNet(nn.Module):

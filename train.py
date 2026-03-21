@@ -14,6 +14,7 @@ from lightning.pytorch.callbacks import LearningRateMonitor
 # my modules
 from ml_recon.pl_modules.pl_UndersampledDataModule import UndersampledDataModule
 from ml_recon.utils import replace_args_from_config, restore_optimizer
+from ml_recon.pl_modules.callbacks import TrainingPlottingCallback, ValidationPlottingCallback, TestPlottingCallback
 from ml_recon.pl_modules.pl_learn_ssl_undersampling import (
     LearnedSSLLightning, 
     VarnetConfig, 
@@ -49,7 +50,7 @@ def main(args):
     # use tensor cores
     torch.set_float32_matmul_precision('medium')
 
-    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint)
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint, weights_only=False)
     trainer.test(model, datamodule=data_module)
 
     process_checkpoint(args, callbacks, wandb_logger)
@@ -71,6 +72,9 @@ def build_callbacks(args, file_name):
     callbacks = []
     callbacks.append(build_checkpoint_callbacks(file_name, args.checkpoint_dir))
     callbacks.append(LearningRateMonitor(logging_interval='step'))
+    callbacks.append(TrainingPlottingCallback())
+    callbacks.append(ValidationPlottingCallback())
+    callbacks.append(TestPlottingCallback())
     return callbacks
 
 def restore_optimizer_state(model):
@@ -114,6 +118,8 @@ def setup_model_parameters(args):
         cascades=args.cascades, 
         channels=args.chans,
         depth=args.depth,
+        is_final_dc=(not args.no_final_dc),
+        is_zf_mask=(not args.no_zf_mask)
     )
 
     partitioning_config = LearnPartitionConfig(
@@ -155,7 +161,8 @@ def setup_model_parameters(args):
         enable_warmup_training=args.warmup_training,
         image_loss_grad_scaling=args.image_loss_grad_scaling,
         warmup_adam=args.warmup_adam,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay, 
+        norm_by_mask=args.norm_by_masks
     )
 
     return model, data_module
@@ -200,23 +207,23 @@ def load_checkpoint(args, data_dir):
     if data_dir:
         data_module_kwargs['data_dir'] = data_dir
         data_module_kwargs['device'] = device
-    model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr, map_location=device)
-    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, **data_module_kwargs)
+    model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr, map_location=device, weights_only=False)
+    data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, **data_module_kwargs, weights_only=False)
     data_module.setup('train')
     return model, data_module
 
 def build_checkpoint_callbacks(file_name, checkpoint_dir):
+    # if checkpoint provided, use the checkpoint dir from checkpoitn
     if args.checkpoint: 
-        file_name = Path(args.checkpoint).name
-        file_name = re.sub(r'last-epoch=\d+\.ckpt$', '', file_name)
         checkpoint_dir = Path(args.checkpoint).parent
     # Checkpoint for the last model (including optimizer state for resubmittions)
     last_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename=file_name + '-last-{epoch:02d}',
+        filename=file_name + '_{val/loss:.2e}-{epoch:02d}',
         save_top_k=1,  # Only keep the latest model
-        monitor='epoch',
-        mode='max',
+        monitor='val/loss',
+        save_last=True,
+        mode='min',
         save_weights_only=False  # Save full model state including optimizer
     )
     
@@ -263,12 +270,15 @@ if __name__ == '__main__':
     dataset_group.add_argument('--ssdu_partitioning', action='store_true')
     dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
     dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max', 'std'], default='image_mean')
+    dataset_group.add_argument('--norm_by_masks', action='store_true')
+    dataset_group.add_argument('--no_final_dc', action='store_true')
+    dataset_group.add_argument('--no_zf_mask', action='store_true')
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')
     model_group.add_argument('--R_hat', type=float, default=2.0)
     model_group.add_argument('--warm_start', action='store_true')
-    model_group.add_argument('--chans', type=int, default=32)
+    model_group.add_argument('--chans', type=int, default=18)
     model_group.add_argument('--depth', type=int, default=4)
     model_group.add_argument('--cascades', type=int, default=6)
     model_group.add_argument('--sigmoid_slope2', type=float, default=200)
