@@ -43,6 +43,7 @@ class LearnedSSLLightning(plReconModel):
         warmup_adam: bool = True,
         weight_decay: float = 0.0,
         norm_by_mask: bool = False,
+        disjoint_masks: bool = False,
     ):
         """
         This function trains all MRI reconstruction models
@@ -55,8 +56,6 @@ class LearnedSSLLightning(plReconModel):
         'lambda_mask': One partition of k-space. If supervised, lambda_mask is the initial undersampling mask (Omega Mask)
         'loss_mask': Other partition of k-space. If supervised, loss_mask is all ones. 
         """
-
-        self.automatic_optimization=False
 
         # since we convert to dicts for uploading to wandb, we need to convert back to dataclasses
         # Needed when loading checkpoints
@@ -94,11 +93,12 @@ class LearnedSSLLightning(plReconModel):
         self.lambda_loss_scaling = lambda_scaling
         self.enable_warmup_training = enable_warmup_training
         self.enable_learn_partitioning = enable_learn_partitioning
-        self.use_superviesd_image_loss = use_supervised_image_loss
+        self.use_supervised_image_loss = use_supervised_image_loss
         self.test_metrics = is_mask_testing
         self.warmup_adam = warmup_adam
         self.weight_decay = weight_decay
         self.norm_by_mask = norm_by_mask
+        self.disjoint_masks = disjoint_masks
         
         # loss function init
         self._setup_image_space_loss(image_loss_function, image_loss_grad_scaling)
@@ -260,6 +260,7 @@ class LearnedSSLLightning(plReconModel):
 
         # pass inital data through model
         estimate_k = self.model.recon_model(undersampled, mask, fully_sampled_k)
+        estimate_k = estimate_k * (1 - mask) + undersampled * mask  # combine with original undersampled data for proper evaluation
 
         # rescale based on scaling factor
         estimate_k *= scaling_factor
@@ -296,7 +297,7 @@ class LearnedSSLLightning(plReconModel):
         estimate_k, fully_sampled_k, _ = self.infer_k_space(batch)
         mse_value = (fully_sampled_k - estimate_k).pow(2).abs().sum((-1, -2, -3))
         l2_norm = fully_sampled_k.pow(2).abs().sum((-1, -2, -3))
-        self.log_scalar("val_nmse/k-space_nmse", (mse_value/l2_norm).mean())
+        self.log_scalar("val_metrics/k-space_nmse", (mse_value/l2_norm).mean())
 
     def _setup_image_space_loss(self, image_loss_function, image_loss_grad_scaling):
         if image_loss_function == "ssim":
@@ -382,7 +383,8 @@ class LearnedSSLLightning(plReconModel):
             self.model.dual_domain_config.pass_through_size,
             self.model.dual_domain_config.pass_all_lines,
         )
-
+        if not self.disjoint_masks:
+            lambda_k_wo_acs = undersampled_k != 0  # if not disjoint, calculate loss on all sampled points
         k_loss_inverse = self.calculate_k_loss(
             inverse_estimate,
             undersampled_k,
@@ -444,7 +446,7 @@ class LearnedSSLLightning(plReconModel):
 
         loss_dict = {}
 
-        if self.use_superviesd_image_loss:
+        if self.use_supervised_image_loss:
             target_img = k_to_img(fully_sampled, coil_dim=2)
             lambda_img = k_to_img(lambda_esitmate, coil_dim=2)
             ssim_val = ssim(target_img, lambda_img, data_range=(target_img.min().item(), target_img.max().item()))
@@ -452,7 +454,8 @@ class LearnedSSLLightning(plReconModel):
             loss_dict["image_loss"] = 1 - ssim_val
 
         # calculate the loss of the lambda estimation
-
+        if not self.disjoint_masks:
+            dc_mask = undersampled_k != 0  # if not disjoint, calculate loss on all sampled points 
         k_losses = self.calculate_k_loss(lambda_esitmate, fully_sampled, dc_mask, self.lambda_loss_scaling, "lambda")
 
         for contrast, value in k_losses.items():

@@ -54,7 +54,8 @@ class MultiContrastVarNet(nn.Module):
             conv_after_upsample=config.conv_after_upsample
             )
         # regularizer weight
-        self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
+        #self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
+        self.lambda_reg = nn.Parameter(torch.ones(contrasts, config.cascades))
 
     # k-space sent in [B, C, H, W]
     def forward(self, input_k, mask, fully_sampled_k):
@@ -79,7 +80,8 @@ class MultiContrastVarNet(nn.Module):
 
             data_consistency = mask * (current_k - input_k)
             # gradient descent step
-            current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
+            #current_k = current_k - (self.lambda_reg[i] * data_consistency) - refined_k
+            current_k = current_k - (self.lambda_reg[:, i].view(1, -1, 1, 1, 1) * data_consistency) - refined_k
 
         if self.config.is_final_dc:
             current_k = self.final_dc_step(input_k, current_k, mask)

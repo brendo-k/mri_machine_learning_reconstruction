@@ -77,11 +77,6 @@ def build_callbacks(args, file_name):
     callbacks.append(TestPlottingCallback())
     return callbacks
 
-def restore_optimizer_state(model):
-    optim = model.optimizers()
-    checkpoint = torch.load(args.checkpoint, weights_only=False)
-    optim.load_state_dict(checkpoint['state_dict'])
-
 def setup_wandb_logger(args, model):
     if os.environ.get('SLURM_LOCALID') is None or int(os.environ['SLURM_LOCALID']) == 0:
         print(model.hparams)
@@ -162,7 +157,8 @@ def setup_model_parameters(args):
         image_loss_grad_scaling=args.image_loss_grad_scaling,
         warmup_adam=args.warmup_adam,
         weight_decay=args.weight_decay, 
-        norm_by_mask=args.norm_by_masks
+        norm_by_mask=args.norm_by_masks, 
+        disjoint_masks=(not args.no_disjoint)
     )
 
     return model, data_module
@@ -273,6 +269,7 @@ if __name__ == '__main__':
     dataset_group.add_argument('--norm_by_masks', action='store_true')
     dataset_group.add_argument('--no_final_dc', action='store_true')
     dataset_group.add_argument('--no_zf_mask', action='store_true')
+    dataset_group.add_argument('--no_disjoint', action='store_true')
 
     # model parameters
     model_group = parser.add_argument_group('Model Parameters')
