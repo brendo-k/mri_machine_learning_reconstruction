@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from mri_tools import rA, rfft2,rifft2
-from net.attention_ConvNext import Block
-from wavelet_transform import IWT,DWT
-from net.WaveletNet import WaveConvNeXt
+from ml_recon.models.IWNeXt.attention_ConvNext import Block
+from ml_recon.models.IWNeXt.WaveletNet import WaveConvNeXt
+from ml_recon.models.IWNeXt.wavelet_transform import IWT,DWT
+from ml_recon.models.IWNeXt.mri_tools import rA, rfft2,rifft2
 
 class Dataconsistency(nn.Module):
     def __init__(self):

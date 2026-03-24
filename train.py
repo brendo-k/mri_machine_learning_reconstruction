@@ -137,7 +137,8 @@ def setup_model_parameters(args):
         original_no_grad=args.all_data_no_grad,
         pass_all_lines=args.pass_all_lines,
         pass_through_size=args.pass_through_size,
-        seperate_models=args.seperate_model
+        seperate_models=args.seperate_model,
+        recon_model=args.recon_model
     )
 
     model = LearnedSSLLightning(
@@ -156,6 +157,7 @@ def setup_model_parameters(args):
         enable_warmup_training=args.warmup_training,
         image_loss_grad_scaling=args.image_loss_grad_scaling,
         warmup_adam=args.warmup_adam,
+        warmup_adam_epochs=args.warmup_adam_epochs,
         weight_decay=args.weight_decay, 
         norm_by_mask=args.norm_by_masks, 
         disjoint_masks=(not args.no_disjoint)
@@ -247,6 +249,7 @@ if __name__ == '__main__':
     training_group.add_argument('--lr', type=float, default=1e-3)
     training_group.add_argument('--lr_scheduler', action='store_true') 
     training_group.add_argument('--warmup_adam', action='store_true') 
+    training_group.add_argument('--warmup_adam_epochs', type=int, default=10) 
     training_group.add_argument('--weight_decay', type=float, default=0) 
     training_group.add_argument('--checkpoint', type=str)
     training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
@@ -304,6 +307,7 @@ if __name__ == '__main__':
     model_group.add_argument('--pass_all_data', action='store_true')
     model_group.add_argument('--inverse_data_no_grad', action='store_true')
     model_group.add_argument('--all_data_no_grad', action='store_true')
+    model_group.add_argument('--recon_model', type=str, default='varnet')
 
     # training type (supervised, self-supervised)
     model_group.add_argument('--supervised', action='store_true')

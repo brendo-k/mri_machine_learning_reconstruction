@@ -1,10 +1,11 @@
 # ssl_model.py
 import torch.nn as nn
-import os 
-from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
 from dataclasses import dataclass
 import torch
 from contextlib import nullcontext
+
+from ml_recon.models.MultiContrastVarNet import MultiContrastVarNet, VarnetConfig
+from ml_recon.models.IWNeXt.multi_share_weight_net import ISTANetPlus
 
 
 
@@ -17,6 +18,7 @@ class DualDomainConifg:
     pass_all_lines: bool = False
     pass_through_size: int = 10
     seperate_models: int = False
+    recon_model: str = 'varnet'
 
 class TriplePathway(nn.Module):
     """
@@ -29,7 +31,10 @@ class TriplePathway(nn.Module):
         super().__init__()
         self.dual_domain_config = dual_domain_config
         # same model used for each pathway
-        self.recon_model = MultiContrastVarNet(varnet_config)
+        if self.recon_model == 'varnet':
+            self.recon_model = MultiContrastVarNet(varnet_config)
+        elif self.recon_model == 'iwnext':
+            self.recon_model = ISTANetPlus(0, 6)
 
         if dual_domain_config.seperate_models: 
             self.inverse_model = MultiContrastVarNet(varnet_config)

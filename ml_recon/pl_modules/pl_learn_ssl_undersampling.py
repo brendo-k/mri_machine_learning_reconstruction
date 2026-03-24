@@ -41,7 +41,7 @@ class LearnedSSLLightning(plReconModel):
         use_supervised_image_loss: bool = False,
         is_mask_testing: bool = True,
         warmup_adam: bool = True,
-        warmup_epochs: int = 10,
+        warmup_adam_epochs: int = 10,
         weight_decay: float = 0.0,
         norm_by_mask: bool = False,
         disjoint_masks: bool = False,
@@ -97,6 +97,7 @@ class LearnedSSLLightning(plReconModel):
         self.use_supervised_image_loss = use_supervised_image_loss
         self.test_metrics = is_mask_testing
         self.warmup_adam = warmup_adam
+        self.warmup_adam_epochs = warmup_adam_epochs
         self.weight_decay = weight_decay
         self.norm_by_mask = norm_by_mask
         self.disjoint_masks = disjoint_masks
@@ -274,7 +275,7 @@ class LearnedSSLLightning(plReconModel):
 
         if self.warmup_adam:
             warmup_scheduler = LinearLR(
-                optimizer, start_factor=0.1, end_factor=1, total_iters=self.warmup_epochs
+                optimizer, start_factor=0.1, end_factor=1, total_iters=self.warmup_adam_epochs
             )
             schedulers.append(
                 {
