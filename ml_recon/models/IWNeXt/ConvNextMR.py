@@ -4,31 +4,31 @@ from ml_recon.models.IWNeXt.attention_ConvNext import Block
 from ml_recon.models.IWNeXt.WaveletNet import WaveConvNeXt
 from ml_recon.models.IWNeXt.wavelet_transform import IWT,DWT
 from ml_recon.models.IWNeXt.mri_tools import rA, rfft2,rifft2
+from ml_recon.utils import fft_2d_img, ifft_2d_img, complex_to_real, real_to_complex
 
 class Dataconsistency(nn.Module):
     def __init__(self):
         super(Dataconsistency, self).__init__()
-    def forward(self,x_rec,under_img,sub_mask):
+        self.lambda_dc = nn.Parameter(torch.tensor(1.0))
+    def forward(self, x_rec: torch.Tensor, under_k: torch.Tensor, sub_mask:torch.Tensor, sense_maps: torch.Tensor):
         '''
-        全部转变维度排列为(1,256,256,1)
+        全部转变维度排列为(1,256,256,1) ???
         '''
-        under_img=under_img.permute(0, 2, 3, 1).contiguous()
-        x_rec = x_rec.permute(0, 2, 3, 1).contiguous()
-        under_k= rA(x_rec,(1.0 - sub_mask))
-        x_k=rfft2(under_img)#输入图像的傅里叶变换
-        k_out=x_k+under_k
-        x_out=rifft2(k_out)
-        x_out=x_out.permute(0, 3, 1, 2).contiguous()
+        x_rec_cmplx = real_to_complex(x_rec)
+        x_rec = sense_maps * x_rec_cmplx.unsqueeze(2)  # [B, contrast, C, H, W]
+        k_rec= fft_2d_img(x_rec * (1.0 - sub_mask))
+        k_out= (under_k + self.lambda_dc * k_rec) / (1 + self.lambda_dc)
+        x_out = torch.sum(ifft_2d_img(k_out) * sense_maps.conj(), dim=2) / (sense_maps.conj() * sense_maps).sum(2)
+        x_out = complex_to_real(x_out)
         return x_out
 
 class ConvNet(nn.Module):
-    def __init__(self, rank,n_channels_in=2,n_channels_mid=32,n_channels_out=1):
+    def __init__(self, n_channels_in=2,n_channels_mid=32,n_channels_out=1):
         super(ConvNet, self).__init__()
         self.inConv=nn.Conv2d(n_channels_in,n_channels_mid,kernel_size=(3,3), padding=1)
-        self.rank=rank
         self.Blocks = []
         for i in range(4):
-            self.Blocks.append(Block(dim=32,rank=self.rank))
+            self.Blocks.append(Block(dim=32))
         self.Blocks = nn.ModuleList(self.Blocks)
         self.sConv=nn.Conv2d(n_channels_mid,n_channels_mid,kernel_size=(3,3), padding=1)
         self.outConv=nn.Conv2d(n_channels_mid,n_channels_out,kernel_size=(3,3), padding=1)
@@ -42,28 +42,27 @@ class ConvNet(nn.Module):
         return x
 
 class Generator(nn.Module):
-    def __init__(self,rank):
+    def __init__(self, input_channels):
         super(Generator, self).__init__()
-        self.rank=rank
-        self.GC = ConvNet(self.rank,2,32,1)
-        self.wave =WaveConvNeXt(self.rank,n_channels=8,G0=32,kSize=3)
+        self.GC = ConvNet(input_channels,32,input_channels)
+        self.wave = WaveConvNeXt(n_channels=input_channels*4,G0=32,kSize=3)
         self.DC=Dataconsistency()
         self.WDC=Dataconsistency()
         self.dwt = DWT()
-        self.iwt=IWT(self.rank)
+        self.iwt=IWT()
         '''
         x:二次欠采样图像,是输入图像
         '''
-    def forward(self,x,underimage,sub_mask,PD_label):
-        inp=torch.cat([x,PD_label],dim=1)
-        out=self.GC(inp)
-        i_out = self.DC(out, underimage, sub_mask)  # under_image是永恒不变的，x是前一个模块的输出
+    def forward(self,x,underimage,sub_mask, sense_maps):
+
+        out=self.GC(x)
+        i_out = self.DC(out, underimage, sub_mask, sense_maps)  # under_image是永恒不变的，x是前一个模块的输出
+
         x_tar_wave2=self.dwt(i_out)
-        x_refere_wave=self.dwt(PD_label)
-        x_i=torch.cat([x_tar_wave2,x_refere_wave],dim=1)
-        w_out=self.wave(x_i)
+        w_out=self.wave(x_tar_wave2)
         w_out=w_out+x_tar_wave2
         w_out=self.iwt(w_out)
-        x_dc = self.WDC(w_out,underimage, sub_mask)
+        x_dc = self.WDC(w_out, underimage, sub_mask, sense_maps)
+        
         x_dc = torch.clamp(x_dc, 0, 1)
         return  x_dc

@@ -15,7 +15,7 @@ def dwt_init(x):
 
     return torch.cat((x_LL, x_HL, x_LH, x_HH), 1)
 
-def iwt_init(x,rank):
+def iwt_init(x):
     r = 2
     in_batch, in_channel, in_height, in_width = x.size()
     # print([in_batch, in_channel, in_height, in_width])
@@ -26,7 +26,7 @@ def iwt_init(x,rank):
     x3 = x[:, out_channel * 2:out_channel * 3, :, :] / 2
     x4 = x[:, out_channel * 3:out_channel * 4, :, :] / 2
 
-    h = torch.zeros([out_batch, out_channel, out_height, out_width],requires_grad=False).cuda(rank).float()
+    h = torch.zeros([out_batch, out_channel, out_height, out_width],requires_grad=False, dtype=x.dtype, device=x.device)
     # print ("IWT_init:",args.device)
 
     h[:, :, 0::2, 0::2] = x1 - x2 - x3 + x4
@@ -45,11 +45,10 @@ class DWT(nn.Module):
         return dwt_init(x)
 
 class IWT(nn.Module):
-    def __init__(self,rank):
+    def __init__(self):
         super(IWT, self).__init__()
         self.requires_grad = False
-        self.rank=rank
     def forward(self, x):
-        return iwt_init(x,self.rank)
+        return iwt_init(x)
 
 

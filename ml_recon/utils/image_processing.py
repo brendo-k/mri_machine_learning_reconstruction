@@ -1,8 +1,21 @@
 import numpy as np
 import torch
-from typing import Union
+from typing import Union, overload
 
 from numpy.typing import NDArray
+
+@overload
+def ifft_2d_img(data: torch.Tensor, axes: list = [-1, -2]) -> torch.Tensor: ...
+
+@overload
+def ifft_2d_img(data: NDArray, axes: list = [-1, -2]) -> NDArray: ...
+
+@overload
+def fft_2d_img(data: torch.Tensor, axes: list = [-1, -2]) -> torch.Tensor: ...  
+
+@overload
+def fft_2d_img(data: NDArray, axes: list = [-1, -2]) -> NDArray: ...
+
 
 def ifft_2d_img(data, axes=[-1, -2]):
     if isinstance(data, torch.Tensor):

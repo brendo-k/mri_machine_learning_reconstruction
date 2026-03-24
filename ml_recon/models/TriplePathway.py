@@ -31,10 +31,10 @@ class TriplePathway(nn.Module):
         super().__init__()
         self.dual_domain_config = dual_domain_config
         # same model used for each pathway
-        if self.recon_model == 'varnet':
+        if self.dual_domain_config.recon_model == 'varnet':
             self.recon_model = MultiContrastVarNet(varnet_config)
-        elif self.recon_model == 'iwnext':
-            self.recon_model = ISTANetPlus(0, 6)
+        elif self.dual_domain_config.recon_model == 'iwnext':
+            self.recon_model = ISTANetPlus(num_layers=varnet_config.cascades, contrasts=len(varnet_config.contrast_order))
 
         if dual_domain_config.seperate_models: 
             self.inverse_model = MultiContrastVarNet(varnet_config)

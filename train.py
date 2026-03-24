@@ -8,6 +8,7 @@ import re
 
 # deep learning modules
 import torch
+from torch.profiler import ProfilerActivity
 import wandb
 from lightning.pytorch.callbacks import LearningRateMonitor
 
@@ -27,10 +28,100 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers.wandb import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
 from lightning.pytorch.callbacks import ModelCheckpoint 
+from lightning.pytorch.profilers import PyTorchProfiler
+
+
+def setup_argparser():
+    parser = ArgumentParser(description="Deep learning multi-contrast self-supervised reconstruction")
+
+    # Training parameters
+    training_group = parser.add_argument_group('Training Parameters')
+    training_group.add_argument('--num_workers', type=int, default=3)
+    training_group.add_argument('--max_epochs', type=int, default=50)
+    training_group.add_argument('--batch_size', type=int, default=1)
+    training_group.add_argument('--lr', type=float, default=1e-3)
+    training_group.add_argument('--lr_scheduler', action='store_true') 
+    training_group.add_argument('--warmup_adam', action='store_true') 
+    training_group.add_argument('--warmup_adam_epochs', type=int, default=10) 
+    training_group.add_argument('--weight_decay', type=float, default=0) 
+    training_group.add_argument('--checkpoint', type=str)
+    training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
+    training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
+    training_group.add_argument("--fast_dev_run", action='store_true')
+    training_group.add_argument("--profile", action='store_true')
+
+    # dataset parameters
+    dataset_group = parser.add_argument_group('Dataset Parameters')
+    dataset_group.add_argument('--R', type=float, default=6.0)
+    dataset_group.add_argument('--dataset', type=str, default='m4raw')
+    dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
+    dataset_group.add_argument('--data_dir', type=str)
+    dataset_group.add_argument('--nx', type=int, default=256)
+    dataset_group.add_argument('--ny', type=int, default=256)
+    dataset_group.add_argument('--limit_volumes', type=float, default=1.0)
+    dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
+    dataset_group.add_argument('--ssdu_partitioning', action='store_true')
+    dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
+    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max', 'std'], default='image_mean')
+    dataset_group.add_argument('--norm_by_masks', action='store_true')
+    dataset_group.add_argument('--no_final_dc', action='store_true')
+    dataset_group.add_argument('--no_zf_mask', action='store_true')
+    dataset_group.add_argument('--no_disjoint', action='store_true')
+
+    # model parameters
+    model_group = parser.add_argument_group('Model Parameters')
+    model_group.add_argument('--R_hat', type=float, default=2.0)
+    model_group.add_argument('--warm_start', action='store_true')
+    model_group.add_argument('--chans', type=int, default=18)
+    model_group.add_argument('--depth', type=int, default=4)
+    model_group.add_argument('--cascades', type=int, default=6)
+    model_group.add_argument('--sigmoid_slope2', type=float, default=200)
+    model_group.add_argument('--sigmoid_slope1', type=float, default=5)
+    model_group.add_argument('--pass_through_size', type=int, default=10)
+    model_group.add_argument('--pass_all_lines', action='store_true')
+    model_group.add_argument('--seperate_model', action='store_true')
+    model_group.add_argument('--learn_R', action='store_true')
+
+    # loss function parameters
+    model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)
+    model_group.add_argument('--image_scaling_lam_full', type=float, default=0.0)
+    model_group.add_argument('--image_scaling_full_inv', type=float, default=0.0)
+    model_group.add_argument('--k_loss', type=str, default='l1', choices=['l1', 'l2', 'l1l2'])
+    model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
+    model_group.add_argument('--image_loss_grad_scaling', type=float, default=1.)
+    model_group.add_argument('--lambda_scaling', type=float, default=0.65)
+    model_group.add_argument('--line_constrained', action='store_true')
+
+    model_group.add_argument('--use_schedulers', action='store_true')
+    model_group.add_argument('--norm_loss_by_mask', action='store_true')
+    model_group.add_argument('--warmup_training', action='store_true')
+
+    # configure pathways in triple pathway
+    model_group.add_argument('--pass_inverse_data', action='store_true')
+    model_group.add_argument('--pass_all_data', action='store_true')
+    model_group.add_argument('--inverse_data_no_grad', action='store_true')
+    model_group.add_argument('--all_data_no_grad', action='store_true')
+    model_group.add_argument('--recon_model', type=str, default='varnet', choices=['varnet', 'iwnext'])
+
+    # training type (supervised, self-supervised)
+    model_group.add_argument('--supervised', action='store_true')
+    model_group.add_argument('--supervised_image', action='store_true')
+    model_group.add_argument('--learn_sampling', action='store_true')
+    
+    #logging parameters
+    logger_group = parser.add_argument_group('Logging Parameters')
+    logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
+    logger_group.add_argument('--run_name', type=str)
+    logger_group.add_argument('--logger_dir', type=str, default='/home/kadotab/scratch')
+    
+    args = parser.parse_args()
+    return parser,args
 
 def main(args):
     pl.seed_everything(8, workers=True)
     file_name = get_unique_file_name(args)
+
+    profiler = setup_profiler(args.profile)
 
     # build some callbacks for pytorch lightning
     callbacks = build_callbacks(args, file_name)
@@ -44,7 +135,8 @@ def main(args):
         max_epochs=args.max_epochs, 
         logger=wandb_logger, 
         callbacks=callbacks,
-        fast_dev_run=args.fast_dev_run
+        fast_dev_run=args.fast_dev_run,
+        profiler=profiler
         )
 
     # use tensor cores
@@ -86,7 +178,22 @@ def setup_wandb_logger(args, model):
         logger = DummyLogger()
     return logger
     
-
+def setup_profiler(profile):
+    if profile:
+        profiler = PyTorchProfiler(
+            dirpath='./profiles',
+            filename=f"profile_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
+            schedule=torch.profiler.schedule(wait=2 , warmup=5, active=10, repeat=1),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('./profiles'),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]
+        )
+        return profiler
+    else:
+        return None
+    
 def setup_model_parameters(args):
     # setup model configurations
 
@@ -238,89 +345,10 @@ def get_unique_file_name(args):
     return file_name
 
 
+
+
 if __name__ == '__main__': 
-    parser = ArgumentParser(description="Deep learning multi-contrast self-supervised reconstruction")
-
-    # Training parameters
-    training_group = parser.add_argument_group('Training Parameters')
-    training_group.add_argument('--num_workers', type=int, default=3)
-    training_group.add_argument('--max_epochs', type=int, default=50)
-    training_group.add_argument('--batch_size', type=int, default=1)
-    training_group.add_argument('--lr', type=float, default=1e-3)
-    training_group.add_argument('--lr_scheduler', action='store_true') 
-    training_group.add_argument('--warmup_adam', action='store_true') 
-    training_group.add_argument('--warmup_adam_epochs', type=int, default=10) 
-    training_group.add_argument('--weight_decay', type=float, default=0) 
-    training_group.add_argument('--checkpoint', type=str)
-    training_group.add_argument("--config", "-c", type=str, help="Path to the YAML configuration file.")
-    training_group.add_argument("--checkpoint_dir", type=str, default='./checkpoints', help="Path to checkpoint save dir")
-    training_group.add_argument("--fast_dev_run", action='store_true')
-    
-    # dataset parameters
-    dataset_group = parser.add_argument_group('Dataset Parameters')
-    dataset_group.add_argument('--R', type=float, default=6.0)
-    dataset_group.add_argument('--dataset', type=str, default='m4raw')
-    dataset_group.add_argument('--contrasts', type=str, nargs='+', default=['t1', 't2', 'flair'])
-    dataset_group.add_argument('--data_dir', type=str)
-    dataset_group.add_argument('--nx', type=int, default=256)
-    dataset_group.add_argument('--ny', type=int, default=256)
-    dataset_group.add_argument('--limit_volumes', type=float, default=1.0)
-    dataset_group.add_argument('--sampling_method', type=str, choices=['2d', '1d', 'pi'], default='2d')
-    dataset_group.add_argument('--ssdu_partitioning', action='store_true')
-    dataset_group.add_argument('--same_mask_all_epochs', action='store_true')
-    dataset_group.add_argument('--norm_method', type=str, choices=['image_mean', 'k', 'max', 'std'], default='image_mean')
-    dataset_group.add_argument('--norm_by_masks', action='store_true')
-    dataset_group.add_argument('--no_final_dc', action='store_true')
-    dataset_group.add_argument('--no_zf_mask', action='store_true')
-    dataset_group.add_argument('--no_disjoint', action='store_true')
-
-    # model parameters
-    model_group = parser.add_argument_group('Model Parameters')
-    model_group.add_argument('--R_hat', type=float, default=2.0)
-    model_group.add_argument('--warm_start', action='store_true')
-    model_group.add_argument('--chans', type=int, default=18)
-    model_group.add_argument('--depth', type=int, default=4)
-    model_group.add_argument('--cascades', type=int, default=6)
-    model_group.add_argument('--sigmoid_slope2', type=float, default=200)
-    model_group.add_argument('--sigmoid_slope1', type=float, default=5)
-    model_group.add_argument('--pass_through_size', type=int, default=10)
-    model_group.add_argument('--pass_all_lines', action='store_true')
-    model_group.add_argument('--seperate_model', action='store_true')
-    model_group.add_argument('--learn_R', action='store_true')
-
-    # loss function parameters
-    model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)
-    model_group.add_argument('--image_scaling_lam_full', type=float, default=0.0)
-    model_group.add_argument('--image_scaling_full_inv', type=float, default=0.0)
-    model_group.add_argument('--k_loss', type=str, default='l1', choices=['l1', 'l2', 'l1l2'])
-    model_group.add_argument('--image_loss', type=str, default='ssim', choices=['ssim', 'l1_grad', 'l1'])
-    model_group.add_argument('--image_loss_grad_scaling', type=float, default=1.)
-    model_group.add_argument('--lambda_scaling', type=float, default=0.65)
-    model_group.add_argument('--line_constrained', action='store_true')
-
-    model_group.add_argument('--use_schedulers', action='store_true')
-    model_group.add_argument('--norm_loss_by_mask', action='store_true')
-    model_group.add_argument('--warmup_training', action='store_true')
-
-    # configure pathways in triple pathway
-    model_group.add_argument('--pass_inverse_data', action='store_true')
-    model_group.add_argument('--pass_all_data', action='store_true')
-    model_group.add_argument('--inverse_data_no_grad', action='store_true')
-    model_group.add_argument('--all_data_no_grad', action='store_true')
-    model_group.add_argument('--recon_model', type=str, default='varnet')
-
-    # training type (supervised, self-supervised)
-    model_group.add_argument('--supervised', action='store_true')
-    model_group.add_argument('--supervised_image', action='store_true')
-    model_group.add_argument('--learn_sampling', action='store_true')
-    
-    #logging parameters
-    logger_group = parser.add_argument_group('Logging Parameters')
-    logger_group.add_argument('--project', type=str, default='MRI Reconstruction')
-    logger_group.add_argument('--run_name', type=str)
-    logger_group.add_argument('--logger_dir', type=str, default='/home/kadotab/scratch')
-    
-    args = parser.parse_args()
+    parser, args = setup_argparser()
 
     args = replace_args_from_config(args.config, args, parser)
 

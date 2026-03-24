@@ -59,21 +59,21 @@ class Block(nn.Module):
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim,rank):
+    def __init__(self, dim):
         super(Block,self).__init__()
-        self.rank = rank
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=(7,7), padding=3, groups=dim)  # depthwise conv
         self.norm = LayerNorm(dim)
         self.pwconv1 = nn.Linear(dim, 4 * dim)
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
-        self.gamma = nn.Parameter(torch.zeros((1, dim, 1, 1)).cuda(self.rank), requires_grad=True)
+        self.gamma = nn.Parameter(torch.zeros((1, 1, 1, dim)), requires_grad=True)
         self.drop_path1 = nn.Identity()
         self.SIAM=simam_module()
     def forward(self, x):
         input = x
         #stage_1
         x = self.dwconv(x)
+        x = x.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
         x = self.norm(x)
         x = self.pwconv1(x)
         x = self.act(x)
@@ -81,6 +81,7 @@ class Block(nn.Module):
         x = self.pwconv2(x)
         if self.gamma is not None:
             x = self.gamma * x
+        x = x.permute(0, 3, 1, 2)  # (N H, W, C) -> (N, C, H, W)
         res = input + self.drop_path1(x)
         return res
 

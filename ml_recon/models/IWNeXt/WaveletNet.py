@@ -1,11 +1,10 @@
 import torch.nn as nn
-from net.attention_ConvNext import Block
+from ml_recon.models.IWNeXt.attention_ConvNext import Block
 
 
 class WaveConvNeXt(nn.Module):
-    def __init__(self, rank,n_channels, G0, kSize, D=4, C=4, G=32):
+    def __init__(self, n_channels, G0, kSize, D=4, C=4, G=32):
         super(WaveConvNeXt, self).__init__()
-        self.rank=rank
         self.D = D   # number of RDB
         self.C = C   # number of Conv in RDB
         self.kSize = kSize  # kernel size
@@ -17,9 +16,7 @@ class WaveConvNeXt(nn.Module):
         # Redidual dense blocks and dense feature fusion
         self.SEDRDBs = nn.ModuleList()
         for i in range(self.D):
-            self.SEDRDBs.append(
-                Block(dim=32,rank=self.rank)
-            )
+            self.SEDRDBs.append(Block(dim=32))
 
 
         self.GFF = nn.Sequential(*[
@@ -29,7 +26,7 @@ class WaveConvNeXt(nn.Module):
         # Up-sampling net
         self.UPNet = nn.Sequential(*[
             nn.Conv2d(G0, G, kSize, padding=(kSize - 1) // 2, stride=1),
-            nn.Conv2d(G, n_channels//2, kSize, padding=(kSize - 1) // 2, stride=1)
+            nn.Conv2d(G, n_channels, kSize, padding=(kSize - 1) // 2, stride=1)
         ])
 
     def forward(self, x):
