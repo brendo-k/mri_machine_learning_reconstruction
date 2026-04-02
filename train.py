@@ -81,6 +81,7 @@ def setup_argparser():
     model_group.add_argument('--pass_all_lines', action='store_true')
     model_group.add_argument('--seperate_model', action='store_true')
     model_group.add_argument('--learn_R', action='store_true')
+    model_group.add_argument('--mask_sensetivity_maps', action='store_true')
 
     # loss function parameters
     model_group.add_argument('--image_scaling_lam_inv', type=float, default=0.0)
@@ -102,6 +103,7 @@ def setup_argparser():
     model_group.add_argument('--inverse_data_no_grad', action='store_true')
     model_group.add_argument('--all_data_no_grad', action='store_true')
     model_group.add_argument('--recon_model', type=str, default='varnet', choices=['varnet', 'iwnext'])
+    model_group.add_argument('--complex_images', action='store_true')
 
     # training type (supervised, self-supervised)
     model_group.add_argument('--supervised', action='store_true')
@@ -221,7 +223,8 @@ def setup_model_parameters(args):
         channels=args.chans,
         depth=args.depth,
         is_final_dc=(not args.no_final_dc),
-        is_zf_mask=(not args.no_zf_mask)
+        is_zf_mask=(not args.no_zf_mask),
+        is_mask_sense_maps=args.mask_sensetivity_maps
     )
 
     partitioning_config = LearnPartitionConfig(
@@ -313,6 +316,16 @@ def load_checkpoint(args, data_dir):
         data_module_kwargs['data_dir'] = data_dir
         data_module_kwargs['device'] = device
     model = LearnedSSLLightning.load_from_checkpoint(args.checkpoint, lr=args.lr, map_location=device, weights_only=False)
+    
+    # Override specific model parameters from command line args
+    model.image_scaling_lam_full = args.image_scaling_lam_inv
+    model.image_scaling_lam_full = args.image_scaling_lam_full
+    model.image_scaling_full_inv = args.image_scaling_full_inv
+    model.model.dual_domain_config.is_pass_inverse = args.pass_inverse_data
+    model.model.dual_domain_config.is_pass_original = args.pass_all_data
+    model.model.dual_domain_config.inverse_no_grad = args.inverse_data_no_grad
+    model.model.dual_domain_config.original_no_grad = args.all_data_no_grad
+    
     data_module = UndersampledDataModule.load_from_checkpoint(args.checkpoint, **data_module_kwargs, weights_only=False)
     data_module.setup('train')
     return model, data_module
@@ -324,12 +337,13 @@ def build_checkpoint_callbacks(file_name, checkpoint_dir):
     # Checkpoint for the last model (including optimizer state for resubmittions)
     last_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename=file_name + '_{val/loss:.2e}-{epoch:02d}',
+        filename=file_name + 'val-loss={val/loss:.2e}-epoch={epoch:02d}',
         save_top_k=1,  # Only keep the latest model
         monitor='val/loss',
         save_last=True,
         mode='min',
-        save_weights_only=False  # Save full model state including optimizer
+        save_weights_only=False,  # Save full model state including optimizer
+        auto_insert_metric_name=False
     )
     
     return last_checkpoint_callback

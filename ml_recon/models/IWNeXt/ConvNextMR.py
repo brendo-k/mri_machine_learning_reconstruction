@@ -63,6 +63,5 @@ class Generator(nn.Module):
         w_out=w_out+x_tar_wave2
         w_out=self.iwt(w_out)
         x_dc = self.WDC(w_out, underimage, sub_mask, sense_maps)
-        
-        x_dc = torch.clamp(x_dc, 0, 1)
+
         return  x_dc

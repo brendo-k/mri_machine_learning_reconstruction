@@ -38,6 +38,7 @@ class LearnedSSLLightning(plReconModel):
         k_space_loss_function: Literal["l1l2", "l1", "l2"] = "l1l2",
         enable_learn_partitioning: bool = True,
         enable_warmup_training: bool = False,
+        warmup_training_epochs: int = 50,
         use_supervised_image_loss: bool = False,
         is_mask_testing: bool = True,
         warmup_adam: bool = True,
@@ -93,6 +94,7 @@ class LearnedSSLLightning(plReconModel):
         self.image_scaling_full_inv = image_loss_scaling_full_inv
         self.lambda_loss_scaling = lambda_scaling
         self.enable_warmup_training = enable_warmup_training
+        self.warmup_training_epochs = warmup_training_epochs
         self.enable_learn_partitioning = enable_learn_partitioning
         self.use_supervised_image_loss = use_supervised_image_loss
         self.test_metrics = is_mask_testing
@@ -497,7 +499,7 @@ class LearnedSSLLightning(plReconModel):
         return loss_dict
 
     def get_image_space_scaling_factors(self):
-        if self.enable_warmup_training and self.current_epoch < 10:
+        if self.enable_warmup_training and self.current_epoch < self.warmup_training_epochs:
             scaling_factor = 0
         else:
             scaling_factor = 1

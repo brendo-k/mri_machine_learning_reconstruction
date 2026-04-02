@@ -16,7 +16,8 @@ class SensetivityModel_mc(nn.Module):
             out_chans: int, 
             chans: int, 
             conv_after_upsample: bool = False,
-            upsample_method: Literal['conv', 'max', 'bilinear'] = 'conv'
+            upsample_method: Literal['conv', 'max', 'bilinear'] = 'conv',
+            is_mask_sense_maps: bool = False
             ):
 
         """Module used to estimate sensetivity maps based on masked k-space center
@@ -36,14 +37,22 @@ class SensetivityModel_mc(nn.Module):
             conv_after_upsample=conv_after_upsample, 
             upsample_method=upsample_method
             )
+        self.is_mask_sense_maps = is_mask_sense_maps
 
     # recieve coil maps as [B, contrast, channels, H, W]
-    def forward(self, images, mask):
+    def forward(self, images: torch.Tensor, mask):
         images = self.mask_center(images, mask) 
         # get the first image for estimating coil sensetivites
         images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
+        if self.is_mask_sense_maps:
+            images_combined = root_sum_of_squares(images, coil_dim=2)
+            coil_mask = images_combined > images_combined.max() * 0.15
+            images = images * coil_mask.unsqueeze(2)
+        else:
+            coil_mask = None
+
         assert isinstance(images, torch.Tensor)
 
         number_of_coils = images.shape[2]
@@ -69,6 +78,11 @@ class SensetivityModel_mc(nn.Module):
         # rss to normalize sense maps
         rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2) 
         images = images / rss_norm
+
+        if self.is_mask_sense_maps:
+            assert coil_mask is not None
+            images = images * coil_mask.unsqueeze(2)
+
         return images
 
     def mask_center(self, coil_k_spaces, mask):

@@ -22,6 +22,7 @@ class VarnetConfig:
     conv_after_upsample: bool = False
     is_final_dc: bool = True
     is_zf_mask: bool = True
+    is_mask_sense_maps: bool = False
 
 
 class MultiContrastVarNet(nn.Module):
@@ -51,7 +52,8 @@ class MultiContrastVarNet(nn.Module):
             2, 
             chans=config.sense_chans, 
             upsample_method=config.upsample_method, 
-            conv_after_upsample=config.conv_after_upsample
+            conv_after_upsample=config.conv_after_upsample,
+            is_mask_sense_maps=config.is_mask_sense_maps
             )
         # regularizer weight
         #self.lambda_reg = nn.Parameter(torch.ones(config.cascades))
